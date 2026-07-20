@@ -24,6 +24,7 @@ import {
   planPlacementCommand,
   type PlacementCommand,
 } from './operations/placement';
+import { collectHandEntryReactionRules } from './reactions/handEntry';
 import type {
   CommittedTransition,
   KernelReaction,
@@ -107,16 +108,10 @@ export interface FrozenPlacementEffectContext {
   readonly scopePath: readonly string[];
 }
 
-export type PlacementReactionEffect =
-  | {
-      readonly kind: 'AUTHORED';
-      readonly effect: EffectExpr;
-    }
-  | {
-      readonly kind: 'HAND_ENTRY';
-      readonly cardId: CardId;
-      readonly owner: Owner;
-    };
+export type PlacementReactionEffect = {
+  readonly kind: 'AUTHORED';
+  readonly effect: EffectExpr;
+};
 
 type PlacementWork = KernelWork<
   PlacementCommand,
@@ -370,7 +365,9 @@ function reaction(
 
 function collectPlacementReactions(
   before: MatchState,
+  after: MatchState,
   transition: CommittedTransition<MatchEvent, PlacementSemantics>,
+  manifest: Manifest,
   baseDepth: number,
 ) {
   const semantics = transition.semantics;
@@ -488,31 +485,39 @@ function collectPlacementReactions(
       || semantics.transitionKind === 'ZONE_CHANGE'
     )
   ) {
-    const context = makeContext(
-      semantics,
+    for (const rule of collectHandEntryReactionRules(
+      after,
       semantics.entityId,
-      'card',
-      null,
       semantics.result.owner,
-      'SYSTEM',
-      'handEntry',
-      0,
-      baseDepth,
-    );
-    out.push(reaction(
-      transition,
-      {
-        kind: 'HAND_ENTRY',
-        cardId: semantics.entityId,
-        owner: semantics.result.owner,
-      },
-      context,
-      handEntryBand,
-      0,
-      priority,
-      Number.MAX_SAFE_INTEGER,
-      -1,
-    ));
+      manifest,
+    )) {
+      const context = makeContext(
+        semantics,
+        rule.sourceId,
+        rule.sourceKind,
+        rule.sourceLane,
+        rule.sourceOwner,
+        rule.cause.effectKind,
+        rule.cause.reason,
+        rule.ruleIndex,
+        baseDepth,
+      );
+      const sourceCardOrdinal = rule.sourceKind === 'card'
+        && rule.sourceOwner !== null
+        ? after.lanesById[rule.sourceLane].cards[rule.sourceOwner]
+            .indexOf(rule.sourceId as CardId)
+        : -1;
+      out.push(reaction(
+        transition,
+        { kind: 'AUTHORED', effect: rule.effect },
+        context,
+        handEntryBand,
+        rule.ruleIndex,
+        ownerRank(before.priority, rule.sourceOwner ?? semantics.result.owner),
+        laneOrdinal(after, rule.sourceLane),
+        sourceCardOrdinal,
+      ));
+    }
   }
 
   return kernelStepSuccess(out);
@@ -567,8 +572,14 @@ export function resolvePlacementTransaction(
       },
       captureSemantics: (before, event, after) =>
         capturePlacementSemantics(before, event, after, options.manifest),
-      collectReactions: (before, _after, transition) =>
-        collectPlacementReactions(before, transition, options.baseDepth),
+      collectReactions: (before, after, transition) =>
+        collectPlacementReactions(
+          before,
+          after,
+          transition,
+          options.manifest,
+          options.baseDepth,
+        ),
     },
   );
   assertKernelSuccess(result);

@@ -145,7 +145,6 @@ export {
   revealPlayedCardAtEndOfGame,
   triggerOnReveal,
   evalEffect,
-  MAX_REVEAL_RECURSION,
 } from './effects/evaluator';
 
 // ---- CLI (headless match driver) -----------------------------------------

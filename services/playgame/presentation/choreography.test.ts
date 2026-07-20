@@ -79,7 +79,7 @@ const event = <T extends MatchEvent>(e: T): T => e;
     type: 'CARD_DRAWN',
     owner: 'P0',
     cardId: 'c1' as CardId,
-    toHand: true,
+    cause: source,
   }));
 
   eq(choreography, {

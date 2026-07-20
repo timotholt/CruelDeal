@@ -40,11 +40,14 @@ import { getLocationRuntime, getLocationState } from './locationRuntime';
 export function collectAllOngoings(state: MatchState, manifest: Manifest): SourcedOngoing[] {
   // --- Step 1: raw gather -------------------------------------------------
   const raw: SourcedOngoing[] = [];
-  const copyExpanders: CardRuntime[] = [];
+  const copyExpanders: {
+    readonly card: CardRuntime;
+    readonly sourceRuleIndex: number;
+  }[] = [];
 
   for (const card of liveCardSources(state, manifest)) {
     const ongoings = card.text.abilities.ongoing ?? [];
-    for (const expr of ongoings) {
+    for (const [sourceRuleIndex, expr] of ongoings.entries()) {
       const b = expr as any;
       if (b.kind === 'CALL_BUILTIN') {
         if (b.fn === 'FULL_LANES_POWER') {
@@ -58,6 +61,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
                 sourceLocationId: null,
                 sourceLane: card.lane!,
                 sourceOwner: card.owner,
+                sourceRuleIndex,
                 expr: {
                   kind: 'LANE_POWER_ADD',
                   laneScope: {
@@ -71,7 +75,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
             }
           }
         } else if (b.fn === 'COPY_ONGOING_OF_CHEAPEST_ONGOING') {
-          copyExpanders.push(card);
+          copyExpanders.push({ card, sourceRuleIndex });
         }
         // Other CALL_BUILTIN entries are not Ongoing projection expanders.
       } else {
@@ -80,6 +84,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
           sourceLocationId: null,
           sourceLane: card.lane!,
           sourceOwner: card.owner,
+          sourceRuleIndex,
           expr,
         });
       }
@@ -89,12 +94,14 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
   for (const loc of liveLocationSources(state)) {
     const location = getLocationRuntime(state, loc.id, manifest);
     if (!location) continue;
-    for (const expr of location.abilities.ongoing ?? []) {
+    for (const [sourceRuleIndex, expr] of
+      (location.abilities.ongoing ?? []).entries()) {
       raw.push({
         sourceCardId: null,
         sourceLocationId: loc.id,
         sourceLane: loc.laneId!,
         sourceOwner: null,
+        sourceRuleIndex,
         expr,
       });
     }
@@ -103,7 +110,8 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
   // Expand COPY_ONGOING_OF_CHEAPEST_ONGOING — copies the ongoings of the
   // cheapest friendly Ongoing card in the same lane (excluding self and
   // other CALL_BUILTIN-only cards), re-attributed to the copier card.
-  for (const copier of copyExpanders) {
+  for (const copyExpander of copyExpanders) {
+    const { card: copier, sourceRuleIndex } = copyExpander;
     const candidates = liveCardSources(state, manifest).filter(c => {
       if (c.id === copier.id || c.lane !== copier.lane || c.owner !== copier.owner) return false;
       return (c.text.abilities.ongoing ?? []).some(e => (e as any).kind !== 'CALL_BUILTIN');
@@ -123,6 +131,7 @@ export function collectAllOngoings(state: MatchState, manifest: Manifest): Sourc
         sourceLocationId: null,
         sourceLane: copier.lane!,
         sourceOwner: copier.owner,
+        sourceRuleIndex,
         expr,
       });
     }
@@ -191,6 +200,8 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
     case 'POWER_ADD':
       return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
     case 'COST_ADD':
+      return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
+    case 'HAND_ENTRY_POWER_ADD':
       return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
     case 'LANE_POWER_ADD':
       return { ...expr, delta: { kind: 'MUL', a: expr.delta, b: { kind: 'LIT', n: agg } } };
@@ -288,6 +299,7 @@ function targetIncludes(
     }
     case 'LANE_POWER_ADD':
     case 'LANE_POWER_MULTIPLIER':
+    case 'HAND_ENTRY_POWER_ADD':
     case 'EXTEND_GAME_TURNS':
     case 'BOOST_ONGOINGS':
     case 'BLOCK_FRIENDLY_DESTROY':

@@ -14,6 +14,7 @@ const CARD_ABILITY_SLOTS = new Set<keyof CardAbilities>([
   'onMove',
   'onDestroyed',
   'onDiscarded',
+  'onGainedPower',
   'onAnyCardPlayedHere',
 ]);
 
@@ -71,6 +72,7 @@ const EFFECT_KINDS = new Set([
 
 const ONGOING_KINDS = new Set([
   'POWER_ADD',
+  'HAND_ENTRY_POWER_ADD',
   'REVEAL_TIMING_OVERRIDE',
   'COST_ADD',
   'LANE_POWER_ADD',

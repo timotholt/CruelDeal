@@ -182,7 +182,7 @@ describe('Canonical framing edge cases', () => {
   it('infers SETUP for the opening draw batch', () => {
     const framed = frameEventSequence(
       fixtureState({ turn: 1 }),
-      [{ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true }],
+      [{ type: 'CARD_DRAWN', owner: 'P0', cardId, cause: systemCause }],
     );
 
     expect(framed[0].scope).toEqual({ turn: 1, phase: 'SETUP' });

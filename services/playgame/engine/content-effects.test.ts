@@ -17,6 +17,7 @@ import { BOOTSTRAP_MANIFEST } from './manifest/bootstrap';
 import { createRng } from './rng';
 import type { MatchEvent } from './types/events';
 import type { CardId, LocationCardInstanceId } from './types/ids';
+import type { EffectRef } from './types/ability';
 import type { MatchState } from './types/state';
 import {
   orderedTestLocationDeck,
@@ -44,6 +45,11 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 const run = (state: MatchState, event: MatchEvent): MatchState =>
   apply(state, event, BOOTSTRAP_MANIFEST);
 const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
+const drawCause = {
+  sourceId: 'system:content-effects-test' as CardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST_DRAW',
+} as const satisfies EffectRef;
 const cardIdInDeck = (
   state: MatchState,
   owner: 'P0' | 'P1',
@@ -65,7 +71,7 @@ const cardIdInDeck = (
   const boneMarket = cardIdInDeck(state, 'P0', 'bone-market');
   const victim = cardIdInDeck(state, 'P0', 'street-kid');
   for (const cardId of [victim, boneMarket]) {
-    state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
+    state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, cause: drawCause });
     state = run(state, {
       type: 'CARD_STAGED',
       intentId: `play-${cardId}`,
@@ -121,7 +127,7 @@ const cardIdInDeck = (
   );
 
   const kid = cardIdInDeck(state, 'P0', 'street-kid');
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-kid', cardId: kid, lane: 0, owner: 'P0', cost: 1 });
 
   const result = revealPlayedCard(state, kid, BOOTSTRAP_MANIFEST, createRng('content-meat-market'));
@@ -140,7 +146,7 @@ const cardIdInDeck = (
 
   const grinder = cardIdInDeck(state, 'P0', 'grinder-crew');
 
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-grinder-crew', cardId: grinder, lane: 0, owner: 'P0', cost: 2 });
 
   const result = revealPlayedCard(state, grinder, BOOTSTRAP_MANIFEST, createRng('content-grinder-crew-empty'));
@@ -158,8 +164,8 @@ const cardIdInDeck = (
   const grinder = cardIdInDeck(state, 'P0', 'meat-grinder');
   const pup = cardIdInDeck(state, 'P1', 'drone-pup');
 
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, toHand: true });
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: grinder, cause: drawCause });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-pup', cardId: pup, lane: 0, owner: 'P1', cost: 1 });
   state = run(state, { type: 'CARD_REVEALED', cardId: pup, cause: { sourceId: pup, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-grinder', cardId: grinder, lane: 0, owner: 'P0', cost: 5 });
@@ -184,7 +190,7 @@ const cardIdInDeck = (
   const chopDoc = cardIdInDeck(state, 'P0', 'chop-doc');
 
   for (const cardId of [unionRep, kid, chopDoc]) {
-    state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
+    state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId, cause: drawCause });
   }
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-union-rep', cardId: unionRep, lane: 0, owner: 'P0', cost: 2 });
   state = run(state, { type: 'CARD_REVEALED', cardId: unionRep, cause: { sourceId: unionRep, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } });
@@ -211,8 +217,8 @@ const cardIdInDeck = (
   const parachute = cardIdInDeck(state, 'P0', 'golden-parachute');
   const acquisition = cardIdInDeck(state, 'P0', 'acquisition-team');
 
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: parachute, toHand: true });
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: acquisition, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: parachute, cause: drawCause });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: acquisition, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-parachute', cardId: parachute, lane: 0, owner: 'P0', cost: 1 });
   state = run(state, { type: 'CARD_REVEALED', cardId: parachute, cause: { sourceId: parachute, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-acquisition', cardId: acquisition, lane: 0, owner: 'P0', cost: 4 });
@@ -286,7 +292,7 @@ const cardIdInDeck = (
   }, locationDeck);
 
   const junkPacket = cardIdInDeck(state, 'P1', 'junk-packet');
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: junkPacket, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: junkPacket, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-junk-packet', cardId: junkPacket, lane: 0, owner: 'P1', cost: 1 });
 
   const result = revealPlayedCard(state, junkPacket, BOOTSTRAP_MANIFEST, createRng('content-junk-packet'));
@@ -317,8 +323,8 @@ const cardIdInDeck = (
 
   const kid = cardIdInDeck(state, 'P0', 'street-kid');
   const pup = cardIdInDeck(state, 'P1', 'drone-pup');
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, toHand: true });
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: kid, cause: drawCause });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: pup, cause: drawCause });
 
   const loc = locationCardAtLane(state, 0)!;
   let s = state;
@@ -357,8 +363,8 @@ const cardIdInDeck = (
   const blackIce = cardIdInDeck(state, 'P0', 'black-ice');
   const bruiser = cardIdInDeck(state, 'P1', 'redline-bruiser');
 
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: blackIce, toHand: true });
-  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: bruiser, toHand: true });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P0', cardId: blackIce, cause: drawCause });
+  state = run(state, { type: 'CARD_DRAWN', owner: 'P1', cardId: bruiser, cause: drawCause });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-bruiser', cardId: bruiser, lane: 0, owner: 'P1', cost: 3 });
   state = run(state, { type: 'CARD_REVEALED', cardId: bruiser, cause: { sourceId: bruiser, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } });
   state = run(state, { type: 'CARD_STAGED', intentId: 'play-black-ice', cardId: blackIce, lane: 0, owner: 'P0', cost: 3 });

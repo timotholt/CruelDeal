@@ -5,11 +5,14 @@
   "basePower": 3,
   "cost": 3,
   "abilities": {
-    "onReveal": [
+    "onGainedPower": [
       {
-        "kind": "CALL_BUILTIN",
-        "fn": "DRAW_ON_POWER_GAIN",
-        "args": {}
+        "kind": "DRAW",
+        "owner": "SELF_OWNER",
+        "count": {
+          "kind": "LIT",
+          "n": 1
+        }
       }
     ]
   },

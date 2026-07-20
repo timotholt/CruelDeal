@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { apply } from '../apply';
 import { createInitialMatchState } from '../cli/initState';
-import type { LocationCardDef } from '../manifest/types';
+import type { LocationCardDef, Manifest } from '../manifest/types';
 import {
   orderedTestLocationDeck,
   testCardDef,
@@ -10,6 +10,8 @@ import {
 } from '../testkit/runtimeFixture';
 import type { MatchEvent } from '../types/events';
 import type { CardId } from '../types/ids';
+import type { EffectRef } from '../types/ability';
+import type { MatchState, PowerMutation } from '../types/state';
 import { frameAndFoldEvents } from '../transactionTimeline';
 import {
   cardLifecycleFrames,
@@ -23,7 +25,7 @@ import {
   replaceCardText,
   setCardCost,
 } from '../operations/cardMutations';
-import { changeStoredPower } from '../kernel/powerTransaction';
+import { resolveStoredPowerTransaction } from '../kernel/powerTransaction';
 import { getCurrentCard } from './card';
 import {
   getCardLifecycle,
@@ -33,6 +35,23 @@ import {
   getCardsInZone,
 } from './cardRuntime';
 import { getCardTemplate } from './cardTemplate';
+
+const changeStoredPower = (
+  current: MatchState,
+  cardId: CardId,
+  mutation: PowerMutation,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveStoredPowerTransaction(current, [{
+  type: 'CHANGE_STORED_POWER',
+  cardId,
+  mutation,
+  cause: source,
+}], {
+  manifest: activeManifest,
+  baseDepth: 0,
+  interpretEffect: (candidate) => ({ events: [], state: candidate }),
+});
 import { getLocationRuntime } from './locationRuntime';
 import { getLocationTemplate } from './locationTemplate';
 import { findCards } from './query';
@@ -350,7 +369,7 @@ describe('current card API', () => {
     const initial = state();
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
-      { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
+      { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
       { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', cost: 3 },
       { type: 'CARD_POWER_CHANGED', cardId, mutation: { kind: 'ADD', delta: 2 }, cause },
       { type: 'CARD_COST_CHANGED', cardId, delta: -1, cause },
@@ -406,7 +425,7 @@ describe('current card API', () => {
     const initial = state();
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
-      { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
+      { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
       { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', cost: 3 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
@@ -449,7 +468,7 @@ describe('current card API', () => {
       transactionId: 'compact-card-lifecycle',
       initialState: initial,
       events: [
-      { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true },
+      { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
       { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', cost: 3 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_PLAY_COMPLETED', cardId, owner: 'P0', lane: 0, cause },

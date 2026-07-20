@@ -6,6 +6,7 @@ import { createMatchGenesis, createSetupMatch } from './cli/initState';
 import { frameAndFoldEvents } from './transactionTimeline';
 import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
+import type { CardId } from './types/ids';
 import { orderedTestLocationDeck } from './testkit/runtimeFixture';
 
 let failures = 0;
@@ -71,7 +72,16 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
   const initialState = setup.genesis;
   const initialSnapshot = clone(initialState);
   const cardId = initialState.deck.P0[0];
-  const draw: MatchEvent = { type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true };
+  const draw: MatchEvent = {
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId,
+    cause: {
+      sourceId: 'system:replay-test' as CardId,
+      effectKind: 'SYSTEM',
+      reason: 'TEST_DRAW',
+    },
+  };
   const drawTransaction = frameAndFoldEvents({
     transactionId: 'replay-custom-initial:draw',
     initialState: setup.state,

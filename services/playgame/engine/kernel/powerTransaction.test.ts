@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { LocationCardDef } from '../manifest/types';
+import { executePowerCommands } from '../effects/evaluator';
+import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import { getCardState } from '../projections/cardRuntime';
 import { getCardPower } from '../projections/power';
 import { getStoredCardPowerDelta } from '../powerLedger';
@@ -11,8 +12,31 @@ import {
 } from '../testkit/runtimeFixture';
 import { foldFramedEvents, frameAndFoldEvents } from '../transactionTimeline';
 import type { CardId } from '../types/ids';
+import type { EffectRef } from '../types/ability';
+import type { MatchState, PowerMutation } from '../types/state';
 import { KernelInvariantError } from './failure';
-import { changeStoredPower } from './powerTransaction';
+import { resolveStoredPowerTransaction } from './powerTransaction';
+import type { ResolutionBudget } from './contracts';
+import { createRng } from '../rng';
+
+const changeStoredPower = (
+  state: MatchState,
+  cardId: CardId,
+  mutation: PowerMutation,
+  cause: EffectRef,
+  manifest: Manifest,
+  budget?: ResolutionBudget,
+) => resolveStoredPowerTransaction(state, [{
+  type: 'CHANGE_STORED_POWER',
+  cardId,
+  mutation,
+  cause,
+}], {
+  manifest,
+  baseDepth: 0,
+  interpretEffect: (candidate) => ({ events: [], state: candidate }),
+  ...(budget === undefined ? {} : { budget }),
+});
 
 const CARD_ID = 'kernel-power-card' as CardId;
 const SOURCE_ID = 'kernel-power-source' as CardId;
@@ -89,6 +113,114 @@ function fixture(
 }
 
 describe('stored-power kernel transaction', () => {
+  it('fires onGainedPower immediately only for a committed gain on an active card', () => {
+    const gainDefinition: CardDef = {
+      ...testCardDef('gain-reactor', { power: 3 }),
+      abilities: {
+        onGainedPower: [{
+          kind: 'DRAW',
+          owner: 'SELF_OWNER',
+          count: { kind: 'LIT', n: 1 },
+        }],
+      },
+    };
+    const drawnDefinition = testCardDef('drawn');
+    const gameManifest = testManifest([gainDefinition, drawnDefinition]);
+    const build = (revealed: boolean) => buildRuntimeFixture({
+      seed: `gain-reaction:${revealed}`,
+      localSeat: 'P0',
+      turn: 3,
+      phase: 'RESOLVING',
+      priority: 'P0',
+      decks: {
+        P0: [{ id: 'drawn-card', defId: 'drawn' }],
+        P1: [],
+      },
+      hands: { P0: [], P1: [] },
+      lanes: [
+        {
+          P0: [{
+            id: CARD_ID,
+            defId: 'gain-reactor',
+            revealed,
+          }],
+          P1: [],
+        },
+        { P0: [], P1: [] },
+        { P0: [], P1: [] },
+      ],
+      locations: [null, null, null],
+    }).state;
+    const run = (
+      state: MatchState,
+      delta: number,
+      manifest: Manifest = gameManifest,
+    ) => executePowerCommands(state, [{
+      type: 'CHANGE_STORED_POWER',
+      cardId: CARD_ID,
+      mutation: { kind: 'ADD', delta },
+      cause: CAUSE,
+    }], {
+      rng: createRng(`gain-reaction:${delta}`),
+    }, manifest);
+
+    const gain = run(build(true), 1);
+    expect(gain.events.map(event => event.type)).toEqual([
+      'CARD_POWER_CHANGED',
+      'CARD_DRAWN',
+    ]);
+    expect(gain.state.hand.P0).toEqual(['drawn-card']);
+
+    const loss = run(build(true), -1);
+    expect(loss.events.map(event => event.type)).toEqual([
+      'CARD_POWER_CHANGED',
+    ]);
+    expect(loss.state.hand.P0).toEqual([]);
+
+    const unrevealed = run(build(false), 1);
+    expect(unrevealed.events.map(event => event.type)).toEqual([
+      'CARD_POWER_CHANGED',
+    ]);
+    expect(unrevealed.state.hand.P0).toEqual([]);
+
+    const blockedManifest = testManifest(
+      [gainDefinition, drawnDefinition],
+      [courthouse()],
+    );
+    const blockedState = buildRuntimeFixture({
+      seed: 'gain-reaction:blocked',
+      localSeat: 'P0',
+      turn: 3,
+      phase: 'RESOLVING',
+      priority: 'P0',
+      decks: {
+        P0: [{ id: 'drawn-card', defId: 'drawn' }],
+        P1: [],
+      },
+      hands: { P0: [], P1: [] },
+      lanes: [
+        {
+          P0: [{
+            id: CARD_ID,
+            defId: 'gain-reactor',
+            revealed: true,
+          }],
+          P1: [],
+        },
+        { P0: [], P1: [] },
+        { P0: [], P1: [] },
+      ],
+      locations: [{
+        id: 'kernel-courthouse@0',
+        defId: 'kernel-courthouse',
+        revealed: true,
+      }, null, null],
+    }).state;
+    const blocked = run(blockedState, 1, blockedManifest);
+    expect(blocked.events).toEqual([]);
+    expect(blocked.state).toBe(blockedState);
+  });
+
   it('captures closed ADD, SET, and RESET semantics from before/after state', () => {
     const { manifest, state } = fixture();
     const added = changeStoredPower(

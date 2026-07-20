@@ -27,17 +27,11 @@ const MANUAL_REACTION_CALLS = new Set([
 type CountInventory = Readonly<Record<string, Readonly<Record<string, number>>>>;
 
 const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
-  'services/playgame/engine/draw.ts': {
-    CARD_DRAWN: 1,
-  },
   'services/playgame/engine/effects/builtins.ts': {
-    CARD_DRAWN: 1,
     CARD_TRANSFORMED: 1,
     PENDING_EFFECT_ADDED: 2,
   },
   'services/playgame/engine/effects/evaluator.ts': {
-    CARD_DISCARDED: 1,
-    CARD_DRAWN: 1,
     CARD_REVEAL_SCHEDULED: 1,
     CARD_TRANSFORMED: 1,
     ENERGY_CHANGED: 1,
@@ -84,6 +78,10 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   'services/playgame/engine/kernel/operations/power.ts': {
     CARD_POWER_CHANGED: 1,
   },
+  'services/playgame/engine/kernel/operations/hand.ts': {
+    CARD_DISCARDED: 1,
+    CARD_DRAWN: 1,
+  },
   'services/playgame/engine/kernel/revealTransaction.ts': {
     CARD_PLAY_COMPLETED: 1,
     CARD_REVEALED: 1,
@@ -116,19 +114,7 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
   },
 };
 
-const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {
-  'services/playgame/engine/effects/evaluator.ts': {
-    applyHandEntryDebuffs: 2,
-    fireCardTrigger: 1,
-  },
-  'services/playgame/engine/resolve.ts': {
-    applyHandEntryDebuffs: 2,
-    hasPowerGainDrawTrigger: 1,
-  },
-  'services/playgame/runtime/opening.ts': {
-    applyHandEntryDebuffs: 1,
-  },
-};
+const EXPECTED_MANUAL_REACTION_CALL_SURFACES: CountInventory = {};
 
 function productionTypeScriptFiles(): string[] {
   const files: string[] = [];

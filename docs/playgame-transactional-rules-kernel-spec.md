@@ -1245,6 +1245,30 @@ Govern:
 
 Every effect and built-in becomes a command/effect client of the kernel.
 
+#### C5A-1 — Hand Lifecycle and Immediate Power Reactions
+
+The first C5A slice governs:
+
+- deck-to-hand draw by canonical top or explicit existing card instance;
+- hand-to-discard transitions;
+- immutable `onDiscarded` reaction snapshots;
+- typed ongoing hand-entry policies;
+- immediate `onGainedPower` reactions in the same private transaction.
+
+`CARD_DRAWN`, `CARD_DISCARDED`, and `CARD_POWER_CHANGED` each have one owning
+operation. Draw/discard clients submit `DRAW_CARD` or `DISCARD_CARD`; permanent
+Power clients submit `CHANGE_STORED_POWER`. Content does not poll later state
+to infer that one of these transitions happened.
+
+Hand-entry policy is authored as typed ongoing content and is sampled from the
+active post-transition source set. Discard reactions are sampled from the
+discarded card's pre-transition text. Power-gain reactions are sampled from
+the affected card immediately after a committed positive stored-Power change.
+Blocked or no-op mutations schedule no reactions.
+
+Every nested effect remains inside the initiating private transaction. Budget
+failure publishes neither the initiating transition nor any reaction result.
+
 ### C5B — Delete Superseded Control Paths
 
 Delete:

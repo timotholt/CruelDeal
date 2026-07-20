@@ -6,13 +6,8 @@
  * the full effect context, and the manifest. Returns { events, state } exactly
  * like evalEffect.
  *
- * Some reactive/Ongoing builtins are implemented outside this dispatcher,
- * because they belong to engine phases or projections rather than direct
- * effect evaluation:
- *   - DRAW_ON_POWER_GAIN: resolveTurn scans CARD_POWER_CHANGED events.
- *   - DEBUFF_ENEMY_ON_HAND_ENTRY: evaluator hand-entry hook applies debuffs.
- *   - COPY_ONGOING_OF_CHEAPEST_ONGOING and FULL_LANES_POWER: ongoing projection
- *     expands them into normal OngoingExpr entries.
+ * Projection-only builtins remain outside this dispatcher because they are
+ * compiled into normal OngoingExpr entries by the projection layer.
  */
 
 import type { MatchEvent } from '../types/events';
@@ -21,15 +16,13 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { EffectCtx } from './evaluator';
 import type { PlacementCommand } from '../kernel/operations/placement';
+import type { HandCommand } from '../kernel/operations/hand';
 import type { RevealCommand } from '../kernel/revealTransaction';
+import type { ChangeStoredPowerCommand } from '../kernel/types';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
-import {
-  addStoredPower,
-  changeStoredPower,
-} from '../kernel/powerTransaction';
 import {
   addCardTag,
   adjustCardCost,
@@ -64,6 +57,24 @@ export interface BuiltinLifecycleCapabilities {
     commands: readonly RevealCommand[],
     options: {
       readonly rng: EffectCtx['rng'];
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executeHandCommands: (
+    state: MatchState,
+    commands: readonly HandCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
+      readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executePowerCommands: (
+    state: MatchState,
+    commands: readonly ChangeStoredPowerCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
+      readonly depth?: number;
     },
     manifest: Manifest,
   ) => BuiltinResult;
@@ -117,6 +128,36 @@ function runReveal(
     state,
     commands,
     { rng: ctx.rng },
+    manifest,
+  );
+}
+
+function runHand(
+  state: MatchState,
+  commands: readonly HandCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executeHandCommands(
+    state,
+    commands,
+    { rng: ctx.rng, depth: ctx.depth },
+    manifest,
+  );
+}
+
+function runPower(
+  state: MatchState,
+  commands: readonly ChangeStoredPowerCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executePowerCommands(
+    state,
+    commands,
+    { rng: ctx.rng, depth: ctx.depth },
     manifest,
   );
 }
@@ -225,12 +266,18 @@ function otherLanes(state: MatchState, lane: LaneId): LaneId[] {
 function powerToDestroyer(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const delta = (args.delta as number) ?? 0;
   const sourceId = ctx.source.sourceId as CardId;
   const srcCard = getCardRuntime(state, sourceId, manifest);
   if (!srcCard || !delta || !isPowerBearingCard(state, sourceId, manifest)) return noop(state);
-  return addStoredPower(state, sourceId, delta, ctx.source, manifest);
+  return runPower(state, [{
+    type: 'CHANGE_STORED_POWER',
+    cardId: sourceId,
+    mutation: { kind: 'ADD', delta },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -246,7 +293,6 @@ function replaceHandCardHigherCost(
   const owner = ctx.selfOwner;
   if (owner === null) return noop(state);
   if (state.hand[owner].length === 0) return noop(state);
-  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
   const handCardId = ctx.rng.scope('pick').pick([...state.hand[owner]]);
   const handCard = getCardRuntime(state, handCardId, manifest);
@@ -301,7 +347,6 @@ function replaceLowestPowerHandWithCost(
   const targetCost = (args.targetCost as number) ?? 3;
   const owner = ctx.selfOwner;
   if (owner === null || state.hand[owner].length === 0) return noop(state);
-  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
   const sorted = state.hand[owner]
     .map(cardId => getCardRuntime(state, cardId, manifest))
@@ -360,7 +405,6 @@ function replaceCreatedHandCardHigherCost(
       && card.spawnSource.kind !== 'DECK_CREATION'
       && card.spawnSource.kind !== 'SYSTEM');
   if (createdCards.length === 0) return noop(state);
-  if (state.hand[owner].length >= manifest.constants.handCap) return noop(state);
 
   const picked = ctx.rng.scope('pick').pick(createdCards);
   const pickedDef = getCardTemplate(manifest, picked.defId);
@@ -475,6 +519,7 @@ function addDiscountedCardToHand(
 function drawLowestCostCard(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null || state.hand[owner].length >= manifest.constants.handCap) return noop(state);
@@ -484,8 +529,12 @@ function drawLowestCostCard(
     getCardCost(state, a, manifest) - getCardCost(state, b, manifest),
   );
   const target = sorted[0];
-  const e: MatchEvent = { type: 'CARD_DRAWN', owner, cardId: target, toHand: true };
-  return { events: [e], state: apply(state, e, manifest) };
+  return runHand(state, [{
+    type: 'DRAW_CARD',
+    owner,
+    selection: { kind: 'CARD', cardId: target },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
 }
 
 /**
@@ -495,6 +544,7 @@ function drawLowestCostCard(
 function overclockChip(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const delta = (args.delta as number) ?? 5;
   const owner = ctx.selfOwner;
@@ -508,7 +558,12 @@ function overclockChip(
   const events: MatchEvent[] = [];
   let s = state;
 
-  const powerChange = addStoredPower(s, targetId, delta, ctx.source, manifest);
+  const powerChange = runPower(s, [{
+    type: 'CHANGE_STORED_POWER',
+    cardId: targetId,
+    mutation: { kind: 'ADD', delta },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
   events.push(...powerChange.events);
   s = powerChange.state;
 
@@ -659,7 +714,7 @@ function copyTopEnemyDeckCardToHand(
   const oppDeck = state.deck[oppOwner];
   if (oppDeck.length === 0) return noop(state);
 
-  const topCardId = oppDeck[oppDeck.length - 1]; // top = last in array
+  const topCardId = oppDeck[0];
   const topCard = getCardRuntime(state, topCardId, manifest);
   if (!topCard) return noop(state);
   const newId = mintCardId(ctx, 'copy');
@@ -796,13 +851,12 @@ function securityDetail(
     events.push(...spawned.events);
     s = spawned.state;
     if (plan.powerDelta === 0) continue;
-    const powerChange = addStoredPower(
-      s,
-      plan.cardId,
-      plan.powerDelta,
-      ctx.source,
-      manifest,
-    );
+    const powerChange = runPower(s, [{
+      type: 'CHANGE_STORED_POWER',
+      cardId: plan.cardId,
+      mutation: { kind: 'ADD', delta: plan.powerDelta },
+      cause: { ...ctx.source },
+    }], ctx, manifest, lifecycle);
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -812,6 +866,7 @@ function securityDetail(
 function recklessRecruiter(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   if (owner === null) return noop(state);
@@ -826,7 +881,12 @@ function recklessRecruiter(
       events.push(...mutation.events);
       s = mutation.state;
     } else {
-      const powerChange = addStoredPower(s, cardId, 2, ctx.source, manifest);
+      const powerChange = runPower(s, [{
+        type: 'CHANGE_STORED_POWER',
+        cardId,
+        mutation: { kind: 'ADD', delta: 2 },
+        cause: { ...ctx.source },
+      }], ctx, manifest, lifecycle);
       events.push(...powerChange.events);
       s = powerChange.state;
     }
@@ -847,6 +907,7 @@ function cardWasPlayedAtLaneThisTurn(state: MatchState, lane: LaneId, owner?: Ow
 function barracadeCheck(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const self = ctx.self as CardId;
   const lane = ctx.selfLane;
@@ -856,7 +917,12 @@ function barracadeCheck(
   if (!cardWasPlayedAtLaneThisTurn(state, lane)) return noop(state);
 
   const delta = (args.delta as number) ?? 4;
-  return addStoredPower(state, self, delta, ctx.source, manifest);
+  return runPower(state, [{
+    type: 'CHANGE_STORED_POWER',
+    cardId: self,
+    mutation: { kind: 'ADD', delta },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
 }
 
 function leonReturn(
@@ -882,7 +948,12 @@ function leonReturn(
   if (getCardRuntime(s, self, manifest)?.zone !== 'HAND' || !isPowerBearingCard(s, self, manifest)) return { events, state: s };
 
   const delta = (args.delta as number) ?? 2;
-  const powerChange = addStoredPower(s, self, delta, ctx.source, manifest);
+  const powerChange = runPower(s, [{
+    type: 'CHANGE_STORED_POWER',
+    cardId: self,
+    mutation: { kind: 'ADD', delta },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
   events.push(...powerChange.events);
   s = powerChange.state;
   return { events, state: s };
@@ -891,6 +962,7 @@ function leonReturn(
 function riotSquad(
   state: MatchState, _fn: string, args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const self = ctx.self as CardId;
   const lane = ctx.selfLane;
@@ -901,7 +973,12 @@ function riotSquad(
   if (!isPowerBearingCard(state, self, manifest)) return noop(state);
 
   const delta = (args.delta as number) ?? 2;
-  return addStoredPower(state, self, delta, ctx.source, manifest);
+  return runPower(state, [{
+    type: 'CHANGE_STORED_POWER',
+    cardId: self,
+    mutation: { kind: 'ADD', delta },
+    cause: { ...ctx.source },
+  }], ctx, manifest, lifecycle);
 }
 
 function corporateClimber(
@@ -935,7 +1012,12 @@ function corporateClimber(
     0,
   );
   if (gainedPower > 0 && getCardRuntime(s, self, manifest)?.zone === 'LANE' && isPowerBearingCard(s, self, manifest)) {
-    const powerChange = addStoredPower(s, self, gainedPower, ctx.source, manifest);
+    const powerChange = runPower(s, [{
+      type: 'CHANGE_STORED_POWER',
+      cardId: self,
+      mutation: { kind: 'ADD', delta: gainedPower },
+      cause: { ...ctx.source },
+    }], ctx, manifest, lifecycle);
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -973,6 +1055,7 @@ function traumaTeam(
 function socialWorker(
   state: MatchState, _fn: string, _args: BuiltinArgs,
   ctx: EffectCtx, manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
   const owner = ctx.selfOwner;
   const lane = ctx.selfLane;
@@ -994,13 +1077,12 @@ function socialWorker(
       .map(def => def.defId);
     if (candidates.length === 0) continue;
     const newDefId = ctx.rng.scope(`social:${cardId}`).pick(candidates);
-    const powerReset = changeStoredPower(
-      s,
+    const powerReset = runPower(s, [{
+      type: 'CHANGE_STORED_POWER',
       cardId,
-      { kind: 'RESET' },
-      ctx.source,
-      manifest,
-    );
+      mutation: { kind: 'RESET' },
+      cause: { ...ctx.source },
+    }], ctx, manifest, lifecycle);
     events.push(...powerReset.events);
     s = powerReset.state;
     const event: MatchEvent = {
@@ -1048,24 +1130,6 @@ function riffRaff(
   return { events, state: s };
 }
 
-// ---- Projection/phase-owned builtins ---------------------------------------
-
-/**
- * DRAW_ON_POWER_GAIN — reactive: fires when this card gains power.
- * Implemented in resolveTurn's post-reveal/end-of-turn power-gain scan.
- */
-function drawOnPowerGain(state: MatchState): BuiltinResult {
-  return noop(state);
-}
-
-/**
- * DEBUFF_ENEMY_ON_HAND_ENTRY — Ongoing: enemy cards enter hand with -1 power.
- * Implemented by applyHandEntryDebuffs after draw/add-to-hand events.
- */
-function debuffEnemyOnHandEntry(state: MatchState): BuiltinResult {
-  return noop(state);
-}
-
 /**
  * COPY_ONGOING_OF_CHEAPEST_ONGOING — Ongoing: copy ongoing of cheapest Ongoing
  * card here. Implemented in collectAllOngoings.
@@ -1097,8 +1161,6 @@ const REGISTRY = new Map<string, BuiltinHandler>([
   ['MOVE_SELF_TO_RANDOM_OTHER_LANE',   moveSelfToRandomOtherLane],
   ['MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', moveRandomFriendlyToOtherLane],
   ['MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', moveLowestPowerEnemyToOtherLane],
-  ['DRAW_ON_POWER_GAIN',               (_s) => drawOnPowerGain(_s)],
-  ['DEBUFF_ENEMY_ON_HAND_ENTRY',       (_s) => debuffEnemyOnHandEntry(_s)],
   ['COPY_TOP_ENEMY_DECK_CARD_TO_HAND', copyTopEnemyDeckCardToHand],
   ['ADD_DISCARDED_CARD_TO_HAND',       addDiscardedCardToHand],
   ['FULL_LANES_POWER',                 (_s) => fullLanesPower(_s)],

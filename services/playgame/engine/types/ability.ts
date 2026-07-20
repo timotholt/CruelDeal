@@ -299,6 +299,18 @@ export type OngoingExpr =
   | { kind: 'POWER_ADD'; target: Selector; delta: NumExpr; stack: StackingPolicy }
   | { kind: 'COST_ADD'; target: Selector; delta: NumExpr; stack: StackingPolicy }
   /**
+   * Active reaction policy. When a card enters a matching owner's hand, this
+   * source schedules one stored-Power mutation against the entering card.
+   * Unlike a projection, the mutation is committed once and remains if the
+   * source later leaves play.
+   */
+  | {
+      kind: 'HAND_ENTRY_POWER_ADD';
+      ownerFilter: OwnerFilter;
+      delta: NumExpr;
+      stack: 'ADDITIVE';
+    }
+  /**
    * Pre-commit play policy. The staging resolver evaluates this after placing
    * the private candidate card in its lane, then stores the selected timing on
    * the card as part of the same atomic command result. It is not a lifecycle

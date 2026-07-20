@@ -30,8 +30,8 @@ import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
 import { invokeBuiltin, planBuiltinRevealCreations } from './builtins';
 import {
-  addStoredPower,
-  changeStoredPower,
+  resolveStoredPowerTransaction,
+  type FrozenPowerEffectContext,
 } from '../kernel/powerTransaction';
 import {
   resolveDestructionLifecycleTransaction,
@@ -42,6 +42,10 @@ import {
   type FrozenPlacementEffectContext,
 } from '../kernel/placementTransaction';
 import {
+  resolveHandTransaction,
+  type FrozenHandEffectContext,
+} from '../kernel/handTransaction';
+import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
   type RevealCommand,
@@ -49,6 +53,8 @@ import {
 } from '../kernel/revealTransaction';
 import type { KernelWorkExpansion } from '../kernel/kernel';
 import type { PlacementCommand } from '../kernel/operations/placement';
+import type { HandCommand } from '../kernel/operations/hand';
+import type { ChangeStoredPowerCommand } from '../kernel/types';
 import {
   addCardTag,
   adjustCardCost,
@@ -70,65 +76,6 @@ import {
   getAllCardIds,
   getCardRuntime,
 } from '../projections/cardRuntime';
-
-export const MAX_REVEAL_RECURSION = 16;
-
-/** Names of per-card triggered ability slots that fire outside the reveal
- *  cascade. Each slot is a `readonly EffectExpr[]` on `CardAbilities`. */
-type TriggerSlot = 'onMove' | 'onDestroyed' | 'onDiscarded' | 'onAnyCardPlayedHere';
-
-/**
- * Fire a named trigger slot for one card, with a frozen self-context
- * (useful when the underlying card has been moved/destroyed/discarded
- * and we still need to resolve SELF-relative selectors against its
- * state at event time). Returns the concatenated events + final state.
- *
- * Depth is inherited + 1 from `parentDepth` so triggered cascades
- * respect the same recursion cap as the OR evaluator.
- */
-function fireCardTrigger(
-  state: MatchState,
-  cardId: CardId,
-  selfLane: LaneId | null,
-  selfOwner: Owner | null,
-  slot: TriggerSlot,
-  parentRng: Rng,
-  parentDepth: number,
-  manifest: Manifest,
-): EvalResult {
-  const card = getCardRuntime(state, cardId, manifest);
-  if (!card) return { events: [], state };
-  const effs = card.text.abilities[slot];
-  if (!effs || effs.length === 0) return { events: [], state };
-  if (parentDepth >= MAX_REVEAL_RECURSION) {
-    const diag: MatchEvent = { type: 'RECURSION_LIMIT_HIT', cardId, depth: parentDepth };
-    return { events: [diag], state: apply(state, diag, manifest) };
-  }
-  const events: MatchEvent[] = [];
-  let s = state;
-  for (let j = 0; j < effs.length; j++) {
-    const subCtx: EffectCtx = {
-      state: s,
-      manifest,
-      self: cardId,
-      selfKind: 'card',
-      selfLane,
-      selfOwner,
-      rng: parentRng.scope(`${slot}:${cardId}:${j}`),
-      source: {
-        sourceId: cardId,
-        effectKind: 'ON_REVEAL',
-        exprIdx: j,
-        reason: slot,
-      },
-      depth: parentDepth + 1,
-    };
-    const res = evalEffect(s, effs[j], subCtx, manifest);
-    events.push(...res.events);
-    s = res.state;
-  }
-  return { events, state: s };
-}
 
 /** Extra fields carried during effect evaluation, on top of EvalCtx. */
 export interface EffectCtx extends EvalCtx {
@@ -244,23 +191,55 @@ export function executePlacementCommands(
   const transaction = resolvePlacementTransaction(state, commands, {
     manifest,
     baseDepth: options.depth ?? 0,
-    interpretEffect: (candidate, reaction, frozen) => {
-      if (reaction.kind === 'HAND_ENTRY') {
-        return applyHandEntryDebuffs(
-          candidate,
-          reaction.cardId,
-          reaction.owner,
-          placementRng(options.rng, frozen),
-          manifest,
-        );
-      }
-      return evalEffect(
+    interpretEffect: (candidate, reaction, frozen) =>
+      evalEffect(
         candidate,
         reaction.effect,
         effectContextFromPlacement(candidate, frozen, options.rng, manifest),
         manifest,
-      );
-    },
+      ),
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute draw/discard work through the canonical hand transaction. */
+export function executeHandCommands(
+  state: MatchState,
+  commands: readonly HandCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveHandTransaction(state, commands, {
+    manifest,
+    baseDepth: options.depth ?? 0,
+    interpretEffect: (candidate, reaction, frozen) =>
+      evalEffect(
+        candidate,
+        reaction.effect,
+        effectContextFromHand(candidate, frozen, options.rng, manifest),
+        manifest,
+      ),
+  });
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute stored-Power mutations and their immediate reactions atomically. */
+export function executePowerCommands(
+  state: MatchState,
+  commands: readonly ChangeStoredPowerCommand[],
+  options: PlacementCommandsOptions,
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveStoredPowerTransaction(state, commands, {
+    manifest,
+    baseDepth: options.depth ?? 0,
+    interpretEffect: (candidate, reaction, frozen) =>
+      evalEffect(
+        candidate,
+        reaction.effect,
+        effectContextFromPower(candidate, frozen, options.rng, manifest),
+        manifest,
+      ),
   });
   return { events: transaction.events, state: transaction.state };
 }
@@ -294,6 +273,56 @@ function effectContextFromPlacement(
     source: context.source,
     depth: context.depth,
     rng: placementRng(rootRng, context),
+  };
+}
+
+function effectContextFromHand(
+  state: MatchState,
+  context: FrozenHandEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): EffectCtx {
+  return {
+    state,
+    manifest,
+    self: context.self,
+    selfKind: context.selfKind,
+    selfLane: context.selfLane,
+    selfOwner: context.selfOwner,
+    eventCard: context.eventCard,
+    eventLane: context.eventLane,
+    eventOwner: context.eventOwner,
+    rng: context.scopePath.reduce(
+      (scoped, purpose) => scoped.scope(purpose),
+      rootRng,
+    ),
+    source: { ...context.source },
+    depth: context.depth,
+  };
+}
+
+function effectContextFromPower(
+  state: MatchState,
+  context: FrozenPowerEffectContext,
+  rootRng: Rng,
+  manifest: Manifest,
+): EffectCtx {
+  return {
+    state,
+    manifest,
+    self: context.self,
+    selfKind: context.selfKind,
+    selfLane: context.selfLane,
+    selfOwner: context.selfOwner,
+    eventCard: context.eventCard,
+    eventLane: context.eventLane,
+    eventOwner: context.eventOwner,
+    rng: context.scopePath.reduce(
+      (scoped, purpose) => scoped.scope(purpose),
+      rootRng,
+    ),
+    source: { ...context.source },
+    depth: context.depth,
   };
 }
 
@@ -812,7 +841,15 @@ export function evalEffect(
           selfOwner: getCardRuntime(s, id, manifest)?.owner ?? null,
         };
         const delta = evalNum(effect.delta, perTargetCtx);
-        const change = addStoredPower(s, id, delta, ctx.source, manifest);
+        const change = executePowerCommands(s, [{
+          type: 'CHANGE_STORED_POWER',
+          cardId: id,
+          mutation: { kind: 'ADD', delta },
+          cause: { ...ctx.source },
+        }], {
+          rng: ctx.rng.scope(`power-add:${id}`),
+          depth: ctx.depth,
+        }, manifest);
         events.push(...change.events);
         s = change.state;
       }
@@ -828,13 +865,15 @@ export function evalEffect(
         const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
         const value = evalNum(effect.value, { ...liveCtx, state: s, self: id });
-        const change = changeStoredPower(
-          s,
-          id,
-          { kind: 'SET', value },
-          ctx.source,
-          manifest,
-        );
+        const change = executePowerCommands(s, [{
+          type: 'CHANGE_STORED_POWER',
+          cardId: id,
+          mutation: { kind: 'SET', value },
+          cause: { ...ctx.source },
+        }], {
+          rng: ctx.rng.scope(`power-set:${id}`),
+          depth: ctx.depth,
+        }, manifest);
         events.push(...change.events);
         s = change.state;
       }
@@ -901,25 +940,20 @@ export function evalEffect(
 
     case 'DISCARD': {
       const targets = select(effect.target, liveCtx);
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (const id of targets) {
-        const preCard = getCardRuntime(s, id, manifest);
-        const preOwner = preCard?.owner ?? null;
-        const e: MatchEvent = {
-          type: 'CARD_DISCARDED',
-          cardId: id,
-          reason: 'FORCED_EFFECT',
-          cause: ctx.source,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
-        // Discard happens from hand, so selfLane is null.
-        const trig = fireCardTrigger(s, id, null, preOwner, 'onDiscarded', ctx.rng, ctx.depth, manifest);
-        events.push(...trig.events);
-        s = trig.state;
-      }
-      return { events, state: s };
+      return executeHandCommands(
+        state,
+        targets.map((cardId) => ({
+          type: 'DISCARD_CARD' as const,
+          cardId,
+          reason: 'FORCED_EFFECT' as const,
+          cause: { ...ctx.source },
+        })),
+        {
+          rng: ctx.rng.scope('discard'),
+          depth: ctx.depth,
+        },
+        manifest,
+      );
     }
 
     case 'MOVE': {
@@ -969,33 +1003,20 @@ export function evalEffect(
       const owner = resolveOwnerRef(effect.owner, ctx.selfOwner, ctx.eventOwner ?? null);
       if (!owner) return { events: [], state };
       const count = Math.max(0, Math.floor(evalNum(effect.count, liveCtx)));
-      const events: MatchEvent[] = [];
-      let s = state;
-      for (let i = 0; i < count; i++) {
-        const deck = s.deck[owner];
-        if (deck.length === 0) break;
-        const topCardId = deck[0]; // top-of-deck is index 0; DECK_SHUFFLED
-                              // established that convention.
-        if (s.hand[owner].length >= manifest.constants.handCap) break;
-        const e: MatchEvent = {
-          type: 'CARD_DRAWN',
+      return executeHandCommands(
+        state,
+        Array.from({ length: count }, () => ({
+          type: 'DRAW_CARD' as const,
           owner,
-          cardId: topCardId,
-          toHand: true,
-        };
-        events.push(e);
-        s = apply(s, e, manifest);
-        const debuff = applyHandEntryDebuffs(
-          s,
-          topCardId,
-          owner,
-          ctx.rng.scope(`debuff:${topCardId}`),
-          manifest,
-        );
-        events.push(...debuff.events);
-        s = debuff.state;
-      }
-      return { events, state: s };
+          selection: { kind: 'TOP' as const },
+          cause: { ...ctx.source },
+        })),
+        {
+          rng: ctx.rng.scope('draw'),
+          depth: ctx.depth,
+        },
+        manifest,
+      );
     }
 
     case 'CREATE_CARD_IN_ZONE': {
@@ -1213,13 +1234,15 @@ export function evalEffect(
         const defId = pickDefIdFromPool(effect.pool, s, manifest, card.owner, ctx.rng.scope(`transform:${id}`), ctx.eventOwner ?? null);
         if (!defId || defId === card.defId) continue;
         if (effect.resetStats) {
-          const powerReset = changeStoredPower(
-            s,
-            id,
-            { kind: 'RESET' },
-            ctx.source,
-            manifest,
-          );
+          const powerReset = executePowerCommands(s, [{
+            type: 'CHANGE_STORED_POWER',
+            cardId: id,
+            mutation: { kind: 'RESET' },
+            cause: { ...ctx.source },
+          }], {
+            rng: ctx.rng.scope(`transform-power-reset:${id}`),
+            depth: ctx.depth,
+          }, manifest);
           events.push(...powerReset.events);
           s = powerReset.state;
         }
@@ -1450,13 +1473,15 @@ export function evalEffect(
         if (!isPowerBearingCard(s, id, manifest)) continue;
         const card = getCardRuntime(s, id, manifest);
         if (!card) continue;
-        const change = changeStoredPower(
-          s,
-          id,
-          { kind: 'RESET' },
-          ctx.source,
-          manifest,
-        );
+        const change = executePowerCommands(s, [{
+          type: 'CHANGE_STORED_POWER',
+          cardId: id,
+          mutation: { kind: 'RESET' },
+          cause: { ...ctx.source },
+        }], {
+          rng: ctx.rng.scope(`power-reset:${id}`),
+          depth: ctx.depth,
+        }, manifest);
         events.push(...change.events);
         s = change.state;
       }
@@ -1617,48 +1642,11 @@ export function evalEffect(
           banishCards,
           executePlacementCommands,
           executeRevealCommands,
+          executeHandCommands,
+          executePowerCommands,
         },
       );
   }
-}
-
-/** Apply DEBUFF_ENEMY_ON_HAND_ENTRY ongoings to a card that just entered hand.
- *  Call after every CARD_DRAWN or hand-destination CARD_CREATED event. */
-export function applyHandEntryDebuffs(
-  state: MatchState,
-  cardId: CardId,
-  newOwner: Owner,
-  rng: Rng,
-  manifest: Manifest,
-): { events: MatchEvent[]; state: MatchState } {
-  if (!isPowerBearingCard(state, cardId, manifest)) return { events: [], state };
-  const oppOwner: Owner = newOwner === 'P0' ? 'P1' : 'P0';
-  const events: MatchEvent[] = [];
-  let s = state;
-  for (const id of getAllCardIds(s)) {
-    const card = getCardRuntime(s, id, manifest);
-    if (!card || card.owner !== oppOwner || card.zone !== 'LANE' || !card.revealed) continue;
-    for (const expr of card.text.abilities.ongoing ?? []) {
-      const b = expr as any;
-      if (b.kind !== 'CALL_BUILTIN' || b.fn !== 'DEBUFF_ENEMY_ON_HAND_ENTRY') continue;
-      const delta: number = b.args?.delta ?? -1;
-      if (delta === 0) continue;
-      const change = addStoredPower(
-        s,
-        cardId,
-        delta,
-        {
-          sourceId: card.id,
-          effectKind: 'ONGOING',
-          reason: 'DEBUFF_ENEMY_ON_HAND_ENTRY',
-        },
-        manifest,
-      );
-      events.push(...change.events);
-      s = change.state;
-    }
-  }
-  return { events, state: s };
 }
 
 // ============================================================================

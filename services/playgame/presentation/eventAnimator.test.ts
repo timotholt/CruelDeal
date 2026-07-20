@@ -7,9 +7,15 @@ import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
-import type { LaneId } from '../engine/types/ids';
+import type { CardId, LaneId } from '../engine/types/ids';
 import { animateEvent, fallbackRectForZone } from './eventAnimator';
 import { createPlayMotionSurface } from './playMotionSurface';
+
+const drawCause = {
+  sourceId: 'system:event-animator-test' as CardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST_DRAW',
+} as const;
 
 describe('event animator transfer origins', () => {
   it('falls remote hand transfers back to the opponent hand region at board top-center', () => {
@@ -45,7 +51,7 @@ describe('event animator transfer origins', () => {
         type: 'CARD_DRAWN',
         owner: 'P0',
         cardId,
-        toHand: true,
+        cause: drawCause,
       }, BOOTSTRAP_MANIFEST);
       before = apply(before, {
         type: 'CARD_STAGED',
@@ -176,7 +182,7 @@ describe('event animator transfer origins', () => {
         type: 'CARD_DRAWN',
         owner: 'P0',
         cardId,
-        toHand: true,
+        cause: drawCause,
       }, BOOTSTRAP_MANIFEST);
       before = apply(before, {
         type: 'CARD_STAGED',
@@ -301,7 +307,7 @@ describe('event animator transfer origins', () => {
         type: 'CARD_DRAWN',
         owner: 'P1',
         cardId,
-        toHand: true,
+        cause: drawCause,
       }, BOOTSTRAP_MANIFEST);
       const event = {
         type: 'CARD_STAGED' as const,

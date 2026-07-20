@@ -42,7 +42,12 @@ const stateWithHandCard = () => {
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
   const cardId = s.deck.P0[0];
-  const draw = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
+  const draw = event({
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId,
+    cause: source,
+  });
   s = apply(s, draw, BOOTSTRAP_MANIFEST);
   return { state: s, cardId };
 };
@@ -55,7 +60,12 @@ const stateWithHandCard = () => {
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
   const cardId = s0.deck.P0[0];
-  const e = event({ type: 'CARD_DRAWN', owner: 'P0', cardId, toHand: true });
+  const e = event({
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId,
+    cause: source,
+  });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(s0, e, s1);
   assertTransferCoverage(s0, e, s1, transfers);

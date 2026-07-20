@@ -301,16 +301,25 @@ describe('CALL_BUILTIN: MOVE_RANDOM_FRIENDLY_TO_OTHER_LANE', () => {
 // ---- COPY_TOP_ENEMY_DECK_CARD_TO_HAND --------------------------------------
 
 describe('CALL_BUILTIN: COPY_TOP_ENEMY_DECK_CARD_TO_HAND', () => {
-  it('adds a copy of top enemy deck card to own hand', () => {
+  it('copies index zero as the canonical top of a multi-card enemy deck', () => {
     const self = mkCard('self', 'a', 'P0', 'LANE', 0);
-    const enemyDeckCard = mkCard('ed1', 'b', 'P1', 'DECK', null);
-    const manifest = buildManifest([mkDef('a', 3, 2), mkDef('b', 4, 3)]);
-    const state = buildState({ P0: [self], P1: [] }, { P0: [], P1: [] }, { P0: [], P1: [enemyDeckCard] });
+    const top = mkCard('ed1', 'top', 'P1', 'DECK', null);
+    const bottom = mkCard('ed2', 'bottom', 'P1', 'DECK', null);
+    const manifest = buildManifest([
+      mkDef('a', 3, 2),
+      mkDef('top', 4, 3),
+      mkDef('bottom', 5, 4),
+    ]);
+    const state = buildState(
+      { P0: [self], P1: [] },
+      { P0: [], P1: [] },
+      { P0: [], P1: [top, bottom] },
+    );
     const { state: after } = runBuiltin('COPY_TOP_ENEMY_DECK_CARD_TO_HAND', {}, state, manifest, 'self' as CardId, 'P0', 0);
 
     expect(after.hand.P0.length).toBe(1);
     const copied = getCardState(after, after.hand.P0[0]);
-    expect(copied?.defId).toBe('b');
+    expect(copied?.defId).toBe('top');
     expect(copied?.spawnSource.kind).toBe('COPY_OF');
   });
 
@@ -463,5 +472,109 @@ describe('CALL_BUILTIN: REPLACE_HAND_CARD_HIGHER_COST', () => {
     expect(after.hand.P0).not.toContain('h1');
     expect(after.hand.P0.length).toBe(1);
     expect(getCardState(after, after.hand.P0[0])?.defId).toBe('cost3');
+  });
+
+  it('replaces at full hand capacity because banishment frees the slot first', () => {
+    const self = mkCard('self', 'a', 'P0', 'LANE', 0);
+    const handCards = Array.from(
+      { length: 7 },
+      (_, index) => mkCard(`h${index}`, 'cost2', 'P0', 'HAND', null),
+    );
+    const manifest = buildManifest([
+      mkDef('a', 3, 2),
+      mkDef('cost2', 2, 2),
+      mkDef('cost3', 4, 3),
+    ]);
+    const state = buildState(
+      { P0: [self], P1: [] },
+      { P0: handCards, P1: [] },
+    );
+    const result = runBuiltin(
+      'REPLACE_HAND_CARD_HIGHER_COST',
+      { costDelta: 1 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+    );
+
+    expect(result.state.hand.P0).toHaveLength(7);
+    expect(result.state.hand.P0.some(cardId =>
+      getCardState(result.state, cardId)?.defId === 'cost3',
+    )).toBe(true);
+    expect(result.events.map(event => event.type)).toContain('CARD_BANISHED');
+    expect(result.events.map(event => event.type)).toContain('CARD_CREATED');
+  });
+});
+
+describe('full-hand replacement builtins', () => {
+  it('replaces the lowest-Power hand card at capacity', () => {
+    const self = mkCard('self', 'source', 'P0', 'LANE', 0);
+    const weakest = mkCard('weakest', 'weak', 'P0', 'HAND', null);
+    const fillers = Array.from(
+      { length: 6 },
+      (_, index) => mkCard(`strong${index}`, 'strong', 'P0', 'HAND', null),
+    );
+    const manifest = buildManifest([
+      mkDef('source', 3, 2),
+      mkDef('weak', 1, 1),
+      mkDef('strong', 5, 2),
+      mkDef('replacement', 4, 3),
+    ]);
+    const state = buildState(
+      { P0: [self], P1: [] },
+      { P0: [weakest, ...fillers], P1: [] },
+    );
+    const result = runBuiltin(
+      'REPLACE_LOWEST_POWER_HAND_WITH_COST',
+      { targetCost: 3 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+    );
+
+    expect(result.state.hand.P0).toHaveLength(7);
+    expect(result.state.hand.P0).not.toContain(weakest.id);
+    expect(result.state.hand.P0.some(cardId =>
+      getCardState(result.state, cardId)?.defId === 'replacement',
+    )).toBe(true);
+  });
+
+  it('replaces a created hand card at capacity', () => {
+    const self = mkCard('self', 'source', 'P0', 'LANE', 0);
+    const created = mkCard('created', 'cost2', 'P0', 'HAND', null, {
+      spawnSource: {
+        kind: 'CARD_CREATED',
+        sourceCardId: self.id,
+      },
+    });
+    const fillers = Array.from(
+      { length: 6 },
+      (_, index) => mkCard(`filler${index}`, 'cost2', 'P0', 'HAND', null),
+    );
+    const manifest = buildManifest([
+      mkDef('source', 3, 2),
+      mkDef('cost2', 2, 2),
+      mkDef('cost3', 4, 3),
+    ]);
+    const state = buildState(
+      { P0: [self], P1: [] },
+      { P0: [created, ...fillers], P1: [] },
+    );
+    const result = runBuiltin(
+      'REPLACE_CREATED_HAND_CARD_HIGHER_COST',
+      { costDelta: 1 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+    );
+
+    expect(result.state.hand.P0).toHaveLength(7);
+    expect(result.state.hand.P0).not.toContain(created.id);
+    expect(result.state.hand.P0.some(cardId =>
+      getCardState(result.state, cardId)?.defId === 'cost3',
+    )).toBe(true);
   });
 });

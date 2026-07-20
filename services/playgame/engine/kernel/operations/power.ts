@@ -27,11 +27,11 @@ export type PowerChangedEvent = Extract<
   { readonly type: 'CARD_POWER_CHANGED' }
 >;
 
-export type StoredPowerKernelWork = KernelWork<
+export type StoredPowerKernelWork<Effect = never, Context = Readonly<Record<string, never>>> = KernelWork<
   ChangeStoredPowerCommand,
-  never,
-  Readonly<Record<string, never>>,
-  PowerChangedEvent
+  Effect,
+  Context,
+  MatchEvent
 >;
 
 function isFiniteInteger(value: number): boolean {
@@ -70,11 +70,13 @@ function storedDeltaAfterMutation(
  * It validates and proposes immutable commit work. Candidate folding belongs
  * to the kernel commit seam, never to an operation or policy.
  */
-export function planStoredPowerCommand(
+export function planStoredPowerCommand<Effect, Context>(
   state: MatchState,
   work: CommandWork<ChangeStoredPowerCommand>,
   manifest: Manifest,
-): KernelStepResult<KernelWorkExpansion<StoredPowerKernelWork>> {
+): KernelStepResult<
+  KernelWorkExpansion<StoredPowerKernelWork<Effect, Context>>
+> {
   const { command } = work;
   if (String(command.cause.sourceId).trim().length === 0) {
     return kernelStepFailure({

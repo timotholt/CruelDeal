@@ -26,16 +26,15 @@ import {
   revealPlayedCard,
   revealPlayedCardAtEndOfGame,
   executeReactionCommands,
+  executeHandCommands,
   evalEffect,
-  applyHandEntryDebuffs,
   type EffectCtx,
 } from './effects/evaluator';
 import { getCardCost } from './projections/cost';
-import { getCardPower, getLanePower } from './projections/power';
+import { getLanePower } from './projections/power';
 import { getFinalTurn } from './projections/gameEnd';
 import { collectAllOngoings, sourceCtx } from './projections/ongoing';
 import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
-import { buildCardDrawEvents } from './draw';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 import { revealLocation } from './locationLifecycle';
 import {
@@ -206,19 +205,6 @@ function resolveConcede(
 // resolveTurn — full turn cascade
 // ============================================================================
 
-function hasPowerGainDrawTrigger(abilities: import('./manifest/types').CardAbilities | null | undefined): boolean {
-  if (!abilities) return false;
-  const has = (list: readonly import('./types/ability').EffectExpr[] | undefined) =>
-    (list ?? []).some(e => (e as any).kind === 'CALL_BUILTIN' && (e as any).fn === 'DRAW_ON_POWER_GAIN');
-  return has(abilities.onReveal)
-    || has(abilities.onEndOfTurn)
-    || has(abilities.onTurnStart)
-    || has(abilities.onDestroyed)
-    || has(abilities.onMove)
-    || has(abilities.onDiscarded)
-    || has(abilities.onAnyCardPlayedHere);
-}
-
 export interface ResolveTurnResult {
   readonly events: readonly MatchEvent[];
   readonly state: MatchState;
@@ -331,34 +317,6 @@ export function resolveTurn(
       const remove: MatchEvent = { type: 'PENDING_EFFECT_REMOVED', effect: pe };
       events.push(remove);
       s = apply(s, remove, manifest);
-    }
-  }
-
-  // Phase 1.95  DRAW_ON_POWER_GAIN — scan all reveal+EOT events for positive
-  //             power changes on cards that have the reactive draw trigger.
-  {
-    const snapshot = [...events];
-    let scanState = state;
-    for (const e of snapshot) {
-      const before = e.type === 'CARD_POWER_CHANGED'
-        ? getCardPower(scanState, e.cardId, manifest)
-        : 0;
-      scanState = apply(scanState, e, manifest);
-      if (
-        e.type !== 'CARD_POWER_CHANGED'
-        || getCardPower(scanState, e.cardId, manifest) <= before
-      ) continue;
-      const card = getCardRuntime(s, e.cardId, manifest);
-      if (!card || !card.revealed) continue;
-      if (!hasPowerGainDrawTrigger(card.text.abilities)) continue;
-      const draws = buildCardDrawEvents(s, card.owner, 1, manifest);
-      for (const drawEvt of draws) {
-        events.push(drawEvt);
-        s = apply(s, drawEvt, manifest);
-        const debuff = applyHandEntryDebuffs(s, drawEvt.cardId, drawEvt.owner, rng.scope(`pgdebuff:${drawEvt.cardId}`), manifest);
-        events.push(...debuff.events);
-        s = debuff.state;
-      }
     }
   }
 
@@ -550,14 +508,23 @@ export function resolveTurn(
 
   // Phase 6  Manifest-declared turn-start draws per owner, hand-cap permitting.
   for (const owner of ['P0', 'P1'] as const) {
-    const draws = buildCardDrawEvents(s, owner, manifest.constants.turnStartDraw, manifest);
-    for (const e of draws) {
-      events.push(e);
-      s = apply(s, e, manifest);
-      const debuff = applyHandEntryDebuffs(s, e.cardId, owner, rng.scope(`draw-debuff:${e.cardId}`), manifest);
-      events.push(...debuff.events);
-      s = debuff.state;
-    }
+    const draw = executeHandCommands(
+      s,
+      Array.from({ length: manifest.constants.turnStartDraw }, () => ({
+        type: 'DRAW_CARD' as const,
+        owner,
+        selection: { kind: 'TOP' as const },
+        cause: {
+          sourceId: `system:turn:${s.turn}:draw:${owner}` as CardId,
+          effectKind: 'SYSTEM' as const,
+          reason: 'TURN_START_DRAW',
+        },
+      })),
+      { rng: rng.scope(`turn-start-draw:${owner}`) },
+      manifest,
+    );
+    events.push(...draw.events);
+    s = draw.state;
   }
 
   // Phase 7  Reveal every active slot scheduled for this turn, in current

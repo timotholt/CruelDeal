@@ -24,6 +24,7 @@ export interface SourcedOngoing {
   readonly sourceLocationId: LocationCardInstanceId | null;
   readonly sourceLane: LaneId;
   readonly sourceOwner: Owner | null;        // null for locations
+  readonly sourceRuleIndex: number;
   readonly expr: OngoingExpr;                // numeric params already boosted
 }
 

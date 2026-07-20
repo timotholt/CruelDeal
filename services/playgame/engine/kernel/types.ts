@@ -142,6 +142,9 @@ export interface InvokeLocationTriggerCommand extends CausedCommand {
 export interface DrawCardCommand extends CausedCommand {
   readonly type: 'DRAW_CARD';
   readonly owner: Owner;
+  readonly selection:
+    | { readonly kind: 'TOP' }
+    | { readonly kind: 'CARD'; readonly cardId: CardId };
 }
 
 export interface DiscardCardCommand extends CausedCommand {

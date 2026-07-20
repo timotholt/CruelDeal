@@ -16,6 +16,7 @@ export const CARD_ABILITY_SLOTS = [
   'onMove',
   'onDestroyed',
   'onDiscarded',
+  'onGainedPower',
   'onAnyCardPlayedHere',
 ] as const satisfies readonly (keyof CardAbilities)[];
 
@@ -34,6 +35,7 @@ export const CARD_ABILITY_LABEL_BY_SLOT = {
   onMove: 'WHEN_MOVED',
   onDestroyed: 'WHEN_DESTROYED',
   onDiscarded: 'WHEN_DISCARDED',
+  onGainedPower: 'WHEN_POWER_GAINED',
   onAnyCardPlayedHere: 'AFTER_CARD_PLAYED_HERE',
 } as const satisfies Readonly<Record<CardAbilitySlot, string>>;
 

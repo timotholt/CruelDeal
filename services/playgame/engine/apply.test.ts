@@ -285,7 +285,12 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     ...s,
     deck: { P0: [cardInst.id], P1: [] },
   }, { d1: cardInst } as Record<CardId, InternalCardRecord>);
-  const s1 = run(s0, { type: 'CARD_DRAWN', owner: 'P0', cardId: 'd1' as CardId, toHand: true });
+  const s1 = run(s0, {
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId: 'd1' as CardId,
+    cause: locationCause,
+  });
   eq(s1.deck.P0.length, 0, 'CARD_DRAWN: removed from deck');
   eq(s1.hand.P0.length, 1, 'CARD_DRAWN: added to hand');
   eq(getCardState(s1, 'd1' as CardId)!.zone, 'HAND', 'CARD_DRAWN: zone=HAND');

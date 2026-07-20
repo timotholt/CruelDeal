@@ -45,6 +45,9 @@ export interface CardAbilities {
   /** Fires when the card is discarded from hand (CARD_DISCARDED event).
    *  Blade, Swarm, Morbius etc. */
   onDiscarded?: EffectExpr[];
+  /** Fires immediately after a positive stored-Power mutation commits.
+   *  Projection-only changes and blocked mutations do not trigger it. */
+  onGainedPower?: EffectExpr[];
   /** Fires when ANY card (friendly or enemy) is played into the same lane
    *  as this one. Does NOT fire for the card's own stage event. */
   onAnyCardPlayedHere?: EffectExpr[];

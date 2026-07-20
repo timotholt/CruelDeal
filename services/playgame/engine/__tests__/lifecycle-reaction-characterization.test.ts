@@ -916,12 +916,13 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     )).toBe(1);
   });
 
-  it('freezes generic hand-entry debuffs versus builtin draw bypass', () => {
+  it('routes generic and builtin draws through identical hand-entry reactions', () => {
     const handEntryMarker = {
-      kind: 'CALL_BUILTIN',
-      fn: 'DEBUFF_ENEMY_ON_HAND_ENTRY',
-      args: { delta: -1 },
-    } as unknown as OngoingExpr;
+      kind: 'HAND_ENTRY_POWER_ADD',
+      ownerFilter: 'OPP_OWNER',
+      delta: { kind: 'LIT', n: -1 },
+      stack: 'ADDITIVE',
+    } as const satisfies OngoingExpr;
     const gameManifest = manifest([
       cardDef('drawer'),
       cardDef('panopticon', { ongoing: [handEntryMarker] }),
@@ -948,8 +949,11 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       fn: 'DRAW_LOWEST_COST_CARD',
       args: {},
     });
-    expect(builtin.events.map(event => event.type)).toEqual(['CARD_DRAWN']);
-    expect(getStoredCardPowerDelta(builtin.state, deckCard.id, gameManifest)).toBe(0);
+    expect(builtin.events.map(event => event.type)).toEqual([
+      'CARD_DRAWN',
+      'CARD_POWER_CHANGED',
+    ]);
+    expect(getStoredCardPowerDelta(builtin.state, deckCard.id, gameManifest)).toBe(-1);
   });
 
   it('keeps creation distinct from movement, play, and reveal', () => {

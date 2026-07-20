@@ -99,7 +99,12 @@ export type MatchEvent =
   // --- Deck / hand ---
   // CARD_CREATED is exclusively a new identity. Existing instances changing
   // zones use CARD_ZONE_CHANGED and retain their original provenance.
-  | { type: 'CARD_DRAWN'; owner: Owner; cardId: CardId; toHand: true }
+  | {
+      type: 'CARD_DRAWN';
+      owner: Owner;
+      cardId: CardId;
+      cause: EffectRef;
+    }
   | {
       type: 'CARD_CREATED';
       owner: Owner;

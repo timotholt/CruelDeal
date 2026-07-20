@@ -1,12 +1,14 @@
 import type { Manifest } from '../engine/manifest/types';
 import { apply } from '../engine/apply';
-import { executeReactionCommands } from '../engine/effects/evaluator';
+import {
+  executeHandCommands,
+  executeReactionCommands,
+} from '../engine/effects/evaluator';
 import { createRng } from '../engine/rng';
 import { appendGameplayRngAdvance } from '../engine/rng/transaction';
 import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
-import { buildCardDrawEvents } from '../engine/draw';
-import { applyHandEntryDebuffs } from '../engine/effects/evaluator';
+import type { CardId } from '../engine/types/ids';
 import { activeLaneIds, locationCardAtLane } from '../engine/laneTopology';
 import { revealLocation } from '../engine/locationLifecycle';
 
@@ -55,10 +57,23 @@ export function buildOpeningTransaction(
         `buildOpeningTransaction: ${owner} deck has ${genesis.deck[owner].length} cards; needs ${openingHandSize}`,
       );
     }
-    for (const event of buildCardDrawEvents(state, owner, startingHandSize, manifest)) {
-      events.push(event);
-      state = apply(state, event, manifest);
-    }
+    const draw = executeHandCommands(
+      state,
+      Array.from({ length: startingHandSize }, () => ({
+        type: 'DRAW_CARD' as const,
+        owner,
+        selection: { kind: 'TOP' as const },
+        cause: {
+          sourceId: `system:opening-hand:${owner}` as CardId,
+          effectKind: 'SYSTEM' as const,
+          reason: 'OPENING_HAND_DRAW',
+        },
+      })),
+      { rng: openingRng.scope(`opening-hand:${owner}`) },
+      manifest,
+    );
+    events.push(...draw.events);
+    state = draw.state;
   }
 
   const scheduledLocationLanes = activeLaneIds(state).filter((laneId) => {
@@ -108,20 +123,23 @@ export function buildOpeningTransaction(
   // Turn 1 begins after the initial location is live. Use the same normal
   // draw selection and hand-entry reaction pipeline as later turn starts.
   for (const owner of ['P0', 'P1'] as const) {
-    const draws = buildCardDrawEvents(state, owner, turnStartDraw, manifest);
-    for (const event of draws) {
-      events.push(event);
-      state = apply(state, event, manifest);
-      const reactions = applyHandEntryDebuffs(
-        state,
-        event.cardId,
+    const draw = executeHandCommands(
+      state,
+      Array.from({ length: turnStartDraw }, () => ({
+        type: 'DRAW_CARD' as const,
         owner,
-        openingRng.scope(`turn-start-draw:${owner}:${event.cardId}`),
-        manifest,
-      );
-      events.push(...reactions.events);
-      state = reactions.state;
-    }
+        selection: { kind: 'TOP' as const },
+        cause: {
+          sourceId: `system:opening-turn-draw:${owner}` as CardId,
+          effectKind: 'SYSTEM' as const,
+          reason: 'TURN_START_DRAW',
+        },
+      })),
+      { rng: openingRng.scope(`turn-start-draw:${owner}`) },
+      manifest,
+    );
+    events.push(...draw.events);
+    state = draw.state;
   }
 
   return Object.freeze({

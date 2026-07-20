@@ -7,11 +7,13 @@
   "abilities": {
     "ongoing": [
       {
-        "kind": "CALL_BUILTIN",
-        "fn": "DEBUFF_ENEMY_ON_HAND_ENTRY",
-        "args": {
-          "delta": -1
-        }
+        "kind": "HAND_ENTRY_POWER_ADD",
+        "ownerFilter": "OPP_OWNER",
+        "delta": {
+          "kind": "LIT",
+          "n": -1
+        },
+        "stack": "ADDITIVE"
       }
     ]
   },
