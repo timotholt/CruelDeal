@@ -59,7 +59,7 @@ describe('event animator transfer origins', () => {
         owner: 'P0',
         cardId,
         lane: 0 as LaneId,
-        cost: 1,
+        energyPaid: 1,
       }, BOOTSTRAP_MANIFEST);
       const event = {
         type: 'CARD_MOVED' as const,
@@ -190,7 +190,7 @@ describe('event animator transfer origins', () => {
         owner: 'P0',
         cardId,
         lane: 0 as LaneId,
-        cost: 1,
+        energyPaid: 1,
       }, BOOTSTRAP_MANIFEST);
       before = apply(before, { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }, BOOTSTRAP_MANIFEST);
       const event = {
@@ -315,7 +315,7 @@ describe('event animator transfer origins', () => {
         owner: 'P1' as const,
         cardId,
         lane: 1 as LaneId,
-        cost: 1,
+        energyPaid: 1,
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {

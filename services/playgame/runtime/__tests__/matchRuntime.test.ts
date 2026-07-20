@@ -365,7 +365,8 @@ describe('createMatchRuntime', () => {
       expectedRevision: runtime.revision(),
       intent: { type: 'STAGE_CARD', cardId: secondCardId, lane: 1 },
     });
-    expect(runtime.state().stagingOrder).toEqual([firstCardId, secondCardId]);
+    expect(runtime.state().stagedPlays.map(play => play.cardId))
+      .toEqual([firstCardId, secondCardId]);
 
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
@@ -405,7 +406,7 @@ describe('createMatchRuntime', () => {
 
     expect(rejected).toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
     expect(accepted).toMatchObject({ status: 'accepted', revision: revision + 1 });
-    expect(runtime.state().stagingOrder).not.toHaveLength(0);
+    expect(runtime.state().stagedPlays).not.toHaveLength(0);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
   });
 

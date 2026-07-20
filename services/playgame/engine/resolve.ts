@@ -44,6 +44,7 @@ import {
 } from './projections/cardRuntime';
 import { getCardTemplate } from './projections/cardTemplate';
 import { getRevealTimingPolicy } from './kernel/policies/revealTiming';
+import { resolveEnergyTransaction } from './kernel/energyTransaction';
 
 // ============================================================================
 // resolve — intent → events
@@ -99,6 +100,9 @@ function resolveStage(
     return reject(intent.intentId, 'lane full');
   }
   const cost = getCardCost(state, intent.cardId, manifest);
+  if (!Number.isSafeInteger(cost) || cost < 0) {
+    return reject(intent.intentId, 'card cost is not a valid Energy payment');
+  }
   if (state.energy[intent.owner] < cost) {
     return reject(intent.intentId, 'insufficient energy');
   }
@@ -113,18 +117,25 @@ function resolveStage(
       cardId: intent.cardId,
       lane: intent.lane,
       owner: intent.owner,
-      cost,
+      energyPaid: cost,
   };
   events.push(staged);
-  const spent: MatchEvent = {
-    type: 'ENERGY_CHANGED',
+  const stagedState = apply(state, staged, manifest);
+  const spend = resolveEnergyTransaction(stagedState, [{
+    type: 'CHANGE_ENERGY',
+    target: 'CURRENT',
     owner: intent.owner,
     delta: -cost,
     reason: 'CARD_PLAYED',
-  };
-  events.push(spent);
+    cause: {
+      sourceId: intent.cardId,
+      effectKind: 'SYSTEM',
+      reason: 'CARD_STAGE_ENERGY_SPEND',
+    },
+  }], manifest);
+  events.push(...spend.events);
 
-  const candidate = apply(apply(state, staged, manifest), spent, manifest);
+  const candidate = spend.state;
   const revealTiming = getRevealTimingPolicy(candidate, intent.cardId, manifest);
   if (revealTiming) {
     events.push({
@@ -143,19 +154,47 @@ function resolveUnstage(
   intent: Extract<MatchIntent, { type: 'UNSTAGE_CARD' }>,
   manifest: Manifest,
 ): MatchEvent[] {
+  const stagedIntegrityError = validateStagedPlayRecords(state, manifest);
+  if (stagedIntegrityError) {
+    return reject(intent.intentId, stagedIntegrityError);
+  }
   const card = getCardRuntime(state, intent.cardId, manifest);
   if (!card) return reject(intent.intentId, `unknown card ${intent.cardId}`);
   if (card.owner !== intent.owner) return reject(intent.intentId, 'card owner mismatch');
   if (card.revealed) return reject(intent.intentId, 'cannot unstage a revealed card');
-  if (!state.stagingOrder.includes(intent.cardId)) {
+  const stagedPlay = state.stagedPlays.find(
+    staged => staged.cardId === intent.cardId,
+  );
+  if (!stagedPlay) {
     return reject(intent.intentId, 'card not in staging order');
   }
-  const refund = getCardCost(state, intent.cardId, manifest);
+  const refund = stagedPlay.energyPaid;
+  if (!Number.isSafeInteger(refund) || refund < 0) {
+    return reject(intent.intentId, 'staged card has an invalid Energy payment');
+  }
 
-  return [
-    { type: 'CARD_UNSTAGED', intentId: intent.intentId, cardId: intent.cardId },
-    { type: 'ENERGY_CHANGED', owner: intent.owner, delta: refund, reason: 'CARD_UNSTAGED' },
-  ];
+  const unstaged: MatchEvent = {
+    type: 'CARD_UNSTAGED',
+    intentId: intent.intentId,
+    cardId: intent.cardId,
+  };
+  const refundTransaction = resolveEnergyTransaction(
+    apply(state, unstaged, manifest),
+    [{
+      type: 'CHANGE_ENERGY',
+      target: 'CURRENT',
+      owner: intent.owner,
+      delta: refund,
+      reason: 'CARD_UNSTAGED',
+      cause: {
+        sourceId: intent.cardId,
+        effectKind: 'SYSTEM',
+        reason: 'CARD_UNSTAGE_ENERGY_REFUND',
+      },
+    }],
+    manifest,
+  );
+  return [unstaged, ...refundTransaction.events];
 }
 
 function resolveUndoTurn(
@@ -163,25 +202,79 @@ function resolveUndoTurn(
   intent: Extract<MatchIntent, { type: 'UNDO_TURN' }>,
   manifest: Manifest,
 ): MatchEvent[] {
+  const stagedIntegrityError = validateStagedPlayRecords(state, manifest);
+  if (stagedIntegrityError) {
+    return reject(intent.intentId, stagedIntegrityError);
+  }
   // Iterate in REVERSE stage order so each unstage's lane-capacity
   // precondition stays satisfied during replay.
-  const mine = state.stagingOrder
-    .filter(id => getCardRuntime(state, id, manifest)?.owner === intent.owner)
+  const mine = state.stagedPlays
+    .filter(staged =>
+      getCardRuntime(state, staged.cardId, manifest)?.owner === intent.owner,
+    )
     .slice()
     .reverse();
   const events: MatchEvent[] = [];
-  for (const id of mine) {
-    const card = getCardRuntime(state, id, manifest);
+  let candidate = state;
+  for (const stagedPlay of mine) {
+    const { cardId: id, energyPaid: refund } = stagedPlay;
+    const card = getCardRuntime(candidate, id, manifest);
     if (!card) continue;
-    events.push({ type: 'CARD_UNSTAGED', intentId: intent.intentId, cardId: id });
-    events.push({
-      type: 'ENERGY_CHANGED',
+    const unstaged: MatchEvent = {
+      type: 'CARD_UNSTAGED',
+      intentId: intent.intentId,
+      cardId: id,
+    };
+    events.push(unstaged);
+    candidate = apply(candidate, unstaged, manifest);
+    const refunded = resolveEnergyTransaction(candidate, [{
+      type: 'CHANGE_ENERGY',
+      target: 'CURRENT',
       owner: intent.owner,
-      delta: getCardCost(state, id, manifest),
+      delta: refund,
       reason: 'CARD_UNSTAGED',
-    });
+      cause: {
+        sourceId: id,
+        effectKind: 'SYSTEM',
+        reason: 'UNDO_TURN_ENERGY_REFUND',
+      },
+    }], manifest);
+    events.push(...refunded.events);
+    candidate = refunded.state;
   }
   return events;
+}
+
+function validateStagedPlayRecords(
+  state: MatchState,
+  manifest: Manifest,
+): string | null {
+  const seen = new Set<CardId>();
+  for (const staged of state.stagedPlays) {
+    if (
+      !Number.isSafeInteger(staged.energyPaid)
+      || staged.energyPaid < 0
+    ) {
+      return 'staged play has an invalid Energy payment';
+    }
+    if (seen.has(staged.cardId)) {
+      return 'staged play has duplicate payment provenance';
+    }
+    seen.add(staged.cardId);
+
+    const card = getCardRuntime(state, staged.cardId, manifest);
+    if (
+      !card
+      || card.zone !== 'LANE'
+      || card.lane === null
+      || card.revealed
+      || !state.lanesById[card.lane]?.cards[card.owner]
+        .includes(staged.cardId)
+    ) {
+      return 'staged play does not reference an unresolved lane card';
+    }
+  }
+  return null;
 }
 
 function resolveConcede(
@@ -321,7 +414,7 @@ export function resolveTurn(
   }
 
   // Phase 2  TURN_ENDED — clears transient tags (DESTROYED_THIS_TURN,
-  //          MOVED_THIS_TURN) + stagingOrder. `@migrate:atTurnEnd` is where
+  //          MOVED_THIS_TURN) + stagedPlays. `@migrate:atTurnEnd` is where
   //          location `atTurnEnd` abilities will be dispatched in a later
   //          tier; they must run BEFORE this cleanup event.
   const turnEnded: MatchEvent = { type: 'TURN_ENDED', turn: s.turn };
@@ -382,37 +475,56 @@ export function resolveTurn(
   //            3. NEXT_TURN_ENERGY_BONUS_CHANGED (zero the one-shot bonus)
   //          Mirrors: `currentEnergy = maxEnergy + energyEarnedLastTurn`.
   for (const owner of ['P0', 'P1'] as const) {
-    const ramp: MatchEvent = {
-      type: 'MAX_ENERGY_CHANGED',
+    const ramp = resolveEnergyTransaction(s, [{
+      type: 'CHANGE_ENERGY',
+      target: 'MAXIMUM',
       owner,
       delta: 1,
       reason: 'TURN_START',
-    };
-    events.push(ramp);
-    s = apply(s, ramp, manifest);
+      cause: {
+        sourceId: `system:turn-${nextTurn}:energy` as CardId,
+        effectKind: 'SYSTEM',
+        reason: 'TURN_START_MAX_ENERGY_RAMP',
+      },
+    }], manifest);
+    events.push(...ramp.events);
+    s = ramp.state;
 
     const bonus = s.nextTurnEnergyBonus[owner];
     const target = s.maxEnergy[owner] + bonus;
     const refillDelta = target - s.energy[owner];
     if (refillDelta !== 0) {
-      const refill: MatchEvent = {
-        type: 'ENERGY_CHANGED',
+      const refill = resolveEnergyTransaction(s, [{
+        type: 'CHANGE_ENERGY',
+        target: 'CURRENT',
         owner,
         delta: refillDelta,
         reason: 'TURN_START',
-      };
-      events.push(refill);
-      s = apply(s, refill, manifest);
+        cause: {
+          sourceId: `system:turn-${nextTurn}:energy` as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TURN_START_ENERGY_REFILL',
+        },
+      }], manifest);
+      events.push(...refill.events);
+      s = refill.state;
     }
 
     if (bonus !== 0) {
-      const consume: MatchEvent = {
-        type: 'NEXT_TURN_ENERGY_BONUS_CHANGED',
+      const consume = resolveEnergyTransaction(s, [{
+        type: 'CHANGE_ENERGY',
+        target: 'NEXT_TURN_BONUS',
         owner,
         delta: -bonus,
-      };
-      events.push(consume);
-      s = apply(s, consume, manifest);
+        reason: 'TURN_START',
+        cause: {
+          sourceId: `system:turn-${nextTurn}:energy` as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TURN_START_BONUS_CONSUMED',
+        },
+      }], manifest);
+      events.push(...consume.events);
+      s = consume.state;
     }
   }
 

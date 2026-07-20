@@ -6,7 +6,7 @@ export interface BoardCardFacingInput {
   readonly owner: Seat;
   readonly viewerSeat: Seat;
   readonly revealed: boolean;
-  readonly stagingOrder: readonly string[];
+  readonly stagedCardIds: readonly string[];
   readonly resolutionLocked: boolean;
 }
 
@@ -37,6 +37,6 @@ export function isBoardCardResolutionLocked(input: BoardCardResolutionLockInput)
 export function isBoardCardFaceDown(input: BoardCardFacingInput): boolean {
   if (input.revealed) return false;
   if (input.owner !== input.viewerSeat) return true;
-  if (!input.stagingOrder.includes(input.cardId)) return true;
+  if (!input.stagedCardIds.includes(input.cardId)) return true;
   return input.resolutionLocked;
 }

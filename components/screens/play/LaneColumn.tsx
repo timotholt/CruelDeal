@@ -19,7 +19,7 @@ interface LaneColumnProps {
   interactive: boolean;
   inspectable: boolean;
   viewerSeat: Seat;
-  stagingOrder: readonly string[];
+  stagedCardIds: readonly string[];
   resolutionLocked: boolean;
 }
 
@@ -65,7 +65,7 @@ export const LaneColumn = (props: LaneColumnProps) => {
         interactive={props.interactive}
         inspectable={props.inspectable}
         viewerSeat={props.viewerSeat}
-        stagingOrder={props.stagingOrder}
+        stagedCardIds={props.stagedCardIds}
         resolutionLocked={props.resolutionLocked}
       />
       <LocationTile
@@ -84,7 +84,7 @@ export const LaneColumn = (props: LaneColumnProps) => {
         interactive={props.interactive}
         inspectable={props.inspectable}
         viewerSeat={props.viewerSeat}
-        stagingOrder={props.stagingOrder}
+        stagedCardIds={props.stagedCardIds}
         resolutionLocked={props.resolutionLocked}
       />
     </section>

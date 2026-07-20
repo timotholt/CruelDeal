@@ -19,12 +19,11 @@ import {
 } from '../timeline';
 import {
   addCardTag,
-  adjustCardCost,
   changeCardCounter,
   removeCardTag,
   replaceCardText,
-  setCardCost,
 } from '../operations/cardMutations';
+import { resolveCostTransaction } from '../kernel/costTransaction';
 import { resolveStoredPowerTransaction } from '../kernel/powerTransaction';
 import { getCurrentCard } from './card';
 import {
@@ -52,6 +51,30 @@ const changeStoredPower = (
   baseDepth: 0,
   interpretEffect: (candidate) => ({ events: [], state: candidate }),
 });
+const adjustCardCost = (
+  current: MatchState,
+  cardId: CardId,
+  delta: number,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCostTransaction(current, [{
+  type: 'CHANGE_COST',
+  cardId,
+  mutation: { kind: 'ADD', delta },
+  cause: source,
+}], activeManifest);
+const setCardCost = (
+  current: MatchState,
+  cardId: CardId,
+  value: number,
+  source: EffectRef,
+  activeManifest: Manifest,
+) => resolveCostTransaction(current, [{
+  type: 'CHANGE_COST',
+  cardId,
+  mutation: { kind: 'SET', value },
+  cause: source,
+}], activeManifest);
 import { getLocationRuntime } from './locationRuntime';
 import { getLocationTemplate } from './locationTemplate';
 import { findCards } from './query';
@@ -126,7 +149,7 @@ describe('current card API', () => {
       0,
       invalidCause,
       manifest,
-    )).toThrow('card mutation reason must be non-empty');
+    )).toThrow('Cost command reason must be non-empty');
     expect(() => changeStoredPower(
       initial,
       cardId,
@@ -370,12 +393,12 @@ describe('current card API', () => {
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', cost: 3 },
+      { type: 'CARD_STAGED', intentId: 'first-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
       { type: 'CARD_POWER_CHANGED', cardId, mutation: { kind: 'ADD', delta: 2 }, cause },
       { type: 'CARD_COST_CHANGED', cardId, delta: -1, cause },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
-      { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', cost: 2 },
+      { type: 'CARD_STAGED', intentId: 'second-play', cardId, lane: 0, owner: 'P0', energyPaid: 2 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
 
@@ -426,13 +449,13 @@ describe('current card API', () => {
     const cardId = getCardsInZone(initial, manifest, 'DECK', 'P0')[0].id;
     const current = fold([
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', cost: 3 },
+      { type: 'CARD_STAGED', intentId: 'turn-one-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause },
       { type: 'TURN_RESOLUTION_STARTED', turn: 1 },
       { type: 'TURN_ENDED', turn: 1 },
       { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' },
-      { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', cost: 3 },
+      { type: 'CARD_STAGED', intentId: 'turn-two-play', cardId, lane: 1, owner: 'P0', energyPaid: 3 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
     ]);
     const lifecycle = getCardLifecycle(current, cardId);
@@ -469,7 +492,7 @@ describe('current card API', () => {
       initialState: initial,
       events: [
       { type: 'CARD_DRAWN', owner: 'P0', cardId, cause },
-      { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', cost: 3 },
+      { type: 'CARD_STAGED', intentId: 'indexed-play', cardId, lane: 0, owner: 'P0', energyPaid: 3 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_PLAY_COMPLETED', cardId, owner: 'P0', lane: 0, cause },
       { type: 'CARD_DESTROYED', cardId, cause },

@@ -45,6 +45,8 @@ import {
   resolveHandTransaction,
   type FrozenHandEffectContext,
 } from '../kernel/handTransaction';
+import { resolveCostTransaction } from '../kernel/costTransaction';
+import { resolveEnergyTransaction } from '../kernel/energyTransaction';
 import {
   resolveRevealTransaction,
   type FrozenRevealEffectContext,
@@ -54,14 +56,16 @@ import {
 import type { KernelWorkExpansion } from '../kernel/kernel';
 import type { PlacementCommand } from '../kernel/operations/placement';
 import type { HandCommand } from '../kernel/operations/hand';
-import type { ChangeStoredPowerCommand } from '../kernel/types';
+import type {
+  ChangeCostCommand,
+  ChangeEnergyCommand,
+  ChangeStoredPowerCommand,
+} from '../kernel/types';
 import {
   addCardTag,
-  adjustCardCost,
   changeCardCounter,
   removeCardTag,
   replaceCardText,
-  setCardCost,
 } from '../operations/cardMutations';
 import {
   addLocationTag,
@@ -241,6 +245,26 @@ export function executePowerCommands(
         manifest,
       ),
   });
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute permanent Cost mutations through the canonical kernel. */
+export function executeCostCommands(
+  state: MatchState,
+  commands: readonly ChangeCostCommand[],
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveCostTransaction(state, commands, manifest);
+  return { events: transaction.events, state: transaction.state };
+}
+
+/** Execute current, maximum, and next-turn Energy mutations canonically. */
+export function executeEnergyCommands(
+  state: MatchState,
+  commands: readonly ChangeEnergyCommand[],
+  manifest: Manifest,
+): EvalResult {
+  const transaction = resolveEnergyTransaction(state, commands, manifest);
   return { events: transaction.events, state: transaction.state };
 }
 
@@ -895,7 +919,12 @@ export function evalEffect(
         };
         const delta = evalNum(effect.delta, perTargetCtx);
         if (delta === 0) continue;
-        const mutation = adjustCardCost(s, id, delta, ctx.source, manifest);
+        const mutation = executeCostCommands(s, [{
+          type: 'CHANGE_COST',
+          cardId: id,
+          mutation: { kind: 'ADD', delta },
+          cause: { ...ctx.source },
+        }], manifest);
         events.push(...mutation.events);
         s = mutation.state;
       }
@@ -1034,30 +1063,34 @@ export function evalEffect(
           throw new Error('CREATE_CARD_IN_ZONE cannot set and adjust cost together');
         }
         const mutation = effect.setCost
-          ? setCardCost(
-              currentState,
-              newId,
-              Math.max(
-                0,
-                Math.floor(evalNum(effect.setCost, {
-                  ...liveCtx,
-                  state: currentState,
-                })),
-              ),
-              ctx.source,
-              manifest,
-            )
+          ? executeCostCommands(currentState, [{
+              type: 'CHANGE_COST',
+              cardId: newId,
+              mutation: {
+                kind: 'SET',
+                value: Math.max(
+                  0,
+                  Math.floor(evalNum(effect.setCost, {
+                    ...liveCtx,
+                    state: currentState,
+                  })),
+                ),
+              },
+              cause: { ...ctx.source },
+            }], manifest)
           : effect.adjustCost
-            ? adjustCardCost(
-                currentState,
-                newId,
-                Math.trunc(evalNum(effect.adjustCost, {
-                  ...liveCtx,
-                  state: currentState,
-                })),
-                ctx.source,
-                manifest,
-              )
+            ? executeCostCommands(currentState, [{
+                type: 'CHANGE_COST',
+                cardId: newId,
+                mutation: {
+                  kind: 'ADD',
+                  delta: Math.trunc(evalNum(effect.adjustCost, {
+                    ...liveCtx,
+                    state: currentState,
+                  })),
+                },
+                cause: { ...ctx.source },
+              }], manifest)
             : { events: [], state: currentState };
         return {
           events: [...precedingEvents, ...mutation.events],
@@ -1606,8 +1639,14 @@ export function evalEffect(
       if (!owner) return { events: [], state };
       const delta = Math.trunc(evalNum(effect.delta, liveCtx));
       if (delta === 0) return { events: [], state };
-      const e: MatchEvent = { type: 'ENERGY_CHANGED', owner, delta, reason: 'EFFECT', cause: ctx.source };
-      return { events: [e], state: apply(state, e, manifest) };
+      return executeEnergyCommands(state, [{
+        type: 'CHANGE_ENERGY',
+        target: 'CURRENT',
+        owner,
+        delta,
+        reason: 'EFFECT',
+        cause: { ...ctx.source },
+      }], manifest);
     }
 
     case 'ADJUST_MAX_ENERGY': {
@@ -1615,8 +1654,14 @@ export function evalEffect(
       if (!owner) return { events: [], state };
       const delta = Math.trunc(evalNum(effect.delta, liveCtx));
       if (delta === 0) return { events: [], state };
-      const e: MatchEvent = { type: 'MAX_ENERGY_CHANGED', owner, delta, reason: 'EFFECT' };
-      return { events: [e], state: apply(state, e, manifest) };
+      return executeEnergyCommands(state, [{
+        type: 'CHANGE_ENERGY',
+        target: 'MAXIMUM',
+        owner,
+        delta,
+        reason: 'EFFECT',
+        cause: { ...ctx.source },
+      }], manifest);
     }
 
     case 'ADJUST_NEXT_TURN_ENERGY_BONUS': {
@@ -1624,8 +1669,14 @@ export function evalEffect(
       if (!owner) return { events: [], state };
       const delta = Math.trunc(evalNum(effect.delta, liveCtx));
       if (delta === 0) return { events: [], state };
-      const e: MatchEvent = { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED', owner, delta };
-      return { events: [e], state: apply(state, e, manifest) };
+      return executeEnergyCommands(state, [{
+        type: 'CHANGE_ENERGY',
+        target: 'NEXT_TURN_BONUS',
+        owner,
+        delta,
+        reason: 'EFFECT',
+        cause: { ...ctx.source },
+      }], manifest);
     }
 
     // ---- Escape hatch ----------------------------------------------------
@@ -1644,6 +1695,7 @@ export function evalEffect(
           executeRevealCommands,
           executeHandCommands,
           executePowerCommands,
+          executeCostCommands,
         },
       );
   }

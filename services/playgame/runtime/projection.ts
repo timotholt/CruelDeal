@@ -283,7 +283,9 @@ export function projectMatchStateForSeat(
     },
     cards,
     lanes,
-    stagedCards: state.stagingOrder.map(id => cardToken(state, viewerSeat, id)),
+    stagedCards: state.stagedPlays.map(
+      staged => cardToken(state, viewerSeat, staged.cardId),
+    ),
     discard: {
       P0: zoneTokens(state, viewerSeat, 'P0', 'DISCARD'),
       P1: zoneTokens(state, viewerSeat, 'P1', 'DISCARD'),

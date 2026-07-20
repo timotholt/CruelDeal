@@ -100,7 +100,16 @@ export function applyFramed(
 }
 
 function requireEventProvenance(event: MatchEvent): void {
-  if (!('cause' in event) || event.cause === undefined) return;
+  const provenanceRequired = event.type === 'CARD_COST_CHANGED'
+    || event.type === 'ENERGY_CHANGED'
+    || event.type === 'MAX_ENERGY_CHANGED'
+    || event.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED';
+  if (!('cause' in event) || event.cause === undefined) {
+    if (provenanceRequired) {
+      throw new Error(`${event.type} cause is required`);
+    }
+    return;
+  }
   if (String(event.cause.sourceId).trim().length === 0) {
     throw new Error(`${event.type} cause sourceId must be non-empty`);
   }
@@ -137,6 +146,14 @@ function applyEventBody(
     // ---- Staging / play ---------------------------------------------------
 
     case 'CARD_STAGED': {
+      if (
+        !Number.isSafeInteger(event.energyPaid)
+        || event.energyPaid < 0
+      ) {
+        throw new Error(
+          'CARD_STAGED energyPaid must be a non-negative safe integer',
+        );
+      }
       // Move card from HAND -> LANE (face-up to owner, not yet revealed).
       const s1 = removeFromHand(state, event.owner, event.cardId);
       const card1 = readCardInternal(s1, event.cardId);
@@ -158,7 +175,10 @@ function applyEventBody(
       const s3 = addToLane(s2, event.owner, event.lane, event.cardId);
       return {
         ...s3,
-        stagingOrder: [...s3.stagingOrder, event.cardId],
+        stagedPlays: [
+          ...s3.stagedPlays,
+          { cardId: event.cardId, energyPaid: event.energyPaid },
+        ],
         lastPlayedBy: { ...s3.lastPlayedBy, [event.owner]: event.cardId },
       };
     }
@@ -176,18 +196,28 @@ function applyEventBody(
       const s3 = addToHand(s2, card.owner, event.cardId);
       return {
         ...s3,
-        stagingOrder: s3.stagingOrder.filter(id => id !== event.cardId),
+        stagedPlays: s3.stagedPlays.filter(
+          staged => staged.cardId !== event.cardId,
+        ),
       };
     }
 
     case 'ENERGY_CHANGED': {
       const after = state.energy[event.owner] + event.delta;
+      if (
+        !Number.isSafeInteger(event.delta)
+        || !Number.isSafeInteger(after)
+      ) {
+        throw new Error(
+          'ENERGY_CHANGED must produce a safe integer Energy value',
+        );
+      }
       const eEntry: EnergyLogEntry = {
         turn: state.turn,
         delta: event.delta,
         after,
         reason: event.reason,
-        ...(event.cause ? { cause: event.cause } : {}),
+        cause: { ...event.cause },
       };
       return {
         ...state,
@@ -199,20 +229,40 @@ function applyEventBody(
       };
     }
 
-    case 'MAX_ENERGY_CHANGED':
+    case 'MAX_ENERGY_CHANGED': {
+      const after = state.maxEnergy[event.owner] + event.delta;
+      if (
+        !Number.isSafeInteger(event.delta)
+        || !Number.isSafeInteger(after)
+      ) {
+        throw new Error(
+          'MAX_ENERGY_CHANGED must produce a safe integer Energy value',
+        );
+      }
       return {
         ...state,
-        maxEnergy: { ...state.maxEnergy, [event.owner]: state.maxEnergy[event.owner] + event.delta },
+        maxEnergy: { ...state.maxEnergy, [event.owner]: after },
       };
+    }
 
-    case 'NEXT_TURN_ENERGY_BONUS_CHANGED':
+    case 'NEXT_TURN_ENERGY_BONUS_CHANGED': {
+      const after = state.nextTurnEnergyBonus[event.owner] + event.delta;
+      if (
+        !Number.isSafeInteger(event.delta)
+        || !Number.isSafeInteger(after)
+      ) {
+        throw new Error(
+          'NEXT_TURN_ENERGY_BONUS_CHANGED must produce a safe integer Energy value',
+        );
+      }
       return {
         ...state,
         nextTurnEnergyBonus: {
           ...state.nextTurnEnergyBonus,
-          [event.owner]: state.nextTurnEnergyBonus[event.owner] + event.delta,
+          [event.owner]: after,
         },
       };
+    }
 
     // ---- Reveal + OR windows ---------------------------------------------
 
@@ -222,10 +272,16 @@ function applyEventBody(
     case 'CARD_REVEALED': {
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
-      return patchCard(state, event.cardId, {
+      const revealed = patchCard(state, event.cardId, {
         revealed: true,
         revealTiming: null,
       });
+      return {
+        ...revealed,
+        stagedPlays: revealed.stagedPlays.filter(
+          staged => staged.cardId !== event.cardId,
+        ),
+      };
     }
 
     case 'CARD_PLAY_COMPLETED':
@@ -257,6 +313,14 @@ function applyEventBody(
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
       const newDelta = card.costDelta + event.delta;
+      if (
+        !Number.isSafeInteger(event.delta)
+        || !Number.isSafeInteger(newDelta)
+      ) {
+        throw new Error(
+          'CARD_COST_CHANGED must produce a safe integer permanent delta',
+        );
+      }
       const cEntry: CostLogEntry = {
         frame: eventFrame,
         turn: state.turn,
@@ -291,7 +355,9 @@ function applyEventBody(
       });
       return {
         ...s,
-        stagingOrder: s.stagingOrder.filter(id => id !== event.cardId),
+        stagedPlays: s.stagedPlays.filter(
+          staged => staged.cardId !== event.cardId,
+        ),
       };
     }
 
@@ -307,15 +373,7 @@ function applyEventBody(
       // Anywhere → BANISHED (permanent exile, no effect can see it again).
       const card = readCardInternal(state, event.cardId);
       if (!card) return state;
-      let s: MatchState = state;
-      if (card.lane !== null) {
-        s = removeFromLane(s, card.owner, card.lane, event.cardId);
-      }
-      s = removeFromHand(s, card.owner, event.cardId);
-      s = {
-        ...s,
-        deck: { ...s.deck, [card.owner]: s.deck[card.owner].filter(id => id !== event.cardId) },
-      };
+      const s = removeFromAllCardZones(state, card.owner, event.cardId);
       return patchCard(s, event.cardId, { zone: 'BANISHED', lane: null, revealTiming: null });
     }
 
@@ -1033,7 +1091,7 @@ function applyEventBody(
     case 'TURN_ENDED': {
       // End-of-turn housekeeping: DESTROYED_THIS_TURN / MOVED_THIS_TURN tags
       // are transient — clear them so they don't leak into next turn's
-      // projections. Also clear stagingOrder.
+      // projections. Also clear unresolved staged-play provenance.
       const cards: Record<string, InternalCardRecord> = {};
       for (const [id, c] of Object.entries(cardRecordsInternal(state))) {
         cards[id] = {
@@ -1048,7 +1106,7 @@ function applyEventBody(
       return {
         ...state,
         cardStore: createCardStoreInternal(cards),
-        stagingOrder: [],
+        stagedPlays: [],
         phase: 'BETWEEN_TURNS',
       };
     }
@@ -1184,7 +1242,7 @@ function removeFromAllCardZones(state: MatchState, owner: Owner, cardId: CardId)
   return {
     ...s,
     deck: { ...s.deck, [owner]: s.deck[owner].filter(id => id !== cardId) },
-    stagingOrder: s.stagingOrder.filter(id => id !== cardId),
+    stagedPlays: s.stagedPlays.filter(staged => staged.cardId !== cardId),
   };
 }
 

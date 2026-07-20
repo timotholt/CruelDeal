@@ -16,7 +16,7 @@ const facing = (overrides: Partial<BoardCardFacingInput>): boolean => isBoardCar
   owner: 'P0',
   viewerSeat: 'P0',
   revealed: false,
-  stagingOrder: ['card'],
+  stagedCardIds: ['card'],
   resolutionLocked: false,
   ...overrides,
 });
@@ -61,7 +61,7 @@ describe('END TURN card facing', () => {
     const delayed = [
       facing({ resolutionLocked: false }),
       facing({ resolutionLocked: true }),
-      facing({ resolutionLocked: false, stagingOrder: [] }),
+      facing({ resolutionLocked: false, stagedCardIds: [] }),
     ];
 
     expect(delayed).toEqual([false, true, true]);

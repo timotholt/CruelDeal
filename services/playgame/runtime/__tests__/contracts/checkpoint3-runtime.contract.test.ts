@@ -103,7 +103,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     const results = await Promise.all([first, second]);
     expect(results.map((result) => result.status)).toEqual(['accepted', 'accepted']);
     // The trusted local projection exposes only the viewer's private plan.
-    expect(runtime.state().stagingOrder).toHaveLength(1);
+    expect(runtime.state().stagedPlays).toHaveLength(1);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
     expect(runtime.revision()).toBe(baseRevision + 2);
   });
@@ -126,7 +126,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       code: 'RULES_INVALID',
       currentRevision: baseRevision + 1,
     });
-    expect(runtime.state().stagingOrder).toEqual([cardId]);
+    expect(runtime.state().stagedPlays.map(play => play.cardId)).toEqual([cardId]);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
     expect(runtime.revision()).toBe(baseRevision + 1);
   });
@@ -148,7 +148,7 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       original: { status: 'accepted', revision: baseRevision + 1 },
     });
     expect(runtime.transactions().filter((record) => record.intent.intentId === 'retry-me')).toHaveLength(0);
-    expect(runtime.state().stagingOrder).toHaveLength(1);
+    expect(runtime.state().stagedPlays).toHaveLength(1);
     expect(runtime.revision()).toBe(baseRevision + 1);
   });
 

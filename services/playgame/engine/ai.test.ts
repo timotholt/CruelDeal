@@ -98,7 +98,7 @@ const buildState = (
     locationDeck: {
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },
-    pending: [], stagingOrder: [], pendingEffects: [],
+    pending: [], stagedPlays: [], pendingEffects: [],
     lastPlayedBy: { P0: null, P1: null }, result: null,
     energyLog: { P0: [], P1: [] },
     trackedVariables: EMPTY_TRACKED_VARIABLES,

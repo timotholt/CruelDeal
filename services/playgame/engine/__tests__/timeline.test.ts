@@ -16,6 +16,11 @@ import type { MatchEvent } from '../types/events';
 import { buildRuntimeFixture, testCardDef, testManifest } from '../testkit/runtimeFixture';
 
 const manifest = testManifest([testCardDef('timeline-card')]);
+const energyCause = {
+  sourceId: 'system:timeline-energy' as CardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST_ENERGY',
+} as const;
 
 function fixtureState() {
   return buildRuntimeFixture({
@@ -49,7 +54,7 @@ describe('Phase 1.1 canonical timeline', () => {
         destination: { kind: 'HAND' },
         cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST' },
       },
-      { type: 'CARD_STAGED', intentId: 'play-1', owner: 'P0', cardId, lane: 0, cost: 1 },
+      { type: 'CARD_STAGED', intentId: 'play-1', owner: 'P0', cardId, lane: 0, energyPaid: 1 },
       { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_PLAY' } },
       {
@@ -103,7 +108,7 @@ describe('Phase 1.1 canonical timeline', () => {
         { type: 'TURN_RESOLUTION_STARTED', turn: 3 },
         { type: 'TURN_ENDED', turn: 3 },
         { type: 'TURN_STARTED', turn: 4, priority: 'P0', priorityReason: 'RETAINED' },
-        { type: 'MAX_ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START' },
+        { type: 'MAX_ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START', cause: energyCause },
       ],
       manifest,
     });

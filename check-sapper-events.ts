@@ -33,7 +33,7 @@ s = apply(s, {
   cardId: sapperId,
   lane: 1,
   owner: 'P0',
-  cost: 1,
+  energyPaid: 1,
 }, BOOTSTRAP_MANIFEST);
 
 // Resolve turn and check events

@@ -18,15 +18,15 @@ import type { EffectCtx } from './evaluator';
 import type { PlacementCommand } from '../kernel/operations/placement';
 import type { HandCommand } from '../kernel/operations/hand';
 import type { RevealCommand } from '../kernel/revealTransaction';
-import type { ChangeStoredPowerCommand } from '../kernel/types';
+import type {
+  ChangeCostCommand,
+  ChangeStoredPowerCommand,
+} from '../kernel/types';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
 import { isPowerBearingCard } from '../projections/power-bearing';
-import {
-  addCardTag,
-  adjustCardCost,
-} from '../operations/cardMutations';
+import { addCardTag } from '../operations/cardMutations';
 import { activeLaneIds } from '../laneTopology';
 import { getPermanentCardPower } from '../powerLedger';
 import {
@@ -76,6 +76,11 @@ export interface BuiltinLifecycleCapabilities {
       readonly rng: EffectCtx['rng'];
       readonly depth?: number;
     },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executeCostCommands: (
+    state: MatchState,
+    commands: readonly ChangeCostCommand[],
     manifest: Manifest,
   ) => BuiltinResult;
   readonly destroyCards: (
@@ -160,6 +165,15 @@ function runPower(
     { rng: ctx.rng, depth: ctx.depth },
     manifest,
   );
+}
+
+function runCost(
+  state: MatchState,
+  commands: readonly ChangeCostCommand[],
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executeCostCommands(state, commands, manifest);
 }
 type BuiltinHandler = (
   state: MatchState,
@@ -478,13 +492,12 @@ function addDiscountedCardToHand(
 
   // Apply temporary cost discount
   if (costDelta !== 0) {
-    const mutation = adjustCardCost(
-      s,
-      newId,
-      costDelta,
-      ctx.source,
-      manifest,
-    );
+    const mutation = runCost(s, [{
+      type: 'CHANGE_COST',
+      cardId: newId,
+      mutation: { kind: 'ADD', delta: costDelta },
+      cause: { ...ctx.source },
+    }], manifest, lifecycle);
     events.push(...mutation.events);
     s = mutation.state;
 
@@ -877,7 +890,12 @@ function recklessRecruiter(
     const giveCost = ctx.rng.scope(`recruit:${cardId}`).int(0, 1) === 0;
     if (!giveCost && !isPowerBearingCard(state, cardId, manifest)) continue;
     if (giveCost) {
-      const mutation = adjustCardCost(s, cardId, -1, ctx.source, manifest);
+      const mutation = runCost(s, [{
+        type: 'CHANGE_COST',
+        cardId,
+        mutation: { kind: 'ADD', delta: -1 },
+        cause: { ...ctx.source },
+      }], manifest, lifecycle);
       events.push(...mutation.events);
       s = mutation.state;
     } else {

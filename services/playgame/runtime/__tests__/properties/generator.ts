@@ -180,7 +180,7 @@ function acceptedUnstageIntents(
   manifest: Manifest,
 ): MatchIntent[] {
   const candidates: MatchIntent[] = [];
-  for (const cardId of state.stagingOrder) {
+  for (const { cardId } of state.stagedPlays) {
     if (getCardState(state, cardId)?.owner !== owner) continue;
     const intent: MatchIntent = {
       type: 'UNSTAGE_CARD',
@@ -208,7 +208,9 @@ function chooseLegalAction(
 ): MatchIntent | null {
   const stages = acceptedStageIntents(state, owner, intentIndex, manifest);
   const unstages = acceptedUnstageIntents(state, owner, intentIndex, manifest);
-  const hasStagedCard = state.stagingOrder.some((cardId) => getCardState(state, cardId)?.owner === owner);
+  const hasStagedCard = state.stagedPlays.some(
+    ({ cardId }) => getCardState(state, cardId)?.owner === owner,
+  );
   const undo: MatchIntent | null = hasStagedCard
     ? {
         type: 'UNDO_TURN',

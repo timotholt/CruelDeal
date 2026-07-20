@@ -202,7 +202,7 @@ describe('replay debug presentation', () => {
       cardId,
       lane: 2,
       owner: 'P0',
-      cost: 1,
+      energyPaid: 1,
     };
     expect(describeReplayStep(step(stagedEvent), names, actors).summary)
       .toBe('Player 1 played Bone Market to the right lane, slot FL.');

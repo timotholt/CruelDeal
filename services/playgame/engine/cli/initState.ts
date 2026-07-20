@@ -155,7 +155,7 @@ export function createMatchGenesis(
       banished: [],
     },
     pending: [],
-    stagingOrder: [],
+    stagedPlays: [],
     pendingEffects: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,

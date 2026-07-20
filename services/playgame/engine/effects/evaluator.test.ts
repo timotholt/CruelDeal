@@ -169,7 +169,7 @@ function buildState(
       drawPile: [], staging: [], discardPile: [], destroyed: [], banished: [],
     },
     pending: [],
-    stagingOrder: [],
+    stagedPlays: [],
     pendingEffects: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
@@ -811,7 +811,7 @@ function buildState(
       cardId: copyId,
       lane: 1,
       owner: 'P0',
-      cost: 0,
+      energyPaid: 0,
     }, manifest);
     const secondDeath = revealPlayedCard(
       replayed,

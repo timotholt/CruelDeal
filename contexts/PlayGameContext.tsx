@@ -175,9 +175,12 @@ export const PlayGameProvider = (props: {
   };
 
   const undoPending = async (): Promise<boolean> => {
-    const lastStaged = [...runtime.state().stagingOrder]
+    const lastStaged = [...runtime.state().stagedPlays]
       .reverse()
-      .find((id) => getCardRuntime(runtime.state(), id, manifest)?.owner === localSeat);
+      .find(staged =>
+        getCardRuntime(runtime.state(), staged.cardId, manifest)?.owner
+          === localSeat,
+      )?.cardId;
     return lastStaged ? undoPendingCard(lastStaged) : false;
   };
 

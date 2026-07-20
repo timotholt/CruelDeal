@@ -158,7 +158,7 @@ describe('Courthouse Power contract', () => {
       cardId: 'subject' as CardId,
       lane: 0,
       owner: 'P0',
-      cost: 1,
+      energyPaid: 1,
     };
     const atCourthouse = apply(initial, stagedEvent, manifest);
 

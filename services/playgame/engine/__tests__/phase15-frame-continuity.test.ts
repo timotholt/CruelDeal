@@ -4,6 +4,7 @@ import { replayMatch } from '../replay';
 import { currentFrame } from '../timeline';
 import { frameAndFoldEvents } from '../transactionTimeline';
 import type { MatchEvent } from '../types/events';
+import type { CardId } from '../types/ids';
 import { asFrame } from '../types/timeline';
 import {
   buildRuntimeFixture,
@@ -12,6 +13,11 @@ import {
 } from '../testkit/runtimeFixture';
 
 const manifest = testManifest([testCardDef('phase15-frame-card')]);
+const energyCause = {
+  sourceId: 'system:phase15-frame-energy' as CardId,
+  effectKind: 'SYSTEM',
+  reason: 'TEST_ENERGY',
+} as const;
 
 function initialState() {
   return buildRuntimeFixture({
@@ -54,8 +60,8 @@ describe('Phase 1.5 preserves the Phase 1.1 chronology', () => {
       transactionId: 'phase15:tx:2',
       initialState: first.finalState,
       events: [
-        { type: 'MAX_ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START' },
-        { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START' },
+        { type: 'MAX_ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START', cause: energyCause },
+        { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'TURN_START', cause: energyCause },
       ],
       manifest,
     });

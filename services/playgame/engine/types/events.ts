@@ -57,17 +57,17 @@ export type MatchEvent =
   // --- Authority bookkeeping ---
   | { type: 'GAMEPLAY_RNG_ADVANCED'; draws: number }
   // --- Staging / play ---
-  | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneId; owner: Owner; cost: number }
+  | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneId; owner: Owner; energyPaid: number }
   | { type: 'CARD_UNSTAGED'; intentId: string; cardId: CardId }
-  | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause?: EffectRef }
+  | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause: EffectRef }
   /** Mutates `state.maxEnergy[owner]` by `delta`. Fired at TURN_STARTED for the
    *  per-turn +1 ramp and by effects that permanently widen the ceiling. */
-  | { type: 'MAX_ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason }
+  | { type: 'MAX_ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause: EffectRef }
   /** Mutates `state.nextTurnEnergyBonus[owner]` by `delta`. Written by
    *  "next turn +N energy" effects during turn N, consumed at the start of
    *  turn N+1 (the refill target is `maxEnergy + bonus`, then the bonus is
    *  zeroed via another event with the negated delta). */
-  | { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED'; owner: Owner; delta: number }
+  | { type: 'NEXT_TURN_ENERGY_BONUS_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause: EffectRef }
 
   // --- Reveal + OR windows ---
   | { type: 'CARD_REVEAL_SCHEDULED'; cardId: CardId; timing: CardRevealTiming; cause: EffectRef }

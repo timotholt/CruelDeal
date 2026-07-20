@@ -6,7 +6,11 @@ import type {
   LocationCardInstanceId,
   Owner,
 } from '../types/ids';
-import type { PowerMutation, SpawnSource } from '../types/state';
+import type {
+  EnergyReason,
+  PowerMutation,
+  SpawnSource,
+} from '../types/state';
 
 /**
  * Present-tense requests understood by the transactional rules kernel.
@@ -162,13 +166,17 @@ export interface ChangeStoredPowerCommand extends CausedCommand {
 export interface ChangeCostCommand extends CausedCommand {
   readonly type: 'CHANGE_COST';
   readonly cardId: CardId;
-  readonly delta: number;
+  readonly mutation:
+    | { readonly kind: 'ADD'; readonly delta: number }
+    | { readonly kind: 'SET'; readonly value: number };
 }
 
 export interface ChangeEnergyCommand extends CausedCommand {
   readonly type: 'CHANGE_ENERGY';
+  readonly target: 'CURRENT' | 'MAXIMUM' | 'NEXT_TURN_BONUS';
   readonly owner: Owner;
   readonly delta: number;
+  readonly reason: EnergyReason;
 }
 
 export interface LocationLifecycleCommand extends CausedCommand {

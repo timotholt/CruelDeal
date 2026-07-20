@@ -25,6 +25,8 @@ const emptyLanes = (): [RuntimeLaneSpec, RuntimeLaneSpec, RuntimeLaneSpec] => [
   { P0: [], P1: [] },
   { P0: [], P1: [] },
 ];
+const staged = (...cardIds: string[]) =>
+  cardIds.map(cardId => ({ cardId, energyPaid: 0 }));
 
 function fixture(
   seed: string,
@@ -154,7 +156,10 @@ describe('Phase 0 runtime characterization', () => {
       P1: [],
     };
     const { events, transitions } = characterizeTurn(
-      fixture('one-reveal-cascade', { lanes, stagingOrder: ['cascade-card'] }),
+      fixture('one-reveal-cascade', {
+        lanes,
+        stagedPlays: staged('cascade-card'),
+      }),
       testManifest([revealCascade]),
     );
     const eventTypes = events.map((event) => event.type);
@@ -188,7 +193,7 @@ describe('Phase 0 runtime characterization', () => {
       fixture('multi-reveal-priority', {
         priority: 'P1',
         lanes,
-        stagingOrder: ['p0-first', 'p1-priority', 'p0-second'],
+        stagedPlays: staged('p0-first', 'p1-priority', 'p0-second'),
       }),
       testManifest([plain]),
     );
@@ -209,7 +214,10 @@ describe('Phase 0 runtime characterization', () => {
       P1: [],
     };
     const { events } = characterizeTurn(
-      fixture('effects-after-final-flip', { lanes, stagingOrder: ['final-flip'] }),
+      fixture('effects-after-final-flip', {
+        lanes,
+        stagedPlays: staged('final-flip'),
+      }),
       testManifest([plain, eotBuffer]),
     );
     const flipIndex = events.findIndex((event) => event.type === 'CARD_REVEALED');
@@ -334,7 +342,7 @@ describe('Phase 0 runtime characterization', () => {
       localSeat,
       priority: localSeat,
       lanes,
-      stagingOrder: ['local-card'],
+      stagedPlays: staged('local-card'),
     });
     const { events, state } = characterizeTurn(runtimeFixture, testManifest([plain]));
 

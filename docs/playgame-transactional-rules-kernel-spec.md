@@ -1269,6 +1269,50 @@ Blocked or no-op mutations schedule no reactions.
 Every nested effect remains inside the initiating private transaction. Budget
 failure publishes neither the initiating transition nor any reaction result.
 
+#### C5A-2 — Cost, Energy, and Staged-Play Payment Provenance
+
+The second C5A slice governs:
+
+- permanent card-Cost `ADD` and effective-Cost `SET` mutations;
+- current Energy, maximum Energy, and next-turn Energy bonus mutations;
+- stage payment, unstage refund, undo refund, turn ramp, turn refill, and
+  next-turn bonus consumption;
+- exact payment provenance for unresolved hand-origin plays.
+
+`CARD_COST_CHANGED` has one owning operation.
+`ENERGY_CHANGED`, `MAX_ENERGY_CHANGED`, and
+`NEXT_TURN_ENERGY_BONUS_CHANGED` have one owning operation. Every emitted
+mutation records a non-empty semantic cause. The reducer rejects provenance-
+free cost or Energy events rather than creating history that cannot explain
+itself.
+
+An unresolved play is stored canonically as:
+
+```ts
+interface StagedPlay {
+  readonly cardId: CardId;
+  readonly energyPaid: number;
+}
+```
+
+`MatchState.stagedPlays` replaces the old ID-only staging order. `CARD_STAGED`
+records the exact non-negative integer payment accepted by the stage
+transaction. Unstage and undo refund only that stored amount; they never
+re-project the card's Cost. A later permanent or ongoing Cost change therefore
+cannot mint Energy, destroy Energy, or retroactively rewrite the historical
+payment.
+
+Reveal, unstage, destruction, banishment/zone removal, and turn cleanup close
+the corresponding staged-play record. Movement and transformation retain it
+until the original unresolved play closes. Invalid payment provenance rejects
+the whole intent before any unstage/refund prefix is published.
+
+Cost and Energy batches use private candidate folding, closed transition
+semantics, deterministic command order, work/event budgets, and all-or-nothing
+publication. They do not dispatch reactions in this slice, but they use the
+same transaction kernel so future policies and reactions have one governed
+extension point.
+
 ### C5B — Delete Superseded Control Paths
 
 Delete:

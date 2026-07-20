@@ -99,7 +99,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 // Tests
 // ============================================================================
 
-// -- CARD_STAGED: moves from hand to lane; face-down; stagingOrder + lastPlayedBy
+// -- CARD_STAGED: moves to lane; records staged payment + lastPlayedBy ------
 
 {
   const s0 = stateWithSentinelInHand();
@@ -109,7 +109,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     cardId: 's1' as CardId,
     lane: 0,
     owner: 'P0',
-    cost: 3,
+    energyPaid: 3,
   });
   const c = getCardState(s1, 's1' as CardId)!;
   eq(c.zone, 'LANE', 'CARD_STAGED: zone becomes LANE');
@@ -117,7 +117,11 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.revealed, false, 'CARD_STAGED: not revealed (face-down pre-reveal)');
   eq(s1.hand.P0.length, 0, 'CARD_STAGED: hand drained');
   eq(s1.lanesById[0].cards.P0, ['s1'] as CardId[], 'CARD_STAGED: card in lane 0 player');
-  eq(s1.stagingOrder, ['s1'] as CardId[], 'CARD_STAGED: pushed onto stagingOrder');
+  eq(
+    s1.stagedPlays,
+    [{ cardId: 's1' as CardId, energyPaid: 3 }],
+    'CARD_STAGED: appends staged payment provenance',
+  );
   eq(s1.lastPlayedBy.P0, 's1' as CardId, 'CARD_STAGED: updates lastPlayedBy.P0');
   eq(s1.timeline.frame, 1, 'CARD_STAGED: advances the timeline');
 }
@@ -128,7 +132,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const s2 = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     { type: 'CARD_UNSTAGED', intentId: 'i2', cardId: 's1' as CardId },
   );
   const c = getCardState(s2, 's1' as CardId)!;
@@ -136,16 +140,64 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.lane, null, 'CARD_UNSTAGED: lane cleared');
   eq(s2.hand.P0.length, 1, 'CARD_UNSTAGED: hand restored');
   eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_UNSTAGED: removed from lane');
-  eq(s2.stagingOrder.length, 0, 'CARD_UNSTAGED: removed from stagingOrder');
+  eq(s2.stagedPlays.length, 0, 'CARD_UNSTAGED: removed from stagedPlays');
 }
 
 // -- ENERGY_CHANGED: additive
 
 {
   const s0 = emptyState();
-  const s1 = run(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -3, reason: 'CARD_PLAYED' });
+  const s1 = run(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -3, reason: 'CARD_PLAYED', cause: locationCause });
   eq(s1.energy.P0, -2, 'ENERGY_CHANGED: delta -3 from 1 = -2');
   eq(s1.energy.P1, 1, 'ENERGY_CHANGED: opponent unchanged');
+}
+
+// -- Cost and Energy reducers require complete provenance -------------------
+
+{
+  const state = stateWithSentinelInHand();
+  const provenanceRequiredEvents = [
+    {
+      type: 'CARD_COST_CHANGED',
+      cardId: 's1' as CardId,
+      delta: 1,
+    },
+    {
+      type: 'ENERGY_CHANGED',
+      owner: 'P0',
+      delta: 1,
+      reason: 'EFFECT',
+    },
+    {
+      type: 'MAX_ENERGY_CHANGED',
+      owner: 'P0',
+      delta: 1,
+      reason: 'EFFECT',
+    },
+    {
+      type: 'NEXT_TURN_ENERGY_BONUS_CHANGED',
+      owner: 'P0',
+      delta: 1,
+      reason: 'EFFECT',
+    },
+  ] as const;
+  for (const event of provenanceRequiredEvents) {
+    let thrown: unknown;
+    try {
+      apply(
+        state,
+        event as unknown as MatchEvent,
+        BOOTSTRAP_MANIFEST,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+    truthy(
+      thrown instanceof Error
+        && thrown.message === `${event.type} cause is required`,
+      `${event.type}: missing cause is rejected`,
+    );
+  }
 }
 
 // -- CARD_REVEALED: revealed := true
@@ -154,7 +206,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const staged = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
   );
   eq(getCardState(staged, 's1' as CardId)!.revealTiming, { kind: 'TURN', turn: 1 }, 'CARD_STAGED: schedules reveal for the current turn');
   const delayed = run(
@@ -173,6 +225,11 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   );
   eq(getCardState(s2, 's1' as CardId)!.revealed, true, 'CARD_REVEALED: revealed=true');
   eq(getCardState(s2, 's1' as CardId)!.revealTiming, null, 'CARD_REVEALED: clears reveal timing');
+  eq(
+    s2.stagedPlays.length,
+    0,
+    'CARD_REVEALED closes unresolved staged payment provenance',
+  );
 }
 
 // -- CARD_POWER_CHANGED: appends semantic ledger entries and affects getCardPower
@@ -180,7 +237,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const staged = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     { type: 'CARD_REVEALED', cardId: 's1' as CardId, cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
   );
   // Armored Van has no ongoing; just check basePower to the lane total, not to any card's own power.
@@ -208,7 +265,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const destroyed = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     { type: 'CARD_DESTROYED', cardId: 's1' as CardId,
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } },
   );
@@ -217,6 +274,11 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(c.lane, null, 'CARD_DESTROYED: lane cleared');
   eq(destroyed.lanesById[0].cards.P0.length, 0, 'CARD_DESTROYED: removed from lane');
   truthy(c.tags.some(t => t.kind === 'DESTROYED_THIS_TURN'), 'CARD_DESTROYED: tagged DESTROYED_THIS_TURN');
+  eq(
+    destroyed.stagedPlays.length,
+    0,
+    'CARD_DESTROYED: closes staged payment provenance',
+  );
 }
 
 // -- CARD_MOVED: swaps lane membership and tags MOVED_THIS_TURN
@@ -225,7 +287,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const moved = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     { type: 'CARD_MOVED', cardId: 's1' as CardId, fromLane: 0, toLane: 2,
       cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' } },
   );
@@ -233,6 +295,34 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(moved.lanesById[2].cards.P0, ['s1'] as CardId[], 'CARD_MOVED: arrived at lane 2');
   eq(getCardState(moved, 's1' as CardId)!.lane, 2, 'CARD_MOVED: card.lane updated');
   truthy(getCardState(moved, 's1' as CardId)!.tags.some(t => t.kind === 'MOVED_THIS_TURN'), 'CARD_MOVED: tagged MOVED_THIS_TURN');
+  eq(
+    moved.stagedPlays,
+    [{ cardId: 's1' as CardId, energyPaid: 3 }],
+    'CARD_MOVED: retains staged payment provenance',
+  );
+  const transformed = run(moved, {
+    type: 'CARD_TRANSFORMED',
+    cardId: 's1' as CardId,
+    oldDefId: 'armored-van',
+    newDefId: 'guard',
+    cause: locationCause,
+  });
+  eq(
+    transformed.stagedPlays,
+    [{ cardId: 's1' as CardId, energyPaid: 3 }],
+    'CARD_TRANSFORMED: retains staged payment provenance',
+  );
+  const returnedToHand = run(transformed, {
+    type: 'CARD_ZONE_CHANGED',
+    cardId: 's1' as CardId,
+    destination: { kind: 'HAND' },
+    cause: locationCause,
+  });
+  eq(
+    returnedToHand.stagedPlays.length,
+    0,
+    'CARD_ZONE_CHANGED: closes staged payment provenance',
+  );
 }
 
 // -- CARD_TAG_ADDED / REMOVED: uniqueness + removal
@@ -318,11 +408,16 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.hand.P0.length, 0, 'CARD_BANISHED: gone from hand');
   // From lane:
   const s2 = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
   );
   eq(getCardState(s2, 's1' as CardId)!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
   eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_BANISHED: gone from lane');
+  eq(
+    s2.stagedPlays.length,
+    0,
+    'CARD_BANISHED: closes staged payment provenance',
+  );
 }
 
 // -- CARD_CREATED in hand: mints with spawnSource (Agent 13 / Collector)
@@ -508,7 +603,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(resolving.phase, 'RESOLVING', 'TURN_RESOLUTION_STARTED: phase = RESOLVING');
 
   const s1 = run(resolving,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', cost: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
     // Give the card a transient tag...
     {
       type: 'CARD_TAG_ADDED',
@@ -520,7 +615,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   );
   truthy(!getCardState(s1, 's1' as CardId)!.tags.some(t => t.kind === 'MOVED_THIS_TURN'),
     'TURN_ENDED: transient tags cleared');
-  eq(s1.stagingOrder.length, 0, 'TURN_ENDED: stagingOrder cleared');
+  eq(s1.stagedPlays.length, 0, 'TURN_ENDED: stagedPlays cleared');
   eq(s1.phase, 'BETWEEN_TURNS', 'TURN_ENDED: phase = BETWEEN_TURNS');
 
   const s2 = run(s1, { type: 'TURN_STARTED', turn: 2, priority: 'P1', priorityReason: 'MORE_POWER' });
@@ -564,9 +659,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const s1 = run(s0,
-    { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT' },
-    { type: 'ENERGY_CHANGED', owner: 'P1',    delta: -1, reason: 'EFFECT' },
-    { type: 'ENERGY_CHANGED', owner: 'P0', delta: +2, reason: 'TURN_START' },
+    { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT', cause: locationCause },
+    { type: 'ENERGY_CHANGED', owner: 'P1',    delta: -1, reason: 'EFFECT', cause: locationCause },
+    { type: 'ENERGY_CHANGED', owner: 'P0', delta: +2, reason: 'TURN_START', cause: locationCause },
   );
   eq(s1.timeline.frame, 3, 'canonical frame is monotonic from genesis');
 }
@@ -576,7 +671,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const frozen = JSON.parse(JSON.stringify(s0));
-  const _ = apply(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT' }, BOOTSTRAP_MANIFEST);
+  const _ = apply(s0, { type: 'ENERGY_CHANGED', owner: 'P0', delta: -1, reason: 'EFFECT', cause: locationCause }, BOOTSTRAP_MANIFEST);
   void _;
   eq(JSON.stringify(s0), JSON.stringify(frozen), 'apply() does not mutate the input state');
 }

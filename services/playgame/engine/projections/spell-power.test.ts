@@ -34,7 +34,7 @@ const fixture = buildRuntimeFixture({
     { P0: [], P1: [] },
   ],
   locations: [null, null, null],
-  stagingOrder: ['spell-1'],
+  stagedPlays: [{ cardId: 'spell-1' as CardId, energyPaid: 1 }],
 });
 
 describe('spell cards have no power', () => {

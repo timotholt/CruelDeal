@@ -195,9 +195,9 @@ function withLaneCard(
         ...input.lanesById,
         [laneId]: nextLane,
       },
-      stagingOrder: options.staged
-        ? [...input.stagingOrder, cardId]
-        : input.stagingOrder,
+      stagedPlays: options.staged
+        ? [...input.stagedPlays, { cardId, energyPaid: 0 }]
+        : input.stagedPlays,
     }, instance),
   };
 }
@@ -684,7 +684,8 @@ describe('lane destruction invariants', () => {
     expect(result.ok).toBe(true);
     expect(getCardState(result.state, faceUp.cardId)!.zone).toBe('DESTROYED');
     expect(getCardState(result.state, faceDown.cardId)!.zone).toBe('DESTROYED');
-    expect(result.state.stagingOrder).not.toContain(faceDown.cardId);
+    expect(result.state.stagedPlays.map(play => play.cardId))
+      .not.toContain(faceDown.cardId);
     expect(result.events.filter(event => event.type === 'CARD_DESTROYED')).toHaveLength(2);
     expect(result.events.some(event => event.type === 'CARD_REVEALED')).toBe(false);
   });

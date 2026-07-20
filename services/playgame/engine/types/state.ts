@@ -180,8 +180,8 @@ export interface EnergyLogEntry {
   /** energy[owner] AFTER applying this entry. */
   readonly after: number;
   readonly reason: EnergyReason;
-  /** Present when reason === 'EFFECT'; identifies the source card/location. */
-  readonly cause?: EffectRef;
+  /** Exact source of this mutation, including system bookkeeping. */
+  readonly cause: EffectRef;
 }
 
 // ---- Match phase -----------------------------------------------------------
@@ -249,6 +249,12 @@ export interface CardLifecycleState {
 }
 
 export const EMPTY_CARD_LIFECYCLE: CardLifecycleState = Object.freeze({});
+
+/** One unresolved hand-origin play and the exact Energy it committed. */
+export interface StagedPlay {
+  readonly cardId: CardId;
+  readonly energyPaid: number;
+}
 
 export interface InternalCardRecord {
   readonly id: CardId;
@@ -458,7 +464,7 @@ export interface MatchState {
   readonly locationStore: LocationStore;
   readonly locationDeck: LocationDeckState;
   readonly pending: readonly CardId[];
-  readonly stagingOrder: readonly CardId[];
+  readonly stagedPlays: readonly StagedPlay[];
   readonly pendingEffects: readonly PendingEffect[];
   readonly lastPlayedBy: Readonly<Record<Owner, CardId | null>>;
   readonly result: MatchResult | null;

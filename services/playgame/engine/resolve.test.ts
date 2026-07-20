@@ -11,6 +11,7 @@ import { resolve, resolveTurn as resolveEngineTurn } from './resolve';
 import { apply } from './apply';
 import { createRng } from './rng';
 import { getCardPower, getLanePower } from './projections';
+import { getCardCost } from './projections/cost';
 import type { CardDef, LocationCardDef, Manifest } from './manifest/types';
 import type {
   InternalCardRecord,
@@ -216,8 +217,29 @@ function resolveCurrentTurn(
     type: 'STAGE_CARD', intentId: 'i-cost', owner: 'P0', cardId: hand.cardId, lane: 0,
   }, createRng('r'), manifest);
   eq(events.length, 2, 'STAGE_CARD(projected cost): emits 2 events');
-  eq((events[0] as { cost: number }).cost, 1, 'CARD_STAGED carries reduced cost');
+  eq(
+    (events[0] as { energyPaid: number }).energyPaid,
+    1,
+    'CARD_STAGED carries exact reduced Energy payment',
+  );
   eq((events[1] as { delta: number }).delta, -1, 'ENERGY_CHANGED uses reduced cost');
+  const staged = runEvents(s, events, manifest);
+  eq(
+    getCardCost(staged, hand.cardId, manifest),
+    2,
+    'staged card no longer receives the hand-only discount',
+  );
+  const unstage = resolve(staged, {
+    type: 'UNSTAGE_CARD',
+    intentId: 'i-cost-undo',
+    owner: 'P0',
+    cardId: hand.cardId,
+  }, createRng('r'), manifest);
+  eq(
+    (unstage[1] as { delta: number }).delta,
+    1,
+    'hand-only discount refunds the exact Energy paid, not lane Cost',
+  );
 }
 
 // -- STAGE_CARD: insufficient energy → INTENT_REJECTED ---------------------
@@ -230,6 +252,65 @@ function resolveCurrentTurn(
   }, createRng('r'), manifest);
   eq(events.length, 1, 'STAGE_CARD(over-cost): single event');
   eq(events[0].type, 'INTENT_REJECTED', 'STAGE_CARD(over-cost): INTENT_REJECTED');
+}
+
+// -- UNDO_TURN rejects corrupt payment provenance without an event prefix ---
+
+{
+  const manifest = mkManifest([mkCard('grunt', 3, 1)]);
+  const { state: s0, cardId } = withCardInHand(
+    baseState({ turn: 3 }),
+    'grunt',
+  );
+  const staged = runEvents(s0, resolve(s0, {
+    type: 'STAGE_CARD',
+    intentId: 'corrupt-stage',
+    owner: 'P0',
+    cardId,
+    lane: 0,
+  }, createRng('corrupt-stage'), manifest), manifest);
+  const corrupt = {
+    ...staged,
+    stagedPlays: [{ cardId, energyPaid: Number.NaN }],
+  };
+  const events = resolve(corrupt, {
+    type: 'UNDO_TURN',
+    intentId: 'corrupt-undo',
+    owner: 'P0',
+  }, createRng('corrupt-undo'), manifest);
+  eq(events.length, 1, 'corrupt UNDO_TURN emits no partial unstage/refund');
+  eq(events[0].type, 'INTENT_REJECTED', 'corrupt UNDO_TURN is rejected');
+}
+
+// -- UNDO_TURN rejects duplicate payment provenance atomically --------------
+
+{
+  const manifest = mkManifest([mkCard('grunt', 3, 1)]);
+  const { state: s0, cardId } = withCardInHand(
+    baseState({ turn: 3 }),
+    'grunt',
+  );
+  const staged = runEvents(s0, resolve(s0, {
+    type: 'STAGE_CARD',
+    intentId: 'duplicate-stage',
+    owner: 'P0',
+    cardId,
+    lane: 0,
+  }, createRng('duplicate-stage'), manifest), manifest);
+  const corrupt = {
+    ...staged,
+    stagedPlays: [
+      ...staged.stagedPlays,
+      { ...staged.stagedPlays[0]! },
+    ],
+  };
+  const events = resolve(corrupt, {
+    type: 'UNDO_TURN',
+    intentId: 'duplicate-undo',
+    owner: 'P0',
+  }, createRng('duplicate-undo'), manifest);
+  eq(events.length, 1, 'duplicate UNDO_TURN emits no partial refund prefix');
+  eq(events[0].type, 'INTENT_REJECTED', 'duplicate UNDO_TURN is rejected');
 }
 
 // -- STAGE_CARD: lane full → INTENT_REJECTED --------------------------------
@@ -258,7 +339,7 @@ function resolveCurrentTurn(
   truthy((events[0] as { reason: string }).reason.includes('full'), 'reason mentions "full"');
 }
 
-// -- UNSTAGE_CARD: refund + remove from stagingOrder ------------------------
+// -- UNSTAGE_CARD: refund + remove from stagedPlays -------------------------
 
 {
   const manifest = mkManifest([mkCard('grunt', 3, 2)]);
@@ -272,8 +353,59 @@ function resolveCurrentTurn(
   eq(events.length, 2, 'UNSTAGE_CARD: 2 events (unstage + refund)');
   const after = runEvents(staged, events, manifest);
   eq(after.energy.P0, 3, 'UNSTAGE_CARD: energy refunded back to 3');
-  eq(after.stagingOrder.length, 0, 'UNSTAGE_CARD: removed from stagingOrder');
+  eq(after.stagedPlays.length, 0, 'UNSTAGE_CARD: removed from stagedPlays');
   eq(after.hand.P0.length, 1, 'UNSTAGE_CARD: back in hand');
+}
+
+// -- UNSTAGE_CARD refunds committed stage cost, not a later projection ------
+
+{
+  const manifest = mkManifest([mkCard('grunt', 3, 2)]);
+  const { state: s0, cardId } = withCardInHand(
+    baseState({ turn: 5 }),
+    'grunt',
+  );
+  const staged = runEvents(s0, resolve(s0, {
+    type: 'STAGE_CARD',
+    intentId: 'stage-stable-refund',
+    owner: 'P0',
+    cardId,
+    lane: 0,
+  }, createRng('stable-refund'), manifest), manifest);
+  const changedAfterStage = apply(staged, {
+    type: 'CARD_COST_CHANGED',
+    cardId,
+    delta: 2,
+    cause: {
+      sourceId: cardId,
+      effectKind: 'SYSTEM',
+      reason: 'TEST_COST_CHANGED_AFTER_STAGE',
+    },
+  }, manifest);
+  eq(
+    changedAfterStage.stagedPlays[0]?.energyPaid,
+    2,
+    'CARD_STAGED stores the exact committed Energy cost',
+  );
+
+  const events = resolve(changedAfterStage, {
+    type: 'UNSTAGE_CARD',
+    intentId: 'unstage-stable-refund',
+    owner: 'P0',
+    cardId,
+  }, createRng('stable-refund'), manifest);
+  eq(
+    (events[1] as { delta: number }).delta,
+    2,
+    'UNSTAGE_CARD refunds the committed cost after effective Cost changes',
+  );
+  const after = runEvents(changedAfterStage, events, manifest);
+  eq(after.energy.P0, 5, 'stable refund restores only the Energy actually paid');
+  eq(
+    after.stagedPlays[0]?.energyPaid,
+    undefined,
+    'CARD_UNSTAGED clears staged Energy provenance',
+  );
 }
 
 // -- UNDO_TURN: unstages ALL my staged cards in reverse order ---------------
@@ -292,7 +424,7 @@ function resolveCurrentTurn(
   const events = resolve(s, { type: 'UNDO_TURN', intentId: 'undo', owner: 'P0' }, createRng('r'), manifest);
   const after = runEvents(s, events, manifest);
   eq(after.energy.P0, 5, 'UNDO_TURN: energy fully refunded');
-  eq(after.stagingOrder.length, 0, 'UNDO_TURN: stagingOrder empty');
+  eq(after.stagedPlays.length, 0, 'UNDO_TURN: stagedPlays empty');
   eq(after.hand.P0.length, 3, 'UNDO_TURN: all 3 cards back in hand');
 }
 
@@ -345,7 +477,7 @@ function resolveCurrentTurn(
   const started = events.find(e => e.type === 'TURN_STARTED') as { turn: number };
   eq(started.turn, 4, 'TURN_STARTED: turn = 4');
   eq(after.turn, 4, 'state.turn advanced');
-  eq(after.stagingOrder.length, 0, 'stagingOrder cleared by TURN_ENDED');
+  eq(after.stagedPlays.length, 0, 'stagedPlays cleared by TURN_ENDED');
   eq(getCardState(after, cardId)!.revealed, true, 'card is revealed after reveal phase');
 }
 

@@ -20,7 +20,7 @@ interface LaneSlotsProps {
   interactive?: boolean;
   inspectable?: boolean;
   viewerSeat?: Seat;
-  stagingOrder?: readonly string[];
+  stagedCardIds?: readonly string[];
   resolutionLocked?: boolean;
 }
 
@@ -60,7 +60,7 @@ export const LaneSlots = (props: LaneSlotsProps) => {
                   interactive={props.interactive}
                   inspectable={props.inspectable}
                   viewerSeat={props.viewerSeat}
-                  stagingOrder={props.stagingOrder}
+                  stagedCardIds={props.stagedCardIds}
                   resolutionLocked={props.resolutionLocked}
                 />
               )}

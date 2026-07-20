@@ -38,7 +38,7 @@ describe('committed END TURN choreography', () => {
         cardId: 'remote-priority' as CardId,
         lane: 0 as LaneId,
         owner: 'P1',
-        cost: 1,
+        energyPaid: 1,
       },
       {
         type: 'CARD_STAGED',
@@ -46,7 +46,7 @@ describe('committed END TURN choreography', () => {
         cardId: 'local-now' as CardId,
         lane: 1 as LaneId,
         owner: 'P0',
-        cost: 1,
+        energyPaid: 1,
       },
       {
         type: 'CARD_STAGED',
@@ -54,7 +54,7 @@ describe('committed END TURN choreography', () => {
         cardId: 'local-delayed' as CardId,
         lane: 2 as LaneId,
         owner: 'P0',
-        cost: 1,
+        energyPaid: 1,
       },
       { type: 'TURN_RESOLUTION_STARTED', turn: 2 },
       { type: 'CARD_REVEALED', cardId: 'remote-priority' as CardId, cause: { sourceId: 'remote-priority' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },

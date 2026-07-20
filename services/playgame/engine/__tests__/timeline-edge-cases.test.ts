@@ -221,7 +221,7 @@ describe('Canonical framing edge cases', () => {
       owner: 'P0',
       cardId,
       lane: 0,
-      cost: 1,
+      energyPaid: 1,
     }]);
 
     expect(framed[0].scope).toEqual({ turn: 4, phase: 'ACTION' });
@@ -377,7 +377,7 @@ describe('Canonical scope validation edge cases', () => {
           totalPower: { P0: 0, P1: 0 },
         },
       },
-      { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'EFFECT' },
+      { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'EFFECT', cause: systemCause },
     ])).toThrow(/after MATCH_ENDED/);
   });
 
@@ -449,7 +449,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       initialState: fixtureState(),
       events: [
         addToHand(cardId),
-        { type: 'CARD_STAGED', intentId: 'first', owner: 'P0', cardId, lane: 0, cost: 1 },
+        { type: 'CARD_STAGED', intentId: 'first', owner: 'P0', cardId, lane: 0, energyPaid: 1 },
         { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
         { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 0, cause: systemCause },
         {
@@ -458,7 +458,7 @@ describe('Timeline query and lifecycle edge cases', () => {
           destination: { kind: 'HAND' },
           cause: systemCause,
         },
-        { type: 'CARD_STAGED', intentId: 'second', owner: 'P0', cardId, lane: 1, cost: 1 },
+        { type: 'CARD_STAGED', intentId: 'second', owner: 'P0', cardId, lane: 1, energyPaid: 1 },
         { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
         { type: 'CARD_PLAY_COMPLETED', owner: 'P0', cardId, lane: 1, cause: systemCause },
         { type: 'CARD_BANISHED', cardId, cause: systemCause },

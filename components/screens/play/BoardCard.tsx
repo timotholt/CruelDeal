@@ -24,7 +24,7 @@ interface BoardCardProps {
   interactive?: boolean;
   inspectable?: boolean;
   viewerSeat?: Seat;
-  stagingOrder?: readonly string[];
+  stagedCardIds?: readonly string[];
   resolutionLocked?: boolean;
 }
 
@@ -41,13 +41,15 @@ export const BoardCard = (props: BoardCardProps) => {
       : [];
     cardVfxRegistry.reconcilePersistent(cardId(), sources);
   });
-  const stagingOrder = (): readonly string[] => props.stagingOrder ?? engineState().stagingOrder;
+  const stagedCardIds = (): readonly string[] =>
+    props.stagedCardIds
+    ?? engineState().stagedPlays.map(staged => staged.cardId);
   const interactive = (): boolean => props.interactive ?? true;
   const inspectable = (): boolean => props.inspectable ?? interactive();
 
   /**
    * True if this is a player card that was staged THIS turn and can still
-   * be dragged back to hand. We key off `stagingOrder` (the engine's source
+   * be dragged back to hand. We key off `stagedCardIds` (the engine's source
    * of truth) rather than `revealed` to avoid a false positive on the first
    * frame after TURN_STARTED.
    */
@@ -56,7 +58,7 @@ export const BoardCard = (props: BoardCardProps) => {
     if (props.side !== 'bottom') return false;
     if (props.card.owner !== viewerSeat()) return false;
     if (isResolving()) return false;
-    return stagingOrder().includes(props.card.id);
+    return stagedCardIds().includes(props.card.id);
   };
 
   const isFaceDown = (): boolean => {
@@ -65,7 +67,7 @@ export const BoardCard = (props: BoardCardProps) => {
       owner: props.card.owner,
       viewerSeat: viewerSeat(),
       revealed: props.card.revealed,
-      stagingOrder: stagingOrder(),
+      stagedCardIds: stagedCardIds(),
       resolutionLocked: props.resolutionLocked ?? ui.isFlipped,
     });
   };

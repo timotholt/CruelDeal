@@ -205,9 +205,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const handleUndoPending = async (): Promise<void> => {
     if (!boardInteractive() || isResolving()) return;
     const liveState = engineState();
-    const lastStaged = [...liveState.stagingOrder]
+    const lastStaged = [...liveState.stagedPlays]
       .reverse()
-      .find((id) => getCardRuntime(liveState, id, manifest)?.owner === localSeat);
+      .find(staged =>
+        getCardRuntime(liveState, staged.cardId, manifest)?.owner === localSeat,
+      )?.cardId;
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
@@ -427,7 +429,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   interactive={boardInteractive()}
                   inspectable={boardInspectable()}
                   viewerSeat={localSeat}
-                  stagingOrder={presentedState().stagingOrder}
+                  stagedCardIds={presentedState().stagedPlays.map(
+                    staged => staged.cardId,
+                  )}
                   resolutionLocked={boardCardResolutionLocked()}
                 />
               )}

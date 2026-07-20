@@ -1,6 +1,5 @@
 import { apply } from '../apply';
 import type { Manifest } from '../manifest/types';
-import { getCardCost } from '../projections/cost';
 import { getCardRuntime } from '../projections/cardRuntime';
 import type { EffectRef, TextOverride } from '../types/ability';
 import type { MatchEvent } from '../types/events';
@@ -37,50 +36,6 @@ function requireFiniteInteger(value: number, label: string): void {
 
 function snapshotCause(cause: EffectRef): EffectRef {
   return { ...cause };
-}
-
-/**
- * Every public card mutation requires an EffectRef. Its sourceId identifies
- * who initiated the write and its non-empty reason is retained by the framed
- * event ledger.
- */
-export function adjustCardCost(
-  state: MatchState,
-  cardId: CardId,
-  delta: number,
-  cause: EffectRef,
-  manifest: Manifest,
-): CardMutationResult {
-  requireCause(cause);
-  requireFiniteInteger(delta, 'card cost delta');
-  if (delta === 0 || !getCardRuntime(state, cardId, manifest)) {
-    return { events: [], state };
-  }
-  return commit(state, {
-    type: 'CARD_COST_CHANGED',
-    cardId,
-    delta,
-    cause: snapshotCause(cause),
-  }, manifest);
-}
-
-export function setCardCost(
-  state: MatchState,
-  cardId: CardId,
-  value: number,
-  cause: EffectRef,
-  manifest: Manifest,
-): CardMutationResult {
-  requireCause(cause);
-  requireFiniteInteger(value, 'card cost');
-  const desired = Math.max(0, value);
-  return adjustCardCost(
-    state,
-    cardId,
-    desired - getCardCost(state, cardId, manifest),
-    cause,
-    manifest,
-  );
 }
 
 export function replaceCardText(

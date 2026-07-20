@@ -75,11 +75,9 @@ export {
 } from './projections';
 export {
   addCardTag,
-  adjustCardCost,
   changeCardCounter,
   removeCardTag,
   replaceCardText,
-  setCardCost,
   type CardMutationResult,
 } from './operations/cardMutations';
 export {

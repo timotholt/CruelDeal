@@ -168,7 +168,7 @@ describe('trackedVariables: CARD_PLAY_COMPLETED', () => {
       cardId: 'h1' as CardId,
       lane: 1,
       owner: 'P0',
-      cost: 3,
+      energyPaid: 3,
     });
     expect(staged.trackedVariables.P0.cardsPlayedThisTurn).toBe(0);
     const completed = run(staged, {
@@ -239,6 +239,7 @@ describe('trackedVariables: ENERGY_CHANGED', () => {
       owner: 'P0',
       delta: -2,
       reason: 'CARD_PLAYED',
+      cause: SYSTEM_SOURCE,
     });
     expect(s.trackedVariables.P0.energyUnspentNow).toBe(1); // 3 - 2 = 1
     expect(s.trackedVariables.P1.energyUnspentNow).toBe(0); // unchanged (was 0)
@@ -256,7 +257,7 @@ describe('trackedVariables: TURN_ENDED', () => {
     }, handCard);
     const s1 = run(s0, {
       type: 'CARD_STAGED',
-      intentId: 'i1', cardId: 'h1' as CardId, lane: 1, owner: 'P0', cost: 3,
+      intentId: 'i1', cardId: 'h1' as CardId, lane: 1, owner: 'P0', energyPaid: 3,
     });
     expect(s1.trackedVariables.P0.cardsPlayedThisTurn).toBe(0);
     const completed = run(s1, {
@@ -276,7 +277,7 @@ describe('trackedVariables: TURN_ENDED', () => {
   it('snapshots energyUnspentLastTurn from current energy', () => {
     // P0 has 1 energy unspent at end of turn
     const s0 = run(baseState(), {
-      type: 'ENERGY_CHANGED', owner: 'P0', delta: -2, reason: 'CARD_PLAYED',
+      type: 'ENERGY_CHANGED', owner: 'P0', delta: -2, reason: 'CARD_PLAYED', cause: SYSTEM_SOURCE,
     });
     const s1 = run(s0, { type: 'TURN_ENDED', turn: 3 });
     expect(s1.trackedVariables.P0.energyUnspentLastTurn).toBe(1);
@@ -297,7 +298,7 @@ describe('trackedVariables: TURN_ENDED', () => {
   it('updates spentAllEnergyLastTurn flag when energy all spent', () => {
     // Spend all 3 energy then end turn
     const s0 = run(baseState(), {
-      type: 'ENERGY_CHANGED', owner: 'P0', delta: -3, reason: 'CARD_PLAYED',
+      type: 'ENERGY_CHANGED', owner: 'P0', delta: -3, reason: 'CARD_PLAYED', cause: SYSTEM_SOURCE,
     });
     const s1 = run(s0, { type: 'TURN_ENDED', turn: 3 });
     expect(s1.trackedVariables.P0.spentAllEnergyLastTurn).toBe(true);

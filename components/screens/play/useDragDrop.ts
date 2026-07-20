@@ -99,7 +99,8 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     boardEl.querySelectorAll('.next-drop').forEach((element) => element.classList.remove('next-drop'));
   };
 
-  const isPending = (cardId: string): boolean => engineState().stagingOrder.includes(cardId as never);
+  const isPending = (cardId: string): boolean =>
+    engineState().stagedPlays.some(staged => staged.cardId === cardId);
 
   const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
     if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
@@ -235,7 +236,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   const performDrop = async (drag: ActivePointerDrag): Promise<void> => {
     const target = drag.target;
     const siblingIds = [
-      ...engineState().stagingOrder.map(String),
+      ...engineState().stagedPlays.map(staged => String(staged.cardId)),
       ...localHand().map((card) => card.id),
     ].filter((id) => id !== drag.cardId);
     const oldRects = captureCardRects(siblingIds, cardRefs);

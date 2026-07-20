@@ -86,6 +86,13 @@ describe('opaque card and location state architecture', () => {
     )).toEqual([]);
   });
 
+  it('permanently removes ID-only and scalar staged-payment compatibility state', () => {
+    expect(violations(
+      /\b(?:stagingOrder|stagedEnergyCost)\b/,
+      new Set(),
+    )).toEqual([]);
+  });
+
   it('keeps opaque stores and their internal helpers behind reducer/projection boundaries', () => {
     const allowed = new Set([
       'engine/apply.ts',
@@ -125,6 +132,7 @@ describe('opaque card and location state architecture', () => {
     expect(violations(
       new RegExp(`type:\\s*'(?:${mutationEvents})'`),
       new Set([
+        'engine/kernel/operations/cost.ts',
         'engine/kernel/operations/power.ts',
         'engine/operations/cardMutations.ts',
         'engine/types/events.ts',
@@ -143,6 +151,30 @@ describe('opaque card and location state architecture', () => {
     expect(existsSync(resolve(engineRoot, 'operations/power.ts'))).toBe(false);
     expect(violations(/\bresolveCardPower[A-Za-z0-9_]*\b/, new Set()))
       .toEqual([]);
+  });
+
+  it('keeps raw permanent-cost construction solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'CARD_COST_CHANGED'/,
+      new Set([
+        'engine/kernel/operations/cost.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
+    expect(violations(
+      /\b(?:adjustCardCost|setCardCost)\b/,
+      new Set(),
+    )).toEqual([]);
+  });
+
+  it('keeps raw Energy construction solely in the kernel operation', () => {
+    expect(violations(
+      /type:\s*'(?:ENERGY_CHANGED|MAX_ENERGY_CHANGED|NEXT_TURN_ENERGY_BONUS_CHANGED)'/,
+      new Set([
+        'engine/kernel/operations/energy.ts',
+        'engine/types/events.ts',
+      ]),
+    )).toEqual([]);
   });
 
   it('keeps kernel operations and policies pure proposal producers', () => {

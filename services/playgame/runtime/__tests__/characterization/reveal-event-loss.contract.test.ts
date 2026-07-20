@@ -16,7 +16,7 @@ function dispatchCurrentLiveRevealHandoff(
 describe('known live reveal event-loss contracts', () => {
   test('does not lose events before the first CARD_REVEALED', async () => {
     const events: MatchEvent[] = [
-      { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'EFFECT' },
+      { type: 'ENERGY_CHANGED', owner: 'P0', delta: 1, reason: 'EFFECT', cause: { sourceId: 'card-1' as never, effectKind: 'SYSTEM', reason: 'TEST_ENERGY' } },
       { type: 'CARD_REVEALED', cardId: 'card-1' as never, cause: { sourceId: 'card-1' as never, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
       { type: 'CARD_POWER_CHANGED', cardId: 'card-1' as never, mutation: { kind: 'ADD', delta: 2 }, cause: { sourceId: 'card-1' as never, effectKind: 'ON_REVEAL', reason: 'TEST' } },
       { type: 'TURN_ENDED', turn: 2 },

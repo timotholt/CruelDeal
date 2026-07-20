@@ -85,7 +85,10 @@ export interface RuntimeFixtureOptions {
   readonly energy?: Readonly<Record<Owner, number>>;
   readonly maxEnergy?: Readonly<Record<Owner, number>>;
   readonly nextTurnEnergyBonus?: Readonly<Record<Owner, number>>;
-  readonly stagingOrder?: readonly string[];
+  readonly stagedPlays?: readonly {
+    readonly cardId: string;
+    readonly energyPaid: number;
+  }[];
   readonly pendingEffects?: readonly PendingEffect[];
 }
 
@@ -165,7 +168,7 @@ export function emptyTestMatchState(
       banished: [],
     },
     pending: [],
-    stagingOrder: [],
+    stagedPlays: [],
     pendingEffects: [],
     lastPlayedBy: { P0: null, P1: null },
     result: null,
@@ -405,11 +408,14 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
     return [lane, laneState];
   })) as Readonly<Record<LaneId, LaneState>>;
 
-  const stagingOrder = (options.stagingOrder ?? []).map((id) => id as CardId);
-  for (const id of stagingOrder) {
+  const stagedPlays = (options.stagedPlays ?? []).map(staged => ({
+    cardId: staged.cardId as CardId,
+    energyPaid: staged.energyPaid,
+  }));
+  for (const { cardId: id } of stagedPlays) {
     const card = cards[id];
     if (!card || card.zone !== 'LANE' || card.lane === null) {
-      throw new Error(`stagingOrder references non-lane fixture card: ${id}`);
+      throw new Error(`stagedPlays references non-lane fixture card: ${id}`);
     }
     cards[id] = {
       ...card,
@@ -447,7 +453,7 @@ export function buildRuntimeFixture(options: RuntimeFixtureOptions): RuntimeFixt
       banished: [],
     },
     pending: [],
-    stagingOrder,
+    stagedPlays,
     pendingEffects: options.pendingEffects ?? [],
     timeline: {
       frame: GENESIS_FRAME,

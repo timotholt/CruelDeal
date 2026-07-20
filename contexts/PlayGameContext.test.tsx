@@ -45,6 +45,10 @@ function firstPlayableCard(pg: PlayGameContextValue): CardId {
   return card;
 }
 
+function stagedCardIds(pg: PlayGameContextValue): CardId[] {
+  return pg.engineState().stagedPlays.map(staged => staged.cardId);
+}
+
 function presentOpeningImmediately(pg: PlayGameContextValue): void {
   for (const frame of pg.openingTimeline.transitions) {
     pg.actions.presentCommittedFrame(frame);
@@ -104,7 +108,7 @@ describe('PlayGameProvider runtime synchronization', () => {
           turn: state.turn,
           phase: state.phase,
           energy: state.energy[context.localSeat],
-          stagingOrder: [...state.stagingOrder],
+          stagedCardIds: state.stagedPlays.map(staged => staged.cardId),
           hand: [...state.hand[context.localSeat]],
           lanes: state.activeLaneOrder.map(
             (laneId) => [...state.lanesById[laneId].cards[context.localSeat]],
@@ -134,11 +138,11 @@ describe('PlayGameProvider runtime synchronization', () => {
 
       await expect(pg.actions.stageCardInLane(cardId, 0 as LaneId)).resolves.toBe(true);
 
-      expect(pg.engineState().stagingOrder, `${label}: store projection`).toContain(cardId);
+      expect(stagedCardIds(pg), `${label}: store projection`).toContain(cardId);
       expect(pg.engineState().energy[pg.localSeat]).toBe(energyBefore - cost);
       expect(observed.length, `${label}: reactive notification`).toBeGreaterThan(observationsBefore);
       const lastObservation = JSON.parse(observed.at(-1)!);
-      expect(lastObservation.stagingOrder).toContain(cardId);
+      expect(lastObservation.stagedCardIds).toContain(cardId);
       expect(lastObservation.hand).not.toContain(cardId);
       expect(lastObservation.lanes.flat()).toContain(cardId);
       expect(lastObservation.energy).toBe(energyBefore - cost);
@@ -148,21 +152,21 @@ describe('PlayGameProvider runtime synchronization', () => {
     const turnOneCard = await stageAndExpectObservation('turn 1 stage');
     const beforeUndoObservations = observed.length;
     await expect(pg.actions.undoPendingCard(turnOneCard)).resolves.toBe(true);
-    expect(pg.engineState().stagingOrder).not.toContain(turnOneCard);
+    expect(stagedCardIds(pg)).not.toContain(turnOneCard);
     expect(observed.length, 'unstage reactive notification').toBeGreaterThan(beforeUndoObservations);
-    expect(JSON.parse(observed.at(-1)!).stagingOrder).not.toContain(turnOneCard);
+    expect(JSON.parse(observed.at(-1)!).stagedCardIds).not.toContain(turnOneCard);
 
     await expect(pg.actions.stageCardInLane(turnOneCard, 0 as LaneId)).resolves.toBe(true);
     const beforeEndTurnObservations = observed.length;
     const timeline = await pg.actions.endTurn();
     expect(timeline).not.toBeNull();
     expect(pg.engineState().turn, 'display does not snap before presentation').toBe(1);
-    expect(pg.engineState().stagingOrder, 'staged projection survives the system commit')
+    expect(stagedCardIds(pg), 'staged projection survives the system commit')
       .toContain(turnOneCard);
     expect(pg.engineState().lanesById[0].cards[pg.localSeat]).toContain(turnOneCard);
     for (const frame of timeline?.transitions ?? []) pg.actions.presentCommittedFrame(frame);
     expect(pg.engineState().turn).toBe(2);
-    expect(pg.engineState().stagingOrder).toHaveLength(0);
+    expect(stagedCardIds(pg)).toHaveLength(0);
     expect(observed.length, 'end-turn reactive notification').toBeGreaterThan(beforeEndTurnObservations);
     expect(JSON.parse(observed.at(-1)!).turn).toBe(2);
     pg.actions.finishTurnPresentation();
@@ -199,7 +203,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     if (!committedFinalFrame) throw new Error('opening timeline has no final frame');
     pg.actions.presentCommittedFrame(committedFinalFrame);
 
-    expect(pg.engineState().stagingOrder).toContain(cardId);
+    expect(stagedCardIds(pg)).toContain(cardId);
     expect(pg.engineState().hand[pg.localSeat]).not.toContain(cardId);
     expect(pg.engineState().lanesById[0].cards[pg.localSeat]).toContain(cardId);
   });
@@ -247,7 +251,7 @@ describe('PlayGameProvider runtime synchronization', () => {
     pg.actions.presentCommittedFrame(resolutionStart);
     const lockObservations = facingObservations.slice(observationsBeforeLock);
 
-    const stagedIds = [...pg.engineState().stagingOrder];
+    const stagedIds = stagedCardIds(pg);
     expect(stagedIds).toContain(localCardId);
     expect(new Set(stagedIds.map((id) =>
       getCardRuntime(pg.engineState(), id, BOOTSTRAP_MANIFEST)?.owner)))
