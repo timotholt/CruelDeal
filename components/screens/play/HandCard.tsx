@@ -11,8 +11,8 @@
 
 import { createEffect, createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
+import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { openInspect } from './inspector';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
@@ -26,6 +26,7 @@ interface HandCardProps {
 
 export const HandCard = (props: HandCardProps) => {
   const { bindCardRef } = useVfx();
+  const { actions } = usePlayUi();
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
   const isInspectable = createMemo(() => props.inspectable !== false && !isHidden());
@@ -47,7 +48,7 @@ export const HandCard = (props: HandCardProps) => {
   const onClick = (e: MouseEvent): void => {
     if (!isInspectable()) return;
     e.stopPropagation();
-    openInspect({
+    actions.openInspector({
       kind: 'card',
       card: props.card,
       zone: 'hand',

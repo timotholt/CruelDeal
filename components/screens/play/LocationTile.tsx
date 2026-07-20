@@ -7,7 +7,7 @@
 
 import type { ResolvedLocation } from '@/services/playgame/view';
 import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
-import { openInspect } from './inspector';
+import { usePlayUi } from '@/contexts/PlayUiContext';
 
 interface LocationTileProps {
   location: ResolvedLocation;
@@ -20,10 +20,11 @@ interface LocationTileProps {
 }
 
 export const LocationTile = (props: LocationTileProps) => {
+  const { actions } = usePlayUi();
   const onClick = (e: MouseEvent): void => {
     if (props.interactive === false) return;
     e.stopPropagation();
-    openInspect({
+    actions.openInspector({
       kind: 'location',
       location: props.location,
       laneIdx: props.laneIdx,

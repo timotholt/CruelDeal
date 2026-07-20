@@ -43,12 +43,30 @@ function debugSession(seed = 'split-provider-1') {
   ));
 }
 
+function remoteHumanSession(seed: string) {
+  const bootstrap = buildDebugMatchBootstrap(
+    DEBUG_DECKS[0],
+    DEBUG_DECKS[7],
+    seed,
+  );
+  return MatchSession.fromBootstrap({
+    ...bootstrap,
+    participants: {
+      ...bootstrap.participants,
+      P1: {
+        ...bootstrap.participants.P1,
+        controller: 'REMOTE_PLAYER',
+      },
+    },
+  });
+}
+
 interface Harness {
   match: MatchSessionContextValue;
   ui: PlayUiContextValue;
 }
 
-function mountHarness(seed = 'split-provider-1'): Harness {
+function mountSession(session: MatchSession): Harness {
   let harness!: Harness;
   const Probe = () => {
     const match = useMatchSession();
@@ -60,13 +78,17 @@ function mountHarness(seed = 'split-provider-1'): Harness {
   document.body.append(host);
   disposers.push(render(
     () => (
-      <PlayProviders session={debugSession(seed)}>
+      <PlayProviders session={session}>
         <Probe />
       </PlayProviders>
     ),
     host,
   ));
   return harness;
+}
+
+function mountHarness(seed = 'split-provider-1'): Harness {
+  return mountSession(debugSession(seed));
 }
 
 function firstPlayableCard(harness: Harness): SeatCardToken {
@@ -97,6 +119,43 @@ function firstLocationRevealed(harness: Harness): boolean {
 }
 
 describe('split play providers', () => {
+  it('settles a pending turn wait when its provider is disposed', async () => {
+    const harness = mountSession(remoteHumanSession('provider-dispose-wait'));
+    presentOpeningImmediately(harness);
+    const pendingTurn = harness.match.actions.endTurn();
+
+    disposers.pop()?.();
+
+    await expect(pendingTurn).resolves.toBeNull();
+  });
+
+  it('owns overlays per mount and resets them on remount', () => {
+    const first = mountHarness('provider-overlay-lifetime');
+    first.ui.actions.setOpenMenuSeat('P0');
+    first.ui.actions.setOpenPile({ owner: 'P0', zone: 'DESTROYED' });
+    first.ui.actions.setReplayOpen(true);
+    first.ui.actions.setReplayCursor(12);
+    first.ui.actions.setReplayFollowingLive(false);
+    first.ui.actions.setReplayClientActivity({
+      kind: 'WAITING_FOR_PLAYER',
+      seat: 'P1',
+    });
+    first.ui.actions.setTurnFlowRunning(true);
+
+    disposers.pop()?.();
+    document.body.replaceChildren();
+
+    const remounted = mountHarness('provider-overlay-lifetime');
+    expect(remounted.ui.openMenuSeat()).toBeNull();
+    expect(remounted.ui.openPile()).toBeNull();
+    expect(remounted.ui.replayOpen()).toBe(false);
+    expect(remounted.ui.replayCursor()).toBe(0);
+    expect(remounted.ui.replayFollowingLive()).toBe(true);
+    expect(remounted.ui.replayClientActivity()).toBeNull();
+    expect(remounted.ui.turnFlowRunning()).toBe(false);
+    expect(remounted.ui.inspectorTarget()).toBeNull();
+  });
+
   it('mounts projected setup and presents the committed opening', () => {
     const harness = mountHarness('provider-opening-boundary');
     const setup = harness.ui.presentedState();

@@ -57,6 +57,31 @@ describe('Phase 2 provider boundary architecture', () => {
     }
   });
 
+  it('keeps overlays provider-scoped and replay behind development authority', () => {
+    const uiContext = readFileSync(resolve(
+      repositoryRoot,
+      'contexts/PlayUiContext.tsx',
+    ), 'utf8');
+    const inspector = readFileSync(resolve(
+      repositoryRoot,
+      'components/screens/play/inspector.ts',
+    ), 'utf8');
+    const matchContext = readFileSync(resolve(
+      repositoryRoot,
+      'contexts/MatchSessionContext.tsx',
+    ), 'utf8');
+    const playBoard = readFileSync(resolve(
+      repositoryRoot,
+      'components/screens/play/PlayBoard.tsx',
+    ), 'utf8');
+    expect(uiContext).toContain('createSignal<InspectTarget | null>');
+    expect(uiContext).toContain('createSignal<OpenPile | null>');
+    expect(inspector).not.toContain('createSignal');
+    expect(matchContext).toContain('readonly debug:');
+    expect(matchContext).toContain('debug: debugEnabled');
+    expect(playBoard).not.toContain('createSignal');
+  });
+
   it('keeps canonical authority types outside contexts and play components', () => {
     const forbidden = [
       /\bPlayGameContext\b/,

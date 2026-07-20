@@ -35,8 +35,10 @@ export interface MatchSessionContextValue {
   readonly remoteSeat: Seat;
   readonly snapshot: Accessor<SeatMatchSnapshot>;
   readonly openingTimeline: SeatTransactionTimeline;
-  readonly performanceProfile: Accessor<MatchPerformanceProfile>;
-  readonly replay: Accessor<SeatReplayTimeline>;
+  readonly debug: {
+    readonly performanceProfile: Accessor<MatchPerformanceProfile>;
+    readonly replay: Accessor<SeatReplayTimeline>;
+  } | null;
   readonly actions: {
     stageCardInLane: (token: SeatCardToken, lane: LaneId) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
@@ -77,41 +79,48 @@ export const MatchSessionProvider = (props: {
   });
   const [performanceRevision, setPerformanceRevision] = createSignal(0);
   const [replayRevision, setReplayRevision] = createSignal(0);
+  const debugEnabled =
+    (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
+  let providerDisposed = false;
   const resolutionWaiters = new Set<
-    (timeline: SeatTransactionTimeline) => void
+    (timeline: SeatTransactionTimeline | null) => void
   >();
 
   const refreshSnapshot = (): void => {
+    if (providerDisposed) return;
     setSnapshot(adapter.snapshot());
     setReplayRevision(revision => revision + 1);
   };
 
-  const unsubscribe = adapter.subscribeCommittedTransactions((timeline) => {
-    setReplayRevision(revision => revision + 1);
-    const isTurnResolution = timeline.frames.some(
-      frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
-    );
-    if (isTurnResolution && resolutionWaiters.size > 0) {
-      for (const resolve of [...resolutionWaiters]) resolve(timeline);
-      resolutionWaiters.clear();
-      return;
-    }
-    setSnapshot({
-      version: 1,
-      matchId: timeline.matchId,
-      revision: timeline.revision,
-      frame: timeline.frames.at(-1)?.frame ?? snapshot().frame,
-      viewerSeat: localSeat,
-      state: timeline.finalState,
-    });
-  });
+  const unsubscribe = adapter.subscribeCommittedTransactions(timeline =>
+    untrack(() => {
+      if (providerDisposed) return;
+      setReplayRevision(revision => revision + 1);
+      const isTurnResolution = timeline.frames.some(
+        frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
+      );
+      if (isTurnResolution && resolutionWaiters.size > 0) {
+        for (const resolve of [...resolutionWaiters]) resolve(timeline);
+        resolutionWaiters.clear();
+        return;
+      }
+      setSnapshot({
+        version: 1,
+        matchId: timeline.matchId,
+        revision: timeline.revision,
+        frame: timeline.frames.at(-1)?.frame ?? snapshot().frame,
+        viewerSeat: localSeat,
+        state: timeline.finalState,
+      });
+    }),
+  );
   onCleanup(unsubscribe);
 
   const accepted = async (
     command: Promise<{ readonly status: string }>,
   ): Promise<boolean> => {
     const result = await command;
-    if (result.status !== 'accepted') return false;
+    if (providerDisposed || result.status !== 'accepted') return false;
     refreshSnapshot();
     return true;
   };
@@ -122,27 +131,32 @@ export const MatchSessionProvider = (props: {
     localSeat,
     remoteSeat,
     snapshot,
-    replay: () => {
-      void replayRevision();
-      return adapter.replay();
-    },
     openingTimeline: initialization.opening,
-    performanceProfile: () => {
-      void performanceRevision();
-      return adapter.performanceProfile();
-    },
+    debug: debugEnabled
+      ? {
+          replay: () => {
+            void replayRevision();
+            return adapter.replay();
+          },
+          performanceProfile: () => {
+            void performanceRevision();
+            return adapter.performanceProfile();
+          },
+        }
+      : null,
     actions: {
       stageCardInLane: (token, lane) => accepted(adapter.stageCard(token, lane)),
       undoPending: () => accepted(adapter.undoLastStagedCard()),
       undoPendingCard: token => accepted(adapter.unstageCard(token)),
       endTurn: async (onWaitingForSeat) => {
-        let resolveTimeline!: (timeline: SeatTransactionTimeline) => void;
-        const timeline = new Promise<SeatTransactionTimeline>((resolve) => {
+        let resolveTimeline!:
+          (timeline: SeatTransactionTimeline | null) => void;
+        const timeline = new Promise<SeatTransactionTimeline | null>((resolve) => {
           resolveTimeline = resolve;
           resolutionWaiters.add(resolve);
         });
         const result = await adapter.endTurn();
-        if (result.status !== 'accepted') {
+        if (providerDisposed || result.status !== 'accepted') {
           resolutionWaiters.delete(resolveTimeline);
           refreshSnapshot();
           return null;
@@ -163,10 +177,9 @@ export const MatchSessionProvider = (props: {
     },
   };
 
-  let providerDisposed = false;
   let uninstallDebug = (): void => undefined;
   if (
-    (import.meta as { env?: { DEV?: boolean } }).env?.DEV
+    debugEnabled
     && typeof window !== 'undefined'
   ) {
     void import('@/services/playgame/debug/installSnapDebug').then(
@@ -183,6 +196,7 @@ export const MatchSessionProvider = (props: {
   }
   onCleanup(() => {
     providerDisposed = true;
+    for (const resolve of resolutionWaiters) resolve(null);
     resolutionWaiters.clear();
     uninstallDebug();
   });

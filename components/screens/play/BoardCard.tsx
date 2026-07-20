@@ -13,7 +13,6 @@ import { useMatchSession } from '@/contexts/MatchSessionContext';
 import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
-import { openInspect } from './inspector';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
@@ -31,7 +30,7 @@ interface BoardCardProps {
 
 export const BoardCard = (props: BoardCardProps) => {
   const match = useMatchSession();
-  const { ui, presentedState, isResolving } = usePlayUi();
+  const { ui, presentedState, isResolving, actions } = usePlayUi();
   const { bindCardRef } = useVfx();
   const viewerSeat = (): Seat => props.viewerSeat ?? match.localSeat;
 
@@ -95,7 +94,7 @@ export const BoardCard = (props: BoardCardProps) => {
     if (!inspectable()) return;
     if (isFaceDown()) return;
     e.stopPropagation();
-    openInspect({
+    actions.openInspector({
       kind: 'card',
       card: props.card,
       zone: 'board',

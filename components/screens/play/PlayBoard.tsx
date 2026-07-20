@@ -14,7 +14,7 @@
  * can change without touching engine-coupled code.
  */
 
-import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
+import { For, Show, createEffect, createMemo, onCleanup, onMount } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { Portal } from '../../ui/Portal';
 import { ModalBackdrop } from '../../ui/ModalBackdrop';
@@ -43,7 +43,6 @@ import { LaneColumn } from './LaneColumn';
 import { setupDragDrop } from './useDragDrop';
 import { useLaneHighlight } from './useLaneHighlight';
 import { useLaneTopologyMotion } from './useLaneTopologyMotion';
-import { inspectTarget, closeInspect } from './inspector';
 import { ReplayDrawer } from './ReplayDrawer';
 import { EnergyBadge } from './EnergyBadge';
 import { HiddenHandIndicator } from './HiddenHandIndicator';
@@ -60,12 +59,6 @@ interface PlayBoardProps {
   onExit?: () => void;
 }
 
-type ReplayClientActivity =
-  | { readonly kind: 'PROCESSING_EVENTS' }
-  | { readonly kind: 'PLAYING_ANIMATIONS' }
-  | { readonly kind: 'WAITING_FOR_PLAYER'; readonly seat: 'P0' | 'P1' }
-  | null;
-
 export const PlayBoard = (props: PlayBoardProps) => {
   const match = useMatchSession();
   const playUi = usePlayUi();
@@ -77,26 +70,32 @@ export const PlayBoard = (props: PlayBoardProps) => {
     ui,
     setUi,
     isResolving,
+    inspectorTarget,
+    openMenuSeat,
+    openPile,
+    replayOpen,
+    replayCursor,
+    replayFollowingLive,
+    replayClientActivity,
+    turnFlowRunning,
     actions: uiActions,
   } = playUi;
+  const {
+    setOpenMenuSeat,
+    setOpenPile,
+    setReplayOpen,
+    setReplayCursor,
+    setReplayFollowingLive,
+    setReplayClientActivity,
+    setTurnFlowRunning,
+  } = uiActions;
   const actions = match.actions;
   const seatMeta = {
     P0: { name: bootstrap.participants.P0.displayName },
     P1: { name: bootstrap.participants.P1.displayName },
   } as const;
   const { cardRefs, zoneRefs, motionSurface, bindZoneRef } = useVfx();
-  const [replayOpen, setReplayOpen] = createSignal(false);
-  const [replayCursor, setReplayCursor] = createSignal(0);
-  const [replayFollowingLive, setReplayFollowingLive] = createSignal(true);
-  const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
-  const [replayClientActivity, setReplayClientActivity] = createSignal<ReplayClientActivity>(null);
-  const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
-  const [openPile, setOpenPile] = createSignal<{
-    owner: 'P0' | 'P1';
-    zone: VisiblePileZone;
-  } | null>(null);
-
-  const replayTimeline = createMemo(() => match.replay());
+  const replayTimeline = createMemo(() => match.debug?.replay() ?? null);
   const replayLastCursor = createMemo(() => Math.max(0, (replayTimeline()?.steps.length ?? 1) - 1));
   const replayStep = createMemo(() => {
     const timeline = replayTimeline();
@@ -152,7 +151,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   createEffect(() => {
     if (!boardLocked() || inspectingReplayHistory()) return;
-    closeInspect();
+    uiActions.closeInspector();
     setOpenPile(null);
     setOpenMenuSeat(null);
   });
@@ -413,7 +412,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   };
 
   const copyGameJson = async (): Promise<void> => {
-    const json = JSON.stringify(match.replay(), null, 2);
+    const json = JSON.stringify(match.debug?.replay() ?? null, null, 2);
     await navigator.clipboard.writeText(json);
   };
 
@@ -609,7 +608,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
               steps={timeline().steps}
-              performanceProfile={match.performanceProfile()}
+              performanceProfile={match.debug!.performanceProfile()}
               selectedStep={replayStep()}
               seatNames={{
                 P0: seatMeta.P0.name,
@@ -625,8 +624,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
       </div>
 
       <Portal>
-        <Show when={inspectTarget()} keyed>
-          {(t) => <ZoomInspector target={t} onClose={closeInspect} />}
+        <Show when={inspectorTarget()} keyed>
+          {(t) => (
+            <ZoomInspector
+              target={t}
+              onClose={uiActions.closeInspector}
+            />
+          )}
         </Show>
       </Portal>
 
