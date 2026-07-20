@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { buildDebugMatchBootstrap } from '../../debug/buildDebugBootstrap';
-import type { CardId } from '../../engine/types/ids';
+import type { CardId, LaneId } from '../../engine/types/ids';
 import { LocalMatchSessionAdapter } from '../localMatchSessionAdapter';
 import { MatchSession } from '../matchSession';
+import { getLaneCardsForSeat } from '../../view';
 import type {
   SeatCardToken,
   SeatTransactionTimeline,
@@ -149,6 +150,49 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
         expect(frame.event).not.toHaveProperty('locationId');
       }
     }
+  });
+
+  it('preserves enemy staged plays in both the live timeline and replay', async () => {
+    const { adapter } = fixture('bug-stage-1');
+    const viewer = adapter.bootstrap.viewerSeat;
+    const opponent = viewer === 'P0' ? 'P1' : 'P0';
+    const timelines: SeatTransactionTimeline[] = [];
+    const unsubscribe = adapter.subscribeCommittedTransactions(
+      timeline => timelines.push(timeline),
+    );
+
+    await expect(adapter.endTurn()).resolves.toMatchObject({
+      status: 'accepted',
+    });
+    unsubscribe();
+
+    expect(timelines).toHaveLength(1);
+    const enemyStage = timelines[0]!.frames.find(
+      frame => frame.event?.type === 'CARD_STAGED'
+        && frame.event.data.owner === opponent,
+    );
+    expect(enemyStage).toBeDefined();
+    const token = enemyStage!.event!.data.card;
+    expect(typeof token).toBe('string');
+    expect(enemyStage!.before.hands[opponent]).toContain(token);
+    expect(enemyStage!.after.hands[opponent]).not.toContain(token);
+    expect(enemyStage!.after.stagedCards).toContain(token);
+    expect(enemyStage!.after.cards.find(card => card.token === token))
+      .toMatchObject({ owner: opponent, zone: 'LANE', revealed: false });
+
+    const replayStage = adapter.replay().steps.find(
+      step => step.frame === enemyStage!.frame,
+    );
+    expect(replayStage?.event).toEqual(enemyStage!.event);
+    expect(replayStage?.state.stagedCards).toContain(token);
+    const lane = enemyStage!.event!.data.lane;
+    expect(typeof lane).toBe('number');
+    expect(getLaneCardsForSeat(
+      replayStage!.state,
+      lane as LaneId,
+      opponent,
+      adapter.manifest,
+    ).map(card => card.id)).toContain(token);
   });
 
   it('undo-last uses authority internally without exposing a card ID', async () => {

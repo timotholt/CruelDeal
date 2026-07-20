@@ -32,7 +32,8 @@ export interface UiState {
 export interface ResolvedCard {
   /** Opaque seat-scoped token shared with DOM/VFX references. */
   id: SeatCardToken;
-  defId: string;
+  /** Null while authority intentionally withholds this card's identity. */
+  defId: string | null;
   name: string;
   cost: number;
   baseCost: number;
@@ -77,7 +78,31 @@ export function resolveCard(
   readStats?: CardStatReader,
 ): ResolvedCard | null {
   const card = visibleCard(state, token);
-  if (!card?.defId) return null;
+  if (!card) return null;
+  if (!card.defId) {
+    // A redacted card is still a real, position-bearing presentation object.
+    // Rendering it as a generic back preserves its DOM/VFX endpoint without
+    // inventing or exposing any hidden gameplay identity or stats.
+    return {
+      id: token,
+      defId: null,
+      name: '',
+      cost: 0,
+      baseCost: 0,
+      power: 0,
+      basePower: 0,
+      art: '#1a1f3a',
+      portraitPath: null,
+      type: '',
+      text: '',
+      textDisabled: false,
+      owner: card.owner,
+      zone: card.zone,
+      revealed: card.revealed,
+      storedPowerDelta: 0,
+      stats: null,
+    };
+  }
   const template = getCardTemplate(manifest, card.defId);
   if (!template) return null;
   const power = card.power ?? template.basePower ?? 0;
