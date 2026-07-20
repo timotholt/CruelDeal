@@ -246,7 +246,7 @@ const addPowerToEventCard = (delta: number): EffectExpr => ({
 });
 
 describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
-  it('stores and reverses a pre-commit reveal schedule without firing a stage reaction', () => {
+  it('stores a governed pre-commit reveal schedule without firing a stage reaction', () => {
     const delayed = card('delayed', 'plain', 'P0', 'HAND');
     const cryobank = locationDef('cryobank', {
       ongoing: [{
@@ -283,20 +283,6 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(getCardState(staged, delayed.id)?.revealTiming)
       .toEqual({ kind: 'END_OF_GAME' });
     expect(getStoredCardPowerDelta(staged, delayed.id, gameManifest)).toBe(0);
-
-    const unstageEvents = resolve(staged, {
-      type: 'UNSTAGE_CARD',
-      intentId: 'cancel-delay',
-      owner: 'P0',
-      cardId: delayed.id,
-    }, createRng('cancel-delay'), gameManifest);
-    const unstaged = fold(staged, unstageEvents, gameManifest);
-
-    expect(unstageEvents.map((event) => event.type)).toEqual([
-      'CARD_UNSTAGED',
-      'ENERGY_CHANGED',
-    ]);
-    expect(getCardState(unstaged, delayed.id)?.revealTiming).toBeNull();
   });
 
   it('keeps builtin create-and-reveal work on the parent reveal queue and obeys capacity', () => {
@@ -376,38 +362,15 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       lane: 0,
     }, createRng('stage'), gameManifest);
     const staged = fold(initial, stageEvents, gameManifest);
-    const unstageEvents = resolve(staged, {
-      type: 'UNSTAGE_CARD',
-      intentId: 'unstage',
-      owner: 'P0',
-      cardId: stagedCard.id,
-    }, createRng('unstage'), gameManifest);
-    const unstaged = fold(staged, unstageEvents, gameManifest);
 
     expect(stageEvents.map(event => event.type)).toEqual([
       'CARD_STAGED',
       'ENERGY_CHANGED',
+      'CARD_REVEAL_SCHEDULED',
     ]);
-    expect(unstageEvents.map(event => event.type)).toEqual([
-      'CARD_UNSTAGED',
-      'ENERGY_CHANGED',
-    ]);
-    expect(getCardState(unstaged, stagedCard.id)!).toMatchObject({
-      zone: 'HAND',
-      lane: null,
-    });
-    expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(0);
-
-    const restageEvents = resolve(unstaged, {
-      type: 'STAGE_CARD',
-      intentId: 'restage',
-      owner: 'P0',
-      cardId: stagedCard.id,
-      lane: 0,
-    }, createRng('restage'), gameManifest);
-    const restaged = fold(unstaged, restageEvents, gameManifest);
+    expect(getStoredCardPowerDelta(staged, stagedCard.id, gameManifest)).toBe(0);
     const played = revealPlayedCard(
-      restaged,
+      staged,
       stagedCard.id,
       gameManifest,
       createRng('reveal-play'),

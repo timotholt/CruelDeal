@@ -207,7 +207,6 @@ export const LIFECYCLE_TRANSITION_CONTRACTS = {
 
 export const PRIVATE_PLANNING_EVENT_TYPES = [
   'CARD_STAGED',
-  'CARD_UNSTAGED',
 ] as const satisfies readonly MatchEvent['type'][];
 
 /**
@@ -429,7 +428,9 @@ export const REACTION_ORDER_PLANS = {
  * not move cards, invoke text, or construct events themselves.
  */
 export const REQUIRED_KERNEL_COMMAND_TYPES = [
+  'STAGE_PLAY',
   'PLAY_CARD',
+  'SET_CARD_REVEAL_TIMING',
   'REVEAL_CARD',
   'CHANGE_STORED_POWER',
   'MOVE_CARD',

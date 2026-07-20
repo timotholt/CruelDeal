@@ -4,9 +4,11 @@
  *
  * Two entry points of the engine's authoritative step:
  *
- *   - `resolve` is the intent validator + translator: stage/unstage/undo/
- *     concede/end-turn intents become event streams, or yield a single
+ *   - `resolve` is the intent validator + translator: stage/concede/end-turn
+ *     intents become event streams, or yield a single
  *     `INTENT_REJECTED` entry when the intent is invalid.
+ *     Unstage and undo are private-plan edits owned by the runtime; they have
+ *     no authoritative inverse event stream.
  *   - `resolveTurn` is the full turn-end cascade: flip priority-ordered
  *     reveals, run OR evaluators, reveal next location, refill energy,
  *     draw, and emit `TURN_ENDED`/`TURN_STARTED` bookends. On the live final
@@ -18,7 +20,7 @@
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
 import type { MatchResult, MatchState } from './types/state';
-import type { CardId, LaneId, Owner } from './types/ids';
+import type { CardId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
 import { apply } from './apply';
@@ -30,20 +32,16 @@ import {
   executePendingEffectCommands,
   executeRulesCommands,
 } from './effects/evaluator';
-import { getCardCost } from './projections/cost';
 import { getLanePower } from './projections/power';
 import { getFinalTurn } from './projections/gameEnd';
-import { collectAllOngoings, sourceCtx } from './projections/ongoing';
-import { evalPredicate, select, selectLanes, ownerMatches } from './projections/select';
 import { activeLaneIds, isActiveLane, locationCardAtLane } from './laneTopology';
 import {
   getAllCardIds,
   getCardLifecycle,
   getCardRuntime,
 } from './projections/cardRuntime';
-import { getCardTemplate } from './projections/cardTemplate';
-import { getRevealTimingPolicy } from './kernel/policies/revealTiming';
 import { resolveEnergyTransaction } from './kernel/energyTransaction';
+import { KernelInvariantError } from './kernel/failure';
 
 // ============================================================================
 // resolve — intent → events
@@ -60,8 +58,12 @@ export function resolve(
   }
   switch (intent.type) {
     case 'STAGE_CARD':   return resolveStage(state, intent, rng, manifest);
-    case 'UNSTAGE_CARD': return resolveUnstage(state, intent, manifest);
-    case 'UNDO_TURN':    return resolveUndoTurn(state, intent, manifest);
+    case 'UNSTAGE_CARD':
+    case 'UNDO_TURN':
+      return reject(
+        intent.intentId,
+        `${intent.type} is a private planning operation`,
+      );
     case 'END_TURN': {
       const started: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: state.turn };
       const resolvingState = apply(state, started, manifest);
@@ -84,196 +86,27 @@ function resolveStage(
   rng: Rng,
   manifest: Manifest,
 ): MatchEvent[] {
-  const card = getCardRuntime(state, intent.cardId, manifest);
-  if (!card) return reject(intent.intentId, `unknown card ${intent.cardId}`);
-  if (card.owner !== intent.owner) return reject(intent.intentId, 'card owner mismatch');
-  if (card.zone !== 'HAND') return reject(intent.intentId, 'card not in hand');
-  const def = getCardTemplate(manifest, card.defId);
-  if (!def) return reject(intent.intentId, `unknown defId ${card.defId}`);
-
-  const lane = state.lanesById[intent.lane];
-  if (!lane || !isActiveLane(state, intent.lane)) {
-    return reject(intent.intentId, 'lane is not active');
-  }
-  if (lane.cards[intent.owner].length >= manifest.constants.laneCapacity) {
-    return reject(intent.intentId, 'lane full');
-  }
-  const cost = getCardCost(state, intent.cardId, manifest);
-  if (!Number.isSafeInteger(cost) || cost < 0) {
-    return reject(intent.intentId, 'card cost is not a valid Energy payment');
-  }
-  if (state.energy[intent.owner] < cost) {
-    return reject(intent.intentId, 'insufficient energy');
-  }
-  if (isPlayBlocked(state, intent.cardId, intent.lane, intent.owner, manifest)) {
-    return reject(intent.intentId, 'location blocks play');
-  }
-
-  const events: MatchEvent[] = [];
-  const staged: MatchEvent = {
-      type: 'CARD_STAGED',
+  try {
+    return [...executeRulesCommands(state, [{
+      type: 'STAGE_PLAY',
       intentId: intent.intentId,
       cardId: intent.cardId,
       lane: intent.lane,
       owner: intent.owner,
-      energyPaid: cost,
-  };
-  events.push(staged);
-  const stagedState = apply(state, staged, manifest);
-  const spend = resolveEnergyTransaction(stagedState, [{
-    type: 'CHANGE_ENERGY',
-    target: 'CURRENT',
-    owner: intent.owner,
-    delta: -cost,
-    reason: 'CARD_PLAYED',
-    cause: {
-      sourceId: intent.cardId,
-      effectKind: 'SYSTEM',
-      reason: 'CARD_STAGE_ENERGY_SPEND',
-    },
-  }], manifest);
-  events.push(...spend.events);
-
-  const candidate = spend.state;
-  const revealTiming = getRevealTimingPolicy(candidate, intent.cardId, manifest);
-  if (revealTiming) {
-    events.push({
-      type: 'CARD_REVEAL_SCHEDULED',
-      cardId: intent.cardId,
-      timing: revealTiming.timing,
-      cause: revealTiming.cause,
-    });
-  }
-
-  return events;
-}
-
-function resolveUnstage(
-  state: MatchState,
-  intent: Extract<MatchIntent, { type: 'UNSTAGE_CARD' }>,
-  manifest: Manifest,
-): MatchEvent[] {
-  const stagedIntegrityError = validateStagedPlayRecords(state, manifest);
-  if (stagedIntegrityError) {
-    return reject(intent.intentId, stagedIntegrityError);
-  }
-  const card = getCardRuntime(state, intent.cardId, manifest);
-  if (!card) return reject(intent.intentId, `unknown card ${intent.cardId}`);
-  if (card.owner !== intent.owner) return reject(intent.intentId, 'card owner mismatch');
-  if (card.revealed) return reject(intent.intentId, 'cannot unstage a revealed card');
-  const stagedPlay = state.stagedPlays.find(
-    staged => staged.cardId === intent.cardId,
-  );
-  if (!stagedPlay) {
-    return reject(intent.intentId, 'card not in staging order');
-  }
-  const refund = stagedPlay.energyPaid;
-  if (!Number.isSafeInteger(refund) || refund < 0) {
-    return reject(intent.intentId, 'staged card has an invalid Energy payment');
-  }
-
-  const unstaged: MatchEvent = {
-    type: 'CARD_UNSTAGED',
-    intentId: intent.intentId,
-    cardId: intent.cardId,
-  };
-  const refundTransaction = resolveEnergyTransaction(
-    apply(state, unstaged, manifest),
-    [{
-      type: 'CHANGE_ENERGY',
-      target: 'CURRENT',
-      owner: intent.owner,
-      delta: refund,
-      reason: 'CARD_UNSTAGED',
       cause: {
         sourceId: intent.cardId,
         effectKind: 'SYSTEM',
-        reason: 'CARD_UNSTAGE_ENERGY_REFUND',
+        reason: 'PLAYER_STAGE_INTENT',
       },
-    }],
-    manifest,
-  );
-  return [unstaged, ...refundTransaction.events];
-}
-
-function resolveUndoTurn(
-  state: MatchState,
-  intent: Extract<MatchIntent, { type: 'UNDO_TURN' }>,
-  manifest: Manifest,
-): MatchEvent[] {
-  const stagedIntegrityError = validateStagedPlayRecords(state, manifest);
-  if (stagedIntegrityError) {
-    return reject(intent.intentId, stagedIntegrityError);
-  }
-  // Iterate in REVERSE stage order so each unstage's lane-capacity
-  // precondition stays satisfied during replay.
-  const mine = state.stagedPlays
-    .filter(staged =>
-      getCardRuntime(state, staged.cardId, manifest)?.owner === intent.owner,
-    )
-    .slice()
-    .reverse();
-  const events: MatchEvent[] = [];
-  let candidate = state;
-  for (const stagedPlay of mine) {
-    const { cardId: id, energyPaid: refund } = stagedPlay;
-    const card = getCardRuntime(candidate, id, manifest);
-    if (!card) continue;
-    const unstaged: MatchEvent = {
-      type: 'CARD_UNSTAGED',
-      intentId: intent.intentId,
-      cardId: id,
-    };
-    events.push(unstaged);
-    candidate = apply(candidate, unstaged, manifest);
-    const refunded = resolveEnergyTransaction(candidate, [{
-      type: 'CHANGE_ENERGY',
-      target: 'CURRENT',
-      owner: intent.owner,
-      delta: refund,
-      reason: 'CARD_UNSTAGED',
-      cause: {
-        sourceId: id,
-        effectKind: 'SYSTEM',
-        reason: 'UNDO_TURN_ENERGY_REFUND',
-      },
-    }], manifest);
-    events.push(...refunded.events);
-    candidate = refunded.state;
-  }
-  return events;
-}
-
-function validateStagedPlayRecords(
-  state: MatchState,
-  manifest: Manifest,
-): string | null {
-  const seen = new Set<CardId>();
-  for (const staged of state.stagedPlays) {
-    if (
-      !Number.isSafeInteger(staged.energyPaid)
-      || staged.energyPaid < 0
-    ) {
-      return 'staged play has an invalid Energy payment';
+    }], {
+      rng: rng.scope(`stage:${intent.intentId}`),
+    }, manifest).events];
+  } catch (error) {
+    if (error instanceof KernelInvariantError) {
+      return reject(intent.intentId, error.failure.message);
     }
-    if (seen.has(staged.cardId)) {
-      return 'staged play has duplicate payment provenance';
-    }
-    seen.add(staged.cardId);
-
-    const card = getCardRuntime(state, staged.cardId, manifest);
-    if (
-      !card
-      || card.zone !== 'LANE'
-      || card.lane === null
-      || card.revealed
-      || !state.lanesById[card.lane]?.cards[card.owner]
-        .includes(staged.cardId)
-    ) {
-      return 'staged play does not reference an unresolved lane card';
-    }
+    throw error;
   }
-  return null;
 }
 
 function resolveConcede(
@@ -651,35 +484,6 @@ export function resolveTurn(
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function isPlayBlocked(
-  state: MatchState,
-  cardId: CardId,
-  lane: LaneId,
-  owner: Owner,
-  manifest: Manifest,
-): boolean {
-  for (const entry of collectAllOngoings(state, manifest)) {
-    if (entry.expr.kind !== 'BLOCK_PLAY') continue;
-    if (!ownerMatches(entry.expr.ownerFilter ?? 'ANY_OWNER', entry.sourceOwner, owner, owner)) continue;
-    const baseCtx = sourceCtx(entry, state, manifest);
-    if (!baseCtx) continue;
-    const ctx = {
-      ...baseCtx,
-      eventCard: cardId,
-      eventLane: lane,
-      eventOwner: owner,
-    };
-    if (entry.expr.when && !evalPredicate(entry.expr.when, ctx)) continue;
-    if (entry.expr.cardPred && !evalPredicate(entry.expr.cardPred, { ...ctx, self: cardId, selfKind: 'card' })) continue;
-    if (entry.expr.laneOf) {
-      if (selectLanes(entry.expr.laneOf, ctx).includes(lane)) return true;
-    } else if (entry.expr.target) {
-      if (select(entry.expr.target, ctx).includes(cardId)) return true;
-    }
-  }
-  return false;
-}
 
 function latestStageIndex(state: MatchState, cardId: CardId): number {
   return getCardLifecycle(state, cardId)?.framePlayed ?? Number.MAX_SAFE_INTEGER;

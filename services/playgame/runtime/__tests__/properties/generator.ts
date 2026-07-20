@@ -1,4 +1,3 @@
-import { getCardState } from '../../../engine/projections/cardRuntime';
 import {
   BOOTSTRAP_MANIFEST,
   apply,
@@ -173,32 +172,6 @@ function acceptedStageIntents(
   return candidates;
 }
 
-function acceptedUnstageIntents(
-  state: MatchState,
-  owner: Owner,
-  intentIndex: number,
-  manifest: Manifest,
-): MatchIntent[] {
-  const candidates: MatchIntent[] = [];
-  for (const { cardId } of state.stagedPlays) {
-    if (getCardState(state, cardId)?.owner !== owner) continue;
-    const intent: MatchIntent = {
-      type: 'UNSTAGE_CARD',
-      intentId: `property-${intentIndex}-${owner}-unstage-${cardId}`,
-      owner,
-      cardId,
-    };
-    const events = resolvePropertyIntent(
-      state,
-      intent,
-      intentIndex,
-      manifest,
-    );
-    if (isAccepted(events)) candidates.push(intent);
-  }
-  return candidates;
-}
-
 function chooseLegalAction(
   state: MatchState,
   owner: Owner,
@@ -207,29 +180,7 @@ function chooseLegalAction(
   manifest: Manifest,
 ): MatchIntent | null {
   const stages = acceptedStageIntents(state, owner, intentIndex, manifest);
-  const unstages = acceptedUnstageIntents(state, owner, intentIndex, manifest);
-  const hasStagedCard = state.stagedPlays.some(
-    ({ cardId }) => getCardState(state, cardId)?.owner === owner,
-  );
-  const undo: MatchIntent | null = hasStagedCard
-    ? {
-        type: 'UNDO_TURN',
-        intentId: `property-${intentIndex}-${owner}-undo`,
-        owner,
-      }
-    : null;
-
-  const actionKinds = [
-    ...(stages.length > 0 ? ['STAGE', 'STAGE', 'STAGE'] as const : []),
-    ...(unstages.length > 0 ? ['UNSTAGE'] as const : []),
-    ...(undo ? ['UNDO'] as const : []),
-  ];
-  if (actionKinds.length === 0) return null;
-
-  const action = rng.pick(actionKinds);
-  if (action === 'STAGE') return rng.pick(stages);
-  if (action === 'UNSTAGE') return rng.pick(unstages);
-  return undo;
+  return stages.length === 0 ? null : rng.pick(stages);
 }
 
 export function generateMatchCase(

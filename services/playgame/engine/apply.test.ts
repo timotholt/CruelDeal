@@ -110,6 +110,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
     lane: 0,
     owner: 'P0',
     energyPaid: 3,
+    cause: locationCause,
   });
   const c = getCardState(s1, 's1' as CardId)!;
   eq(c.zone, 'LANE', 'CARD_STAGED: zone becomes LANE');
@@ -126,23 +127,6 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.timeline.frame, 1, 'CARD_STAGED: advances the timeline');
 }
 
-// -- CARD_UNSTAGED: inverse of CARD_STAGED
-
-{
-  const s0 = stateWithSentinelInHand();
-  const s2 = run(
-    s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
-    { type: 'CARD_UNSTAGED', intentId: 'i2', cardId: 's1' as CardId },
-  );
-  const c = getCardState(s2, 's1' as CardId)!;
-  eq(c.zone, 'HAND', 'CARD_UNSTAGED: zone back to HAND');
-  eq(c.lane, null, 'CARD_UNSTAGED: lane cleared');
-  eq(s2.hand.P0.length, 1, 'CARD_UNSTAGED: hand restored');
-  eq(s2.lanesById[0].cards.P0.length, 0, 'CARD_UNSTAGED: removed from lane');
-  eq(s2.stagedPlays.length, 0, 'CARD_UNSTAGED: removed from stagedPlays');
-}
-
 // -- ENERGY_CHANGED: additive
 
 {
@@ -157,6 +141,19 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const state = stateWithSentinelInHand();
   const provenanceRequiredEvents = [
+    {
+      type: 'CARD_STAGED',
+      intentId: 'missing-stage-cause',
+      cardId: 's1' as CardId,
+      lane: 0,
+      owner: 'P0',
+      energyPaid: 1,
+    },
+    {
+      type: 'CARD_REVEAL_SCHEDULED',
+      cardId: 's1' as CardId,
+      timing: { kind: 'TURN', turn: 1 },
+    },
     {
       type: 'CARD_COST_CHANGED',
       cardId: 's1' as CardId,
@@ -206,9 +203,9 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const staged = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
   );
-  eq(getCardState(staged, 's1' as CardId)!.revealTiming, { kind: 'TURN', turn: 1 }, 'CARD_STAGED: schedules reveal for the current turn');
+  eq(getCardState(staged, 's1' as CardId)!.revealTiming, null, 'CARD_STAGED leaves reveal timing to its governing operation');
   const delayed = run(
     staged,
     {
@@ -218,7 +215,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
       cause: locationCause,
     },
   );
-  eq(getCardState(delayed, 's1' as CardId)!.revealTiming, { kind: 'END_OF_GAME' }, 'CARD_REVEAL_SCHEDULED: replaces the reveal timing');
+  eq(getCardState(delayed, 's1' as CardId)!.revealTiming, { kind: 'END_OF_GAME' }, 'CARD_REVEAL_SCHEDULED owns reveal timing');
   const s2 = run(
     delayed,
     { type: 'CARD_REVEALED', cardId: 's1' as CardId, cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
@@ -237,7 +234,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
 {
   const s0 = stateWithSentinelInHand();
   const staged = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
     { type: 'CARD_REVEALED', cardId: 's1' as CardId, cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
   );
   // Armored Van has no ongoing; just check basePower to the lane total, not to any card's own power.
@@ -265,7 +262,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const destroyed = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
     { type: 'CARD_DESTROYED', cardId: 's1' as CardId,
       cause: { sourceId: 's1' as CardId, effectKind: 'SYSTEM', reason: 'TEST' } },
   );
@@ -288,7 +285,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   const s0 = stateWithSentinelInHand();
   const moved = run(
     s0,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
     { type: 'CARD_MOVED', cardId: 's1' as CardId, fromLane: 0, toLane: 2,
       cause: { sourceId: 's1' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST' } },
   );
@@ -418,7 +415,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(s1.hand.P0.length, 0, 'CARD_BANISHED: gone from hand');
   // From lane:
   const s2 = run(s0,
-    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
     { type: 'CARD_BANISHED', cardId: 's1' as CardId, cause },
   );
   eq(getCardState(s2, 's1' as CardId)!.zone, 'BANISHED', 'CARD_BANISHED (from lane): zone=BANISHED');
@@ -649,7 +646,7 @@ function run(s: MatchState, ...events: MatchEvent[]): MatchState {
   eq(resolving.phase, 'RESOLVING', 'TURN_RESOLUTION_STARTED: phase = RESOLVING');
 
   const s1 = run(resolving,
-    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3 },
+    { type: 'CARD_STAGED', intentId: 'i1', cardId: 's1' as CardId, lane: 0, owner: 'P0', energyPaid: 3, cause: locationCause },
     {
       type: 'CARD_MOVED',
       cardId: 's1' as CardId,

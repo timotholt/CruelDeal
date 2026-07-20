@@ -399,8 +399,6 @@ function projectAnimationEvent(
           owner: event.owner,
         },
       };
-    case 'CARD_UNSTAGED':
-      return { type: event.type, data: { card: card(event.cardId) } };
     case 'CARD_DRAWN':
       return {
         type: event.type,

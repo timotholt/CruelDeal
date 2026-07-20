@@ -101,7 +101,9 @@ export function applyFramed(
 }
 
 function requireEventProvenance(event: MatchEvent): void {
-  const provenanceRequired = event.type === 'CARD_COST_CHANGED'
+  const provenanceRequired = event.type === 'CARD_STAGED'
+    || event.type === 'CARD_REVEAL_SCHEDULED'
+    || event.type === 'CARD_COST_CHANGED'
     || event.type === 'ENERGY_CHANGED'
     || event.type === 'MAX_ENERGY_CHANGED'
     || event.type === 'NEXT_TURN_ENERGY_BONUS_CHANGED'
@@ -188,7 +190,7 @@ function applyEventBody(
         zone: 'LANE',
         lane: event.lane,
         revealed: false,
-        revealTiming: { kind: 'TURN', turn: state.turn },
+        revealTiming: null,
         lifecycle: card1
           ? {
               ...card1.lifecycle,
@@ -206,25 +208,6 @@ function applyEventBody(
           { cardId: event.cardId, energyPaid: event.energyPaid },
         ],
         lastPlayedBy: { ...s3.lastPlayedBy, [event.owner]: event.cardId },
-      };
-    }
-
-    case 'CARD_UNSTAGED': {
-      const card = readCardInternal(state, event.cardId);
-      if (!card || card.lane === null) return state;
-      const s1 = removeFromLane(state, card.owner, card.lane, event.cardId);
-      const s2 = patchCard(s1, event.cardId, {
-        zone: 'HAND',
-        lane: null,
-        revealed: false,
-        revealTiming: null,
-      });
-      const s3 = addToHand(s2, card.owner, event.cardId);
-      return {
-        ...s3,
-        stagedPlays: s3.stagedPlays.filter(
-          staged => staged.cardId !== event.cardId,
-        ),
       };
     }
 

@@ -159,6 +159,11 @@ describe('Courthouse Power contract', () => {
       lane: 0,
       owner: 'P0',
       energyPaid: 1,
+      cause: {
+        sourceId: 'subject' as CardId,
+        effectKind: 'SYSTEM',
+        reason: 'TEST_STAGE',
+      },
     };
     const atCourthouse = apply(initial, stagedEvent, manifest);
 

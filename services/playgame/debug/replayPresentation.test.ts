@@ -245,6 +245,11 @@ describe('replay debug presentation', () => {
       lane: 2,
       owner: 'P0',
       energyPaid: 1,
+      cause: {
+        sourceId: cardId,
+        effectKind: 'SYSTEM',
+        reason: 'TEST_STAGE',
+      },
     };
     expect(describeReplayStep(step(stagedEvent), names, actors).summary)
       .toBe('Player 1 played Bone Market to the right lane, slot FL.');

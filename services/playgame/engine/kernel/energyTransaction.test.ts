@@ -154,6 +154,26 @@ describe('energy kernel transaction', () => {
     }
   });
 
+  it('records an exact zero-cost current-Energy card payment', () => {
+    const { manifest, state } = fixture();
+    const result = run(state, manifest, [
+      command('CURRENT', 0, { reason: 'CARD_PLAYED' }),
+    ]);
+
+    expect(result.events).toEqual([{
+      type: 'ENERGY_CHANGED',
+      owner: 'P0',
+      delta: 0,
+      reason: 'CARD_PLAYED',
+      cause: CAUSE,
+    }]);
+    expect(result.state.energy).toEqual(state.energy);
+    expect(result.transitions[0]?.semantics).toMatchObject({
+      transitionKind: 'CURRENT_ENERGY_PAYMENT_RECORDED',
+      signedChange: 0,
+    });
+  });
+
   it('rejects invalid provenance, reason, owner, and numeric values', () => {
     const { manifest, state } = fixture();
     const invalid = [

@@ -130,7 +130,6 @@ export type { TrackedStatKey, TrackedFlagKey };
 export type EnergyReason =
   | 'TURN_START'
   | 'CARD_PLAYED'
-  | 'CARD_UNSTAGED'
   | 'EFFECT';
 
 // ---- Stat change logs ------------------------------------------------------

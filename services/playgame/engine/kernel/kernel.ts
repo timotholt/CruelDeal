@@ -96,6 +96,7 @@ export interface CompletedKernelTransaction<S, M, Semantics> {
 type WorkShape<C extends GameCommand, E, X, M> = KernelWork<C, E, X, M>;
 
 const COMMAND_TYPES = new Set<GameCommand['type']>([
+  'STAGE_PLAY',
   'PLAY_CARD',
   'SET_CARD_REVEAL_TIMING',
   'REVEAL_CARD',

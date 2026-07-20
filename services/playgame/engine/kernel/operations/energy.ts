@@ -50,7 +50,6 @@ export type EnergyKernelWork = KernelWork<
 const ENERGY_REASONS = new Set<EnergyReason>([
   'TURN_START',
   'CARD_PLAYED',
-  'CARD_UNSTAGED',
   'EFFECT',
 ]);
 
@@ -100,7 +99,11 @@ export function planEnergyCommand(
       sourceInstanceId: String(command.cause.sourceId),
     });
   }
-  if (command.delta === 0) {
+  const recordsZeroCostPayment =
+    command.delta === 0
+    && command.target === 'CURRENT'
+    && command.reason === 'CARD_PLAYED';
+  if (command.delta === 0 && !recordsZeroCostPayment) {
     return kernelStepSuccess({ work: [] });
   }
   const currentValue = command.target === 'CURRENT'

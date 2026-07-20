@@ -82,7 +82,7 @@ const stateWithHandCard = () => {
 
 {
   const { state: s0, cardId } = stateWithHandCard();
-  const e = event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 1 as LaneId, owner: 'P0', energyPaid: 1 });
+  const e = event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 1 as LaneId, owner: 'P0', energyPaid: 1, cause: source });
   const s1 = apply(s0, e, BOOTSTRAP_MANIFEST);
   const transfers = deriveCardTransfers(s0, e, s1);
   assertTransferCoverage(s0, e, s1, transfers);
@@ -101,7 +101,7 @@ const stateWithHandCard = () => {
 
 {
   const { state: handState, cardId } = stateWithHandCard();
-  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', energyPaid: 1 }), BOOTSTRAP_MANIFEST);
+  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', energyPaid: 1, cause: source }), BOOTSTRAP_MANIFEST);
   const revealed = apply(staged, event({ type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }), BOOTSTRAP_MANIFEST);
   const e = event({ type: 'CARD_ZONE_CHANGED', cardId, destination: { kind: 'HAND' }, cause: source });
   const s1 = apply(revealed, e, BOOTSTRAP_MANIFEST);
@@ -126,7 +126,7 @@ const stateWithHandCard = () => {
 
 {
   const { state: handState, cardId } = stateWithHandCard();
-  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', energyPaid: 1 }), BOOTSTRAP_MANIFEST);
+  const staged = apply(handState, event({ type: 'CARD_STAGED', intentId: 'stage', cardId, lane: 0 as LaneId, owner: 'P0', energyPaid: 1, cause: source }), BOOTSTRAP_MANIFEST);
   const destroyed = apply(staged, event({ type: 'CARD_DESTROYED', cardId, cause: source }), BOOTSTRAP_MANIFEST);
   const e = event({ type: 'CARD_RETURNED_TO_LANE', cardId, lane: 2 as LaneId, revealed: true, cause: source });
   const s1 = apply(destroyed, e, BOOTSTRAP_MANIFEST);

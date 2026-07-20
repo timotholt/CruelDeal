@@ -64,8 +64,15 @@ export type MatchEvent =
   // --- Authority bookkeeping ---
   | { type: 'GAMEPLAY_RNG_ADVANCED'; draws: number }
   // --- Staging / play ---
-  | { type: 'CARD_STAGED'; intentId: string; cardId: CardId; lane: LaneId; owner: Owner; energyPaid: number }
-  | { type: 'CARD_UNSTAGED'; intentId: string; cardId: CardId }
+  | {
+      type: 'CARD_STAGED';
+      intentId: string;
+      cardId: CardId;
+      lane: LaneId;
+      owner: Owner;
+      energyPaid: number;
+      cause: EffectRef;
+    }
   | { type: 'ENERGY_CHANGED'; owner: Owner; delta: number; reason: EnergyReason; cause: EffectRef }
   /** Mutates `state.maxEnergy[owner]` by `delta`. Fired at TURN_STARTED for the
    *  per-turn +1 ramp and by effects that permanently widen the ceiling. */

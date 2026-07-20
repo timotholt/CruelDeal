@@ -243,6 +243,101 @@
       ],
       "additionalProperties": false
     },
+    "CardRevealTiming": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "TURN"
+            },
+            "turn": {
+              "$ref": "#/$defs/PositiveInteger"
+            }
+          },
+          "required": [
+            "kind",
+            "turn"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "END_OF_GAME"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "CardStagedEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "CARD_STAGED"
+        },
+        "intentId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cardId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lane": {
+          "$ref": "#/$defs/LaneId"
+        },
+        "owner": {
+          "$ref": "#/$defs/Seat"
+        },
+        "energyPaid": {
+          "$ref": "#/$defs/SafeInteger"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "intentId",
+        "cardId",
+        "lane",
+        "owner",
+        "energyPaid",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
+    "CardRevealScheduledEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "const": "CARD_REVEAL_SCHEDULED"
+        },
+        "cardId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timing": {
+          "$ref": "#/$defs/CardRevealTiming"
+        },
+        "cause": {
+          "$ref": "#/$defs/EffectRef"
+        }
+      },
+      "required": [
+        "type",
+        "cardId",
+        "timing",
+        "cause"
+      ],
+      "additionalProperties": false
+    },
     "EffectExpr": {
       "type": "object",
       "properties": {
@@ -966,14 +1061,11 @@
         "type": {
           "enum": [
             "GAMEPLAY_RNG_ADVANCED",
-            "CARD_STAGED",
-            "CARD_UNSTAGED",
             "ENERGY_CHANGED",
             "MAX_ENERGY_CHANGED",
             "NEXT_TURN_ENERGY_BONUS_CHANGED",
             "CARD_REVEALED",
             "CARD_PLAY_COMPLETED",
-            "CARD_REVEAL_SCHEDULED",
             "OR_WINDOW_OPEN",
             "OR_WINDOW_CLOSE",
             "CARD_POWER_CHANGED",
@@ -1008,6 +1100,12 @@
     },
     "MatchEvent": {
       "oneOf": [
+        {
+          "$ref": "#/$defs/CardStagedEvent"
+        },
+        {
+          "$ref": "#/$defs/CardRevealScheduledEvent"
+        },
         {
           "$ref": "#/$defs/TurnResolutionStartedEvent"
         },
@@ -1918,7 +2016,6 @@
           "enum": [
             "GAMEPLAY_RNG_ADVANCED",
             "CARD_STAGED",
-            "CARD_UNSTAGED",
             "ENERGY_CHANGED",
             "MAX_ENERGY_CHANGED",
             "NEXT_TURN_ENERGY_BONUS_CHANGED",

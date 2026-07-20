@@ -168,9 +168,14 @@ function resolveCurrentTurn(
   const events = resolve(state, {
     type: 'STAGE_CARD', intentId: 'i1', owner: 'P0', cardId, lane: 0,
   }, createRng('r'), manifest);
-  eq(events.length, 2, 'STAGE_CARD: emits 2 events');
+  eq(events.length, 3, 'STAGE_CARD: emits 3 governed events');
   eq(events[0].type, 'CARD_STAGED', 'STAGE_CARD[0]: CARD_STAGED');
   eq(events[1].type, 'ENERGY_CHANGED', 'STAGE_CARD[1]: ENERGY_CHANGED');
+  eq(
+    events[2].type,
+    'CARD_REVEAL_SCHEDULED',
+    'STAGE_CARD[2]: CARD_REVEAL_SCHEDULED',
+  );
   eq((events[1] as { delta: number }).delta, -2, 'ENERGY_CHANGED: delta = -cost');
   const after = runEvents(state, events, manifest);
   eq(after.energy.P0, 1, 'energy: 3 - 2 = 1');
@@ -209,7 +214,7 @@ function resolveCurrentTurn(
   const events = resolve(s, {
     type: 'STAGE_CARD', intentId: 'i-cost', owner: 'P0', cardId: hand.cardId, lane: 0,
   }, createRng('r'), manifest);
-  eq(events.length, 2, 'STAGE_CARD(projected cost): emits 2 events');
+  eq(events.length, 3, 'STAGE_CARD(projected cost): emits 3 events');
   eq(
     (events[0] as { energyPaid: number }).energyPaid,
     1,
@@ -221,17 +226,6 @@ function resolveCurrentTurn(
     getCardCost(staged, hand.cardId, manifest),
     2,
     'staged card no longer receives the hand-only discount',
-  );
-  const unstage = resolve(staged, {
-    type: 'UNSTAGE_CARD',
-    intentId: 'i-cost-undo',
-    owner: 'P0',
-    cardId: hand.cardId,
-  }, createRng('r'), manifest);
-  eq(
-    (unstage[1] as { delta: number }).delta,
-    1,
-    'hand-only discount refunds the exact Energy paid, not lane Cost',
   );
 }
 
@@ -247,63 +241,29 @@ function resolveCurrentTurn(
   eq(events[0].type, 'INTENT_REJECTED', 'STAGE_CARD(over-cost): INTENT_REJECTED');
 }
 
-// -- UNDO_TURN rejects corrupt payment provenance without an event prefix ---
+// -- Private-plan edits have no authoritative inverse event stream -----------
 
 {
   const manifest = mkManifest([mkCard('grunt', 3, 1)]);
-  const { state: s0, cardId } = withCardInHand(
+  const { state, cardId } = withCardInHand(
     baseState({ turn: 3 }),
     'grunt',
   );
-  const staged = runEvents(s0, resolve(s0, {
-    type: 'STAGE_CARD',
-    intentId: 'corrupt-stage',
+  const unstage = resolve(state, {
+    type: 'UNSTAGE_CARD',
+    intentId: 'private-unstage',
     owner: 'P0',
     cardId,
-    lane: 0,
-  }, createRng('corrupt-stage'), manifest), manifest);
-  const corrupt = {
-    ...staged,
-    stagedPlays: [{ cardId, energyPaid: Number.NaN }],
-  };
-  const events = resolve(corrupt, {
+  }, createRng('private-unstage'), manifest);
+  eq(unstage.length, 1, 'UNSTAGE_CARD emits only typed rejection outside runtime planning');
+  eq(unstage[0].type, 'INTENT_REJECTED', 'UNSTAGE_CARD is private-plan-only');
+  const undo = resolve(state, {
     type: 'UNDO_TURN',
-    intentId: 'corrupt-undo',
+    intentId: 'private-undo',
     owner: 'P0',
-  }, createRng('corrupt-undo'), manifest);
-  eq(events.length, 1, 'corrupt UNDO_TURN emits no partial unstage/refund');
-  eq(events[0].type, 'INTENT_REJECTED', 'corrupt UNDO_TURN is rejected');
-}
-
-// -- UNDO_TURN rejects duplicate payment provenance atomically --------------
-
-{
-  const manifest = mkManifest([mkCard('grunt', 3, 1)]);
-  const { state: s0, cardId } = withCardInHand(
-    baseState({ turn: 3 }),
-    'grunt',
-  );
-  const staged = runEvents(s0, resolve(s0, {
-    type: 'STAGE_CARD',
-    intentId: 'duplicate-stage',
-    owner: 'P0',
-    cardId,
-    lane: 0,
-  }, createRng('duplicate-stage'), manifest), manifest);
-  const corrupt = {
-    ...staged,
-    stagedPlays: [
-      ...staged.stagedPlays,
-      { ...staged.stagedPlays[0]! },
-    ],
-  };
-  const events = resolve(corrupt, {
-    type: 'UNDO_TURN',
-    intentId: 'duplicate-undo',
-    owner: 'P0',
-  }, createRng('duplicate-undo'), manifest);
-  eq(events.length, 1, 'duplicate UNDO_TURN emits no partial refund prefix');
-  eq(events[0].type, 'INTENT_REJECTED', 'duplicate UNDO_TURN is rejected');
+  }, createRng('private-undo'), manifest);
+  eq(undo.length, 1, 'UNDO_TURN emits only typed rejection outside runtime planning');
+  eq(undo[0].type, 'INTENT_REJECTED', 'UNDO_TURN is private-plan-only');
 }
 
 // -- STAGE_CARD: lane full → INTENT_REJECTED --------------------------------
@@ -330,95 +290,6 @@ function resolveCurrentTurn(
   }, createRng('r'), manifest);
   eq(events[0].type, 'INTENT_REJECTED', 'STAGE_CARD(lane full): rejected');
   truthy((events[0] as { reason: string }).reason.includes('full'), 'reason mentions "full"');
-}
-
-// -- UNSTAGE_CARD: refund + remove from stagedPlays -------------------------
-
-{
-  const manifest = mkManifest([mkCard('grunt', 3, 2)]);
-  const { state: s0, cardId } = withCardInHand(baseState({ turn: 3 }), 'grunt');
-  const staged = runEvents(s0, resolve(s0, {
-    type: 'STAGE_CARD', intentId: 'stage', owner: 'P0', cardId, lane: 0,
-  }, createRng('r'), manifest), manifest);
-  const events = resolve(staged, {
-    type: 'UNSTAGE_CARD', intentId: 'unstage', owner: 'P0', cardId,
-  }, createRng('r'), manifest);
-  eq(events.length, 2, 'UNSTAGE_CARD: 2 events (unstage + refund)');
-  const after = runEvents(staged, events, manifest);
-  eq(after.energy.P0, 3, 'UNSTAGE_CARD: energy refunded back to 3');
-  eq(after.stagedPlays.length, 0, 'UNSTAGE_CARD: removed from stagedPlays');
-  eq(after.hand.P0.length, 1, 'UNSTAGE_CARD: back in hand');
-}
-
-// -- UNSTAGE_CARD refunds committed stage cost, not a later projection ------
-
-{
-  const manifest = mkManifest([mkCard('grunt', 3, 2)]);
-  const { state: s0, cardId } = withCardInHand(
-    baseState({ turn: 5 }),
-    'grunt',
-  );
-  const staged = runEvents(s0, resolve(s0, {
-    type: 'STAGE_CARD',
-    intentId: 'stage-stable-refund',
-    owner: 'P0',
-    cardId,
-    lane: 0,
-  }, createRng('stable-refund'), manifest), manifest);
-  const changedAfterStage = apply(staged, {
-    type: 'CARD_COST_CHANGED',
-    cardId,
-    delta: 2,
-    cause: {
-      sourceId: cardId,
-      effectKind: 'SYSTEM',
-      reason: 'TEST_COST_CHANGED_AFTER_STAGE',
-    },
-  }, manifest);
-  eq(
-    changedAfterStage.stagedPlays[0]?.energyPaid,
-    2,
-    'CARD_STAGED stores the exact committed Energy cost',
-  );
-
-  const events = resolve(changedAfterStage, {
-    type: 'UNSTAGE_CARD',
-    intentId: 'unstage-stable-refund',
-    owner: 'P0',
-    cardId,
-  }, createRng('stable-refund'), manifest);
-  eq(
-    (events[1] as { delta: number }).delta,
-    2,
-    'UNSTAGE_CARD refunds the committed cost after effective Cost changes',
-  );
-  const after = runEvents(changedAfterStage, events, manifest);
-  eq(after.energy.P0, 5, 'stable refund restores only the Energy actually paid');
-  eq(
-    after.stagedPlays[0]?.energyPaid,
-    undefined,
-    'CARD_UNSTAGED clears staged Energy provenance',
-  );
-}
-
-// -- UNDO_TURN: unstages ALL my staged cards in reverse order ---------------
-
-{
-  const manifest = mkManifest([mkCard('grunt', 3, 1)]);
-  let s = baseState({ turn: 5 });
-  const a = withCardInHand(s, 'grunt'); s = a.state;
-  const b = withCardInHand(s, 'grunt'); s = b.state;
-  const c = withCardInHand(s, 'grunt'); s = c.state;
-  // Stage all three.
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sa', owner: 'P0', cardId: a.cardId, lane: 0 }, createRng('r'), manifest), manifest);
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sb', owner: 'P0', cardId: b.cardId, lane: 1 }, createRng('r'), manifest), manifest);
-  s = runEvents(s, resolve(s, { type: 'STAGE_CARD', intentId: 'sc', owner: 'P0', cardId: c.cardId, lane: 2 }, createRng('r'), manifest), manifest);
-  eq(s.energy.P0, 2, 'after staging 3x cost-1: energy = 5-3 = 2');
-  const events = resolve(s, { type: 'UNDO_TURN', intentId: 'undo', owner: 'P0' }, createRng('r'), manifest);
-  const after = runEvents(s, events, manifest);
-  eq(after.energy.P0, 5, 'UNDO_TURN: energy fully refunded');
-  eq(after.stagedPlays.length, 0, 'UNDO_TURN: stagedPlays empty');
-  eq(after.hand.P0.length, 3, 'UNDO_TURN: all 3 cards back in hand');
 }
 
 // -- CONCEDE: emits MATCH_ENDED with opponent winning -----------------------

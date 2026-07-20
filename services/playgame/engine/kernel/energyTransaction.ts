@@ -31,6 +31,7 @@ export interface EnergySemantics {
   readonly transitionKind:
     | 'CURRENT_ENERGY_INCREASE'
     | 'CURRENT_ENERGY_DECREASE'
+    | 'CURRENT_ENERGY_PAYMENT_RECORDED'
     | 'MAXIMUM_ENERGY_INCREASE'
     | 'MAXIMUM_ENERGY_DECREASE'
     | 'NEXT_TURN_BONUS_INCREASE'
@@ -94,6 +95,9 @@ function transitionKind(
   signedChange: number,
 ): EnergySemantics['transitionKind'] {
   if (target === 'CURRENT') {
+    if (signedChange === 0) {
+      return 'CURRENT_ENERGY_PAYMENT_RECORDED';
+    }
     return signedChange > 0
       ? 'CURRENT_ENERGY_INCREASE'
       : 'CURRENT_ENERGY_DECREASE';

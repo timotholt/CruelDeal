@@ -41,7 +41,6 @@ describe('C4A kernel contract readiness', () => {
   it('keeps private planning outside committed lifecycle dispatch', () => {
     expect(PRIVATE_PLANNING_EVENT_TYPES).toEqual([
       'CARD_STAGED',
-      'CARD_UNSTAGED',
     ]);
     expect(
       PRIVATE_PLANNING_EVENT_TYPES.some((type) =>

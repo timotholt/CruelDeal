@@ -29,6 +29,7 @@ import type {
  * work or provide an arbitrary callback as a command.
  */
 export type GameCommand =
+  | StagePlayCommand
   | PlayCardCommand
   | SetCardRevealTimingCommand
   | RevealCardCommand
@@ -74,6 +75,14 @@ export type GameCommand =
 
 interface CausedCommand {
   readonly cause: EffectRef;
+}
+
+export interface StagePlayCommand extends CausedCommand {
+  readonly type: 'STAGE_PLAY';
+  readonly intentId: string;
+  readonly owner: Owner;
+  readonly cardId: CardId;
+  readonly lane: LaneId;
 }
 
 export interface SetCardRevealTimingCommand extends CausedCommand {

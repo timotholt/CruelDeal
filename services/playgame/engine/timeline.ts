@@ -307,7 +307,6 @@ function scopeForEvent(
     case 'MATCH_ENDED':
       return { turn: previous.turn, phase: 'MATCH_END' };
     case 'CARD_STAGED':
-    case 'CARD_UNSTAGED':
     case 'INTENT_REJECTED':
       return { turn: previous.turn, phase: 'ACTION' };
     default:

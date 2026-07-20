@@ -84,6 +84,13 @@ import {
   type LocationLifecycleSemantics,
 } from './locationLifecycleSemantics';
 import {
+  captureStagedPlaySemantics,
+  planStagedPlayCommand,
+  planStagedRevealTiming,
+  type ResolveStagedRevealTimingEffect,
+  type StagedPlaySemantics,
+} from './operations/stagedPlay';
+import {
   planDestructionLifecycleCommand,
   type DestructionLifecycleCommand,
 } from './operations/lifecycle';
@@ -148,6 +155,7 @@ import type {
   KernelReaction,
   KernelWork,
   SetCardRevealTimingCommand,
+  StagePlayCommand,
   TransformCardCommand,
 } from './types';
 
@@ -244,6 +252,7 @@ function captureControlFlowSemantics(
 }
 
 export type CanonicalRulesSemantics =
+  | StagedPlaySemantics
   | LaneTopologySemantics
   | DestructionLifecycleSemantics
   | LocationLifecycleSemantics
@@ -303,6 +312,7 @@ export interface ChangeStoredPowerIfCardZoneEffect {
 
 export type CanonicalRulesEffect =
   | EffectExpr
+  | ResolveStagedRevealTimingEffect
   | PlacementReactionEffect
   | HandReactionEffect
   | PowerReactionEffect
@@ -534,6 +544,9 @@ function captureSemantics(
   after: MatchState,
   manifest: Manifest,
 ) {
+  if (event.type === 'CARD_STAGED') {
+    return captureStagedPlaySemantics(before, event, after);
+  }
   if (isTopologyEvent(event)) {
     return captureLaneTopologySemantics(before, event, after);
   }
@@ -771,6 +784,14 @@ function executeCommand(
 ): KernelStepResult<
   KernelWorkExpansion<CanonicalRulesWork>
 > {
+  if (work.command.type === 'STAGE_PLAY') {
+    return planStagedPlayCommand(
+      state,
+      work as CommandWork<StagePlayCommand>,
+      manifest,
+      baseDepth,
+    ) as KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>>;
+  }
   if (
     work.command.type === 'CREATE_LANE'
     || work.command.type === 'DESTROY_LANE'
@@ -954,6 +975,16 @@ export function resolveRulesTransaction(
           options.baseDepth,
         ),
       interpretEffect: (candidate, work) => {
+        if (
+          'kind' in work.effect
+          && work.effect.kind === 'RESOLVE_STAGED_REVEAL_TIMING'
+        ) {
+          return planStagedRevealTiming(
+            candidate,
+            work.effect,
+            options.manifest,
+          ) as KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>>;
+        }
         if (
           'kind' in work.effect
           && work.effect.kind === 'COMPLETE_PLAY'

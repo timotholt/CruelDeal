@@ -117,7 +117,6 @@ interface CommittedCandidate {
 
 interface PlannedStage {
   readonly intent: Extract<MatchIntent, { type: 'STAGE_CARD' }>;
-  readonly events: readonly MatchEvent[];
 }
 
 interface PlanningPrelude {
@@ -128,6 +127,11 @@ interface PlanningPrelude {
 interface ResolvedEventBatch {
   readonly events: readonly MatchEvent[];
   readonly durationMs: number;
+}
+
+interface PlannedSequenceFold {
+  readonly state: MatchState;
+  readonly rejection: Extract<MatchEvent, { type: 'INTENT_REJECTED' }> | null;
 }
 
 const MUTATION_OPTIONAL_EVENTS = new Set<MatchEvent['type']>([
@@ -353,10 +357,11 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     };
   };
 
-  const foldPlannedStages = (
+  const foldPlannedSequence = (
     seat: Seat,
+    plannedStages: readonly PlannedStage[],
     baseState: MatchState = authoritativeState,
-  ): MatchState => {
+  ): PlannedSequenceFold => {
     let state = baseState;
     const prelude = planningPrelude[seat];
     if (prelude && state.rng.draws === prelude.baseDraws) {
@@ -364,18 +369,70 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         state = apply(state, event, manifest);
       }
     }
-    for (const planned of planning[seat]) {
+    for (const planned of plannedStages) {
       // Presentation frames at or after this stage already contain its whole
       // event batch, including lane-entry effects. Never fold it twice.
-      if (getCardPlacement(state, planned.intent.cardId)?.zone !== 'HAND') continue;
-      for (const event of planned.events) state = apply(state, event, manifest);
+      if (getCardPlacement(state, planned.intent.cardId)?.zone !== 'HAND') {
+        if (baseState !== authoritativeState) continue;
+        return {
+          state: baseState,
+          rejection: {
+            type: 'INTENT_REJECTED',
+            intentId: planned.intent.intentId,
+            reason: 'card not in hand',
+          },
+        };
+      }
+      const rng = createRng(state.rng).scope(
+        `stage:${state.turn}:${seat}:${planned.intent.intentId}`,
+      );
+      const events = appendGameplayRngAdvance(
+        state,
+        rng,
+        resolve(state, planned.intent, rng, manifest),
+      );
+      const rejection = events[0]?.type === 'INTENT_REJECTED'
+        ? events[0]
+        : null;
+      if (events.length === 0 || rejection) {
+        return {
+          state: baseState,
+          rejection: rejection ?? {
+            type: 'INTENT_REJECTED',
+            intentId: planned.intent.intentId,
+            reason: 'private stage produced no planning events',
+          },
+        };
+      }
+      for (const event of events) state = apply(state, event, manifest);
     }
     // Private plans are hypothetical branches, not committed chronology.
     // Preserve their mechanical projection while withholding candidate frame
     // advancement from consumers.
-    return state.timeline === baseState.timeline
-      ? state
-      : { ...state, timeline: baseState.timeline };
+    return {
+      state: state.timeline === baseState.timeline
+        ? state
+        : { ...state, timeline: baseState.timeline },
+      rejection: null,
+    };
+  };
+
+  const foldPlannedStages = (
+    seat: Seat,
+    baseState: MatchState = authoritativeState,
+  ): MatchState => {
+    const folded = foldPlannedSequence(seat, planning[seat], baseState);
+    if (folded.rejection) {
+      throw new KernelInvariantError(Object.freeze({
+        kind: 'KERNEL_FAILURE',
+        code: 'REDUCER_INVARIANT',
+        message: `stored private plan is invalid: ${folded.rejection.reason}`,
+        workItemsConsumed: 0,
+        eventsProduced: 0,
+        reactionsScheduled: 0,
+      }));
+    }
+    return folded.state;
   };
 
   const projectWorkingState = (baseState: MatchState = authoritativeState): MatchState => (
@@ -630,7 +687,16 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         const stageEvents = stageBatch.events;
         resolveMs += stageBatch.durationMs;
         const rejection = stageEvents[0]?.type === 'INTENT_REJECTED' ? stageEvents[0] : null;
-        if (rejection) continue;
+        if (stageEvents.length === 0 || rejection) {
+          throw new KernelInvariantError(Object.freeze({
+            kind: 'KERNEL_FAILURE',
+            code: 'REDUCER_INVARIANT',
+            message: `accepted private plan failed commit refold: ${rejection?.reason ?? 'stage produced no events'}`,
+            workItemsConsumed: 0,
+            eventsProduced: events.length,
+            reactionsScheduled: 0,
+          }));
+        }
         events.push(...stageEvents);
         for (const event of stageEvents) mergedState = apply(mergedState, event, manifest);
       }
@@ -785,22 +851,20 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
             'seat is locked',
           ));
         }
-        const planningState = foldPlannedStages(envelope.seat);
-        const events = resolveWithStateRng(
-          planningState,
-          engineIntent,
-          `stage:${planningState.turn}:${envelope.seat}:${envelope.intentId}`,
-        ).events;
-        const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
-        if (events.length === 0 || engineRejection) {
+        const candidate = [
+          ...planning[envelope.seat],
+          { intent: engineIntent },
+        ];
+        const folded = foldPlannedSequence(envelope.seat, candidate);
+        if (folded.rejection) {
           return storeRejection(key, illegalResult(
             envelope,
             currentRevision,
             'RULES_INVALID',
-            engineRejection?.reason ?? 'intent produced no planning events',
+            folded.rejection.reason,
           ));
         }
-        planning[envelope.seat].push({ intent: engineIntent, events: Object.freeze([...events]) });
+        planning[envelope.seat] = candidate;
         return acceptPrivate(key, envelope);
       }
 
@@ -819,7 +883,19 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
             'card is not in the private planning stack',
           ));
         }
-        planning[envelope.seat].splice(index);
+        const candidate = planning[envelope.seat].filter(
+          (_, candidateIndex) => candidateIndex !== index,
+        );
+        const folded = foldPlannedSequence(envelope.seat, candidate);
+        if (folded.rejection) {
+          return storeRejection(key, illegalResult(
+            envelope,
+            currentRevision,
+            'RULES_INVALID',
+            `remaining private plan is invalid: ${folded.rejection.reason}`,
+          ));
+        }
+        planning[envelope.seat] = candidate;
         return acceptPrivate(key, envelope);
       }
 

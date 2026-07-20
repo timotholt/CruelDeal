@@ -140,6 +140,9 @@ export function describeReplayCause(
   names: ReplayNameResolver,
 ): string | null {
   if (!frame?.event) return null;
+  // Staging is the player's initiating action. Its mandatory provenance is
+  // mechanically important, but narrating it as self-caused is misleading.
+  if (frame.event.type === 'CARD_STAGED') return null;
   const cause = eventCause(frame.event);
   if (!cause) return null;
 
@@ -213,9 +216,6 @@ export function describeReplayStep(
   switch (event.type) {
     case 'CARD_STAGED':
       summary = `${player(event.owner)} played ${cardName(event.cardId)} to the ${laneLabel(event.lane)}, slot ${cardSlot(event.cardId, event.lane, event.owner)}.`;
-      break;
-    case 'CARD_UNSTAGED':
-      summary = `${cardPlayer(event.cardId)} returned ${cardName(event.cardId)} to their hand.`;
       break;
     case 'ENERGY_CHANGED':
       summary = `${player(event.owner)} ${signedChange(event.delta, 'gained', 'spent')} energy (${humanizeToken(event.reason).toLowerCase()}).`;

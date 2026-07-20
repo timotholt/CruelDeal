@@ -71,7 +71,6 @@ const GOVERNED_LOCATION_EVENT_TYPES = [
 export const PROTOCOL_MATCH_EVENT_TYPES = [
   'GAMEPLAY_RNG_ADVANCED',
   'CARD_STAGED',
-  'CARD_UNSTAGED',
   'ENERGY_CHANGED',
   'MAX_ENERGY_CHANGED',
   'NEXT_TURN_ENERGY_BONUS_CHANGED',
@@ -138,6 +137,8 @@ const OTHER_EVENT_TYPES = PROTOCOL_MATCH_EVENT_TYPES.filter(
   (type) => !([
     ...CORE_BOUNDARY_EVENT_TYPES,
     ...GOVERNED_LOCATION_EVENT_TYPES,
+    'CARD_STAGED',
+    'CARD_REVEAL_SCHEDULED',
     'PENDING_EFFECT_SCHEDULED',
     'PENDING_EFFECT_CONSUMED',
   ] as readonly string[]).includes(type),
@@ -233,6 +234,42 @@ export const PROTOCOL_SCHEMA = {
         reason: string(),
       },
       ['sourceId', 'effectKind', 'reason'],
+    ),
+    CardRevealTiming: {
+      oneOf: [
+        object(
+          {
+            kind: { const: 'TURN' },
+            turn: ref('PositiveInteger'),
+          },
+          ['kind', 'turn'],
+        ),
+        object(
+          { kind: { const: 'END_OF_GAME' } },
+          ['kind'],
+        ),
+      ],
+    },
+    CardStagedEvent: tagged(
+      'CARD_STAGED',
+      {
+        intentId: string(),
+        cardId: string(),
+        lane: ref('LaneId'),
+        owner: ref('Seat'),
+        energyPaid: ref('SafeInteger'),
+        cause: ref('EffectRef'),
+      },
+      ['intentId', 'cardId', 'lane', 'owner', 'energyPaid', 'cause'],
+    ),
+    CardRevealScheduledEvent: tagged(
+      'CARD_REVEAL_SCHEDULED',
+      {
+        cardId: string(),
+        timing: ref('CardRevealTiming'),
+        cause: ref('EffectRef'),
+      },
+      ['cardId', 'timing', 'cause'],
     ),
     EffectExpr: {
       type: 'object',
@@ -524,6 +561,8 @@ export const PROTOCOL_SCHEMA = {
     },
     MatchEvent: {
       oneOf: [
+        ref('CardStagedEvent'),
+        ref('CardRevealScheduledEvent'),
         ref('TurnResolutionStartedEvent'),
         ref('TurnStartedEvent'),
         ref('TurnEndedEvent'),

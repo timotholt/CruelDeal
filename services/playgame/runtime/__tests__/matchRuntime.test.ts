@@ -326,7 +326,7 @@ describe('createMatchRuntime', () => {
     }
   });
 
-  it('keeps private Gun Store stages reaction-free across suffix and full-turn undo', async () => {
+  it('re-resolves the remaining private plan after unstage and refolds exact payment on undo', async () => {
     const runtime = Array.from({ length: 256 }, (_, index) => runtimeFixture(`gun-store-planning-${index}`))
       .find((candidate) => {
         const state = candidate.state();
@@ -368,17 +368,35 @@ describe('createMatchRuntime', () => {
     expect(runtime.state().stagedPlays.map(play => play.cardId))
       .toEqual([firstCardId, secondCardId]);
 
-    await runtime.submitIntent({
+    const unstageEnvelope: IntentEnvelope = {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'undo-older-suffix',
       expectedRevision: runtime.revision(),
       intent: { type: 'UNSTAGE_CARD', cardId: firstCardId },
+    };
+    await expect(runtime.submitIntent(unstageEnvelope)).resolves.toMatchObject({
+      status: 'accepted',
+      commit: 'PRIVATE',
     });
-    expect(runtime.state()).toEqual(turnBase);
+    expect(runtime.state().stagedPlays.map(play => play.cardId))
+      .toEqual([secondCardId]);
+    expect(runtime.state().hand.P0).toContain(firstCardId);
+    expect(runtime.state().hand.P0).not.toContain(secondCardId);
+    expect(runtime.state().energy.P0).toBe(
+      turnBase.energy.P0
+      - runtime.state().stagedPlays[0]!.energyPaid,
+    );
     expect(runtime.transactions()).toHaveLength(transactionCount);
 
-    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-restage', runtime.revision(), 'P0', firstCardId));
+    const afterFirstUnstage = structuredClone(runtime.state());
+    await expect(runtime.submitIntent(unstageEnvelope)).resolves.toMatchObject({
+      status: 'duplicate',
+      original: { status: 'accepted', commit: 'PRIVATE' },
+    });
+    expect(runtime.state()).toEqual(afterFirstUnstage);
+    expect(runtime.transactions()).toHaveLength(transactionCount);
+
     await runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P0',
@@ -408,6 +426,48 @@ describe('createMatchRuntime', () => {
     expect(accepted).toMatchObject({ status: 'accepted', revision: revision + 1 });
     expect(runtime.state().stagedPlays).not.toHaveLength(0);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
+  });
+
+  it('rejects duplicate and missing-card plan edits without changing the private fold', async () => {
+    const runtime = runtimeFixture('private-plan-atomic-rejections');
+    const transactionCount = runtime.transactions().length;
+    const [stagedCardId, otherCardId] = runtime.state().hand.P0;
+    expect(stagedCardId).toBeDefined();
+    expect(otherCardId).toBeDefined();
+
+    await expect(runtime.submitIntent(stageEnvelope(
+      runtime,
+      'first-private-stage',
+      runtime.revision(),
+      'P0',
+      stagedCardId,
+    ))).resolves.toMatchObject({ status: 'accepted', commit: 'PRIVATE' });
+    const afterStage = structuredClone(runtime.state());
+
+    await expect(runtime.submitIntent(stageEnvelope(
+      runtime,
+      'duplicate-private-stage',
+      runtime.revision(),
+      'P0',
+      stagedCardId,
+    ))).resolves.toMatchObject({
+      status: 'illegal',
+      code: 'RULES_INVALID',
+    });
+    expect(runtime.state()).toEqual(afterStage);
+
+    await expect(runtime.submitIntent({
+      matchId: 'phase1-runtime-match',
+      seat: 'P0',
+      intentId: 'missing-private-unstage',
+      expectedRevision: runtime.revision(),
+      intent: { type: 'UNSTAGE_CARD', cardId: otherCardId },
+    })).resolves.toMatchObject({
+      status: 'illegal',
+      code: 'RULES_INVALID',
+    });
+    expect(runtime.state()).toEqual(afterStage);
+    expect(runtime.transactions()).toHaveLength(transactionCount);
   });
 
   it('rejects non-contract envelope fields before rules resolution', async () => {

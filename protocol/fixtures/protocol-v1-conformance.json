@@ -465,6 +465,250 @@
       }
     },
     {
+      "name": "valid canonical staged card event",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 9,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_STAGED",
+            "intentId": "intent:stage-card",
+            "cardId": "card:staged",
+            "lane": 2,
+            "owner": "P1",
+            "energyPaid": 0,
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "valid canonical turn reveal schedule",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 10,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_REVEAL_SCHEDULED",
+            "cardId": "card:staged",
+            "timing": {
+              "kind": "TURN",
+              "turn": 3
+            },
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "valid canonical end of game reveal schedule",
+      "valid": true,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 11,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_REVEAL_SCHEDULED",
+            "cardId": "card:staged",
+            "timing": {
+              "kind": "END_OF_GAME"
+            },
+            "cause": {
+              "sourceId": "location:cryobank",
+              "effectKind": "LOCATION",
+              "reason": "DELAY_REVEAL"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "staged payment must be a non-negative safe integer",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 12,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_STAGED",
+            "intentId": "intent:stage-card",
+            "cardId": "card:staged",
+            "lane": 2,
+            "owner": "P1",
+            "energyPaid": -1,
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "staged event rejects legacy cost alias",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 12,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_STAGED",
+            "intentId": "intent:stage-card",
+            "cardId": "card:staged",
+            "lane": 2,
+            "owner": "P1",
+            "energyPaid": 1,
+            "cost": 1,
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "reveal schedule rejects unsafe turn",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 13,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_REVEAL_SCHEDULED",
+            "cardId": "card:staged",
+            "timing": {
+              "kind": "TURN",
+              "turn": 9007199254740992
+            },
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "reveal schedule rejects legacy timing discriminator",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 14,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_REVEAL_SCHEDULED",
+            "cardId": "card:staged",
+            "timing": {
+              "type": "TURN",
+              "turn": 3
+            },
+            "cause": {
+              "sourceId": "card:staged",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "staged event requires non-empty cause provenance",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 15,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_STAGED",
+            "intentId": "intent:stage-card",
+            "cardId": "card:staged",
+            "lane": 2,
+            "owner": "P1",
+            "energyPaid": 1,
+            "cause": {
+              "sourceId": "",
+              "effectKind": "SYSTEM",
+              "reason": "CARD_STAGE"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "removed card unstaged event is rejected",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "FRAMED_EVENT",
+        "payload": {
+          "frame": 16,
+          "scope": {
+            "turn": 2,
+            "phase": "ACTION"
+          },
+          "event": {
+            "type": "CARD_UNSTAGED",
+            "intentId": "intent:undo",
+            "cardId": "card:staged"
+          }
+        }
+      }
+    },
+    {
       "name": "protocol version is exact",
       "valid": false,
       "value": {

@@ -228,9 +228,6 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
     case 'CARD_STAGED':
       return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'LANE', owner: event.owner, lane: event.lane }, 'faceDown');
 
-    case 'CARD_UNSTAGED':
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), zoneOfCard(after, event.cardId), 'faceUp');
-
     case 'CARD_MOVED': {
       const card = getCardPlacement(before, event.cardId) ??
         getCardPlacement(after, event.cardId);
@@ -301,7 +298,6 @@ export function deriveCardTransfers(before: MatchState, event: MatchEvent, after
 const structuralCardEventTypes = new Set<MatchEvent['type']>([
   'CARD_DRAWN',
   'CARD_STAGED',
-  'CARD_UNSTAGED',
   'CARD_MOVED',
   'CARD_ZONE_CHANGED',
   'CARD_RETURNED_TO_LANE',
