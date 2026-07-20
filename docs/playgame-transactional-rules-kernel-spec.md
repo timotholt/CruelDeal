@@ -1692,6 +1692,13 @@ Enable AST/import/source fences that fail on:
 - unscoped gameplay randomness;
 - missing semantic envelope closure.
 
+C5C is complete when one permanent gate classifies every event variant and
+constructor owner, enforces the complete reducer allowlist, restricts reaction
+collection to the canonical dispatcher, isolates active content and
+presentation/provider layers from engine capabilities, forbids unscoped
+simulation/runtime randomness, and proves semantic capture precedes reaction
+discovery for every canonical event.
+
 ### Phase 1.5 Exit
 
 Phase 1.5 is complete only when:
