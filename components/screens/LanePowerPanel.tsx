@@ -1,38 +1,19 @@
-import { createSignal } from 'solid-js';
-import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
-import {
-  getCardRuntime,
-  getCardTemplate,
-  getLocationTemplate,
-} from '@/services/playgame/engine/projections';
-import type { CardId } from '@/services/playgame/engine/types/ids';
-import { usePlayGame } from '@/contexts/PlayGameContext';
+import { createSignal, For } from 'solid-js';
+import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
+import { useMatchSession } from '@/contexts/MatchSessionContext';
 
 interface LanePowerPanelProps {
-  breakdown: LanePowerBreakdown;
+  breakdown: SeatLanePowerReadModel;
   onClose: () => void;
 }
 
 export const LanePowerPanel = (props: LanePowerPanelProps) => {
-  const { engineState, manifest, localSeat, seatMeta } = usePlayGame();
+  const { bootstrap } = useMatchSession();
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
   let panelRef: HTMLDivElement | undefined;
 
-  const resolveName = (sourceId: string): string => {
-    const card = getCardRuntime(engineState(), sourceId as CardId, manifest);
-    if (card) {
-      return getCardTemplate(manifest, card.defId)?.name ?? card.defId;
-    }
-    const defId = sourceId.split('@')[0];
-    const location = getLocationTemplate(manifest, defId);
-    if (location) return location.name;
-    return sourceId;
-  };
-
-  const sign = (n: number) => (n >= 0 ? `+${n}` : `${n}`);
-  const scoreLabel = props.breakdown.owner === localSeat
-    ? seatMeta[localSeat].name
-    : seatMeta[localSeat === 'P0' ? 'P1' : 'P0'].name;
+  const scoreLabel = () =>
+    bootstrap.participants[props.breakdown.owner].displayName;
 
   const handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
@@ -63,7 +44,7 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
 
   return (
     <div
-      ref={panelRef}
+      ref={(element) => { panelRef = element; }}
       onClick={(e) => e.stopPropagation()}
       style={{
         position: 'fixed',
@@ -107,27 +88,28 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
             Lane Score
           </span>
           <span style={{ color: '#94a3b8', 'font-size': '0.6rem' }}>
-            {scoreLabel}
+            {scoreLabel()}
           </span>
         </div>
         <button
-          onClick={props.onClose}
+          onClick={() => props.onClose()}
           style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', 'font-size': '1rem', 'line-height': '1', padding: '0 0 0 8px' }}
         >×</button>
       </div>
 
       <div style={{ 'overflow-y': 'auto', display: 'flex', 'flex-direction': 'column', gap: '3px' }}>
         <SectionLabel label="Cards" />
-        {props.breakdown.cards.length > 0 ? props.breakdown.cards.map((entry) => {
-          const totalDelta = entry.permanentDelta + entry.ongoingDelta;
-          return (
-            <BreakdownRow
-              label={resolveName(entry.cardId)}
-              delta={totalDelta}
-              total={entry.finalCardPower}
-            />
-          );
-        }) : (
+        {props.breakdown.cards.length > 0 ? (
+          <For each={props.breakdown.cards}>
+            {entry => (
+              <BreakdownRow
+                label={entry.label}
+                delta={entry.permanentDelta + entry.ongoingDelta}
+                total={entry.finalPower}
+              />
+            )}
+          </For>
+        ) : (
           <EmptyRow label="No cards in lane" />
         )}
 
@@ -136,13 +118,15 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
         {props.breakdown.laneAdditions.length > 0 && (
           <>
             <SectionLabel label="Lane" />
-            {props.breakdown.laneAdditions.map((entry) => (
-              <BreakdownRow
-                label={resolveName(entry.sourceId)}
-                delta={entry.delta}
-                total={undefined}
-              />
-            ))}
+            <For each={props.breakdown.laneAdditions}>
+              {entry => (
+                <BreakdownRow
+                  label={entry.sourceLabel}
+                  delta={entry.delta}
+                  total={undefined}
+                />
+              )}
+            </For>
             <SummaryRow label="After Lane" total={props.breakdown.subtotalAfterAdditions} />
           </>
         )}
@@ -150,12 +134,14 @@ export const LanePowerPanel = (props: LanePowerPanelProps) => {
         {props.breakdown.multipliers.length > 0 && (
           <>
             <SectionLabel label="Ongoing" />
-            {props.breakdown.multipliers.map((entry) => (
-              <MultiplierRow
-                label={resolveName(entry.sourceId)}
-                factor={entry.factor}
-              />
-            ))}
+            <For each={props.breakdown.multipliers}>
+              {entry => (
+                <MultiplierRow
+                  label={entry.sourceLabel}
+                  factor={entry.factor}
+                />
+              )}
+            </For>
             <SummaryRow label="Multiplier" total={props.breakdown.effectiveMultiplier} prefix="x" />
           </>
         )}
@@ -174,8 +160,10 @@ const SectionLabel = (props: { label: string }) => (
 );
 
 const BreakdownRow = (props: { label: string; delta: number; total?: number }) => {
-  const deltaColor = props.delta > 0 ? '#4ade80' : props.delta < 0 ? '#f87171' : '#94a3b8';
-  const deltaText = props.delta >= 0 ? `+${props.delta}` : `${props.delta}`;
+  const deltaColor = () =>
+    props.delta > 0 ? '#4ade80' : props.delta < 0 ? '#f87171' : '#94a3b8';
+  const deltaText = () =>
+    props.delta >= 0 ? `+${props.delta}` : `${props.delta}`;
   return (
     <div style={{
       display: 'grid',
@@ -189,8 +177,8 @@ const BreakdownRow = (props: { label: string; delta: number; total?: number }) =
       <span style={{ color: '#94a3b8', 'font-size': '0.6rem', overflow: 'hidden', 'text-overflow': 'ellipsis', 'white-space': 'nowrap' }}>
         {props.label}
       </span>
-      <span style={{ color: deltaColor, 'font-size': '0.65rem', 'font-weight': '700', 'font-style': 'italic' }}>
-        {deltaText}
+      <span style={{ color: deltaColor(), 'font-size': '0.65rem', 'font-weight': '700', 'font-style': 'italic' }}>
+        {deltaText()}
       </span>
       <span style={{ color: '#e2e8f0', 'font-size': '0.65rem', 'font-weight': '700', 'min-width': '1.5rem', 'text-align': 'right' }}>
         {props.total !== undefined ? `→ ${props.total}` : '\u00a0'}

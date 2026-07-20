@@ -732,7 +732,7 @@ export const PROTOCOL_SCHEMA = {
         token: string(),
         owner: ref('Seat'),
         zone: {
-          enum: ['HAND', 'LANE', 'DISCARD', 'DESTROYED'],
+          enum: ['HAND', 'LANE', 'DISCARD', 'DESTROYED', 'BANISHED'],
         },
         lane: {
           anyOf: [ref('LaneId'), { type: 'null' }],
@@ -776,8 +776,15 @@ export const PROTOCOL_SCHEMA = {
           },
           ['P0', 'P1'],
         ),
+        power: object(
+          {
+            P0: ref('SafeSignedInteger'),
+            P1: ref('SafeSignedInteger'),
+          },
+          ['P0', 'P1'],
+        ),
       },
-      ['id', 'status', 'location', 'cards'],
+      ['id', 'status', 'location', 'cards', 'power'],
     ),
     SeatVisibleMatchState: object(
       {
@@ -824,6 +831,10 @@ export const PROTOCOL_SCHEMA = {
           { P0: array(string()), P1: array(string()) },
           ['P0', 'P1'],
         ),
+        banished: object(
+          { P0: array(string()), P1: array(string()) },
+          ['P0', 'P1'],
+        ),
         banishedCounts: object(
           { P0: ref('SafeInteger'), P1: ref('SafeInteger') },
           ['P0', 'P1'],
@@ -847,6 +858,7 @@ export const PROTOCOL_SCHEMA = {
         'stagedCards',
         'discard',
         'destroyed',
+        'banished',
         'banishedCounts',
         'result',
       ],

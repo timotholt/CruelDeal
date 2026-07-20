@@ -1,13 +1,22 @@
-import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneId, Owner } from '../engine/types/ids';
+import type { LaneId, Owner } from '../engine/types/ids';
+import type {
+  SeatAnimationEvent,
+  SeatCardToken,
+} from '../runtime/projection';
+import {
+  eventCardToken,
+  eventOwner,
+  eventRecord,
+  eventString,
+} from './projectedEvent';
 
 export type StructuralAnimation =
   | { kind: 'dispatch-only' }
-  | { kind: 'card-flip'; cardId: CardId }
-  | { kind: 'card-move'; cardId: CardId; durationMs: number }
+  | { kind: 'card-flip'; cardId: SeatCardToken }
+  | { kind: 'card-move'; cardId: SeatCardToken; durationMs: number }
   | {
       kind: 'card-enter-hand';
-      cardId: CardId;
+      cardId: SeatCardToken;
       owner: Owner;
       origin: 'deck' | 'generated';
       popDurationMs: number;
@@ -15,13 +24,13 @@ export type StructuralAnimation =
   | { kind: 'location-reveal'; lane: LaneId };
 
 export type VfxCue =
-  | { kind: 'power-flash'; cardId: CardId; delta: number }
-  | { kind: 'destroy-burst'; cardId: CardId }
-  | { kind: 'glitch-flash'; cardId: CardId }
+  | { kind: 'power-flash'; cardId: SeatCardToken; delta: number }
+  | { kind: 'destroy-burst'; cardId: SeatCardToken }
+  | { kind: 'glitch-flash'; cardId: SeatCardToken }
   | {
       kind: 'move-trail';
-      cardId: CardId;
-      effectKind: Extract<MatchEvent, { type: 'CARD_MOVED' }>['cause']['effectKind'];
+      cardId: SeatCardToken;
+      effectKind: string;
       sourceId: string;
       reason: string;
     }
@@ -44,66 +53,68 @@ const dispatchOnly = (): EventChoreography => ({
   sfx: [],
 });
 
-export function describeEventChoreography(event: MatchEvent): EventChoreography {
+export function describeEventChoreography(
+  event: SeatAnimationEvent,
+): EventChoreography {
+  const cardId = eventCardToken(event);
+  if (!cardId) return dispatchOnly();
   switch (event.type) {
     case 'CARD_MOVED':
-      return {
-        structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
-        vfx: [{
-          kind: 'move-trail',
-          cardId: event.cardId,
-          effectKind: event.cause.effectKind,
-          reason: event.cause.reason,
-          sourceId: event.cause.sourceId,
-        }],
-        sfx: [{ name: 'move', timing: 'on-dispatch' }],
-      };
-
     case 'CARD_ZONE_CHANGED':
       return {
-        structural: { kind: 'card-move', cardId: event.cardId, durationMs: 360 },
+        structural: { kind: 'card-move', cardId, durationMs: 360 },
         vfx: [{
           kind: 'move-trail',
-          cardId: event.cardId,
-          effectKind: event.cause.effectKind,
-          reason: event.cause.reason,
-          sourceId: event.cause.sourceId,
+          cardId,
+          effectKind: eventString(event, 'effectKind') ?? 'SYSTEM',
+          reason: eventString(event, 'reason') ?? event.type,
+          sourceId: eventString(event, 'source') ?? cardId,
         }],
         sfx: [{ name: 'move', timing: 'on-dispatch' }],
       };
 
-    case 'CARD_DRAWN':
+    case 'CARD_DRAWN': {
+      const owner = eventOwner(event);
+      if (!owner) return dispatchOnly();
       return {
         structural: {
           kind: 'card-enter-hand',
-          cardId: event.cardId,
-          owner: event.owner,
+          cardId,
+          owner,
           origin: 'deck',
           popDurationMs: 320,
         },
         vfx: [],
         sfx: [],
       };
+    }
 
-    case 'CARD_CREATED':
-      if (event.destination.kind !== 'HAND') return dispatchOnly();
+    case 'CARD_CREATED': {
+      const owner = eventOwner(event);
+      const destination = eventRecord(event, 'destination');
+      if (!owner || destination?.kind !== 'HAND') return dispatchOnly();
       return {
         structural: {
           kind: 'card-enter-hand',
-          cardId: event.cardId,
-          owner: event.owner,
+          cardId,
+          owner,
           origin: 'generated',
           popDurationMs: 320,
         },
         vfx: [],
         sfx: [],
       };
+    }
 
     case 'CARD_POWER_CHANGED': {
-      const delta = event.mutation.kind === 'ADD' ? event.mutation.delta : 0;
+      const mutation = eventRecord(event, 'mutation');
+      const delta = mutation?.kind === 'ADD'
+        && typeof mutation.delta === 'number'
+        ? mutation.delta
+        : 0;
       return {
         structural: { kind: 'dispatch-only' },
-        vfx: [{ kind: 'power-flash', cardId: event.cardId, delta }],
+        vfx: [{ kind: 'power-flash', cardId, delta }],
         sfx: delta === 0
           ? []
           : [{ name: delta > 0 ? 'buff' : 'debuff', timing: 'after-dispatch' }],
@@ -113,14 +124,14 @@ export function describeEventChoreography(event: MatchEvent): EventChoreography 
     case 'CARD_DESTROYED':
       return {
         structural: { kind: 'dispatch-only' },
-        vfx: [{ kind: 'destroy-burst', cardId: event.cardId }],
+        vfx: [{ kind: 'destroy-burst', cardId }],
         sfx: [{ name: 'destroy', timing: 'after-dispatch' }],
       };
 
     case 'CARD_TRANSFORMED':
       return {
         structural: { kind: 'dispatch-only' },
-        vfx: [{ kind: 'glitch-flash', cardId: event.cardId }],
+        vfx: [{ kind: 'glitch-flash', cardId }],
         sfx: [{ name: 'on_reveal', timing: 'after-dispatch' }],
       };
 

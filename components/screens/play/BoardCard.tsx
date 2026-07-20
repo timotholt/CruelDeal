@@ -9,9 +9,10 @@
 
 import { createEffect } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
-import { usePlayGame } from '@/contexts/PlayGameContext';
+import { useMatchSession } from '@/contexts/MatchSessionContext';
+import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
-import type { CardId, Seat } from '@/services/playgame/engine/types/ids';
+import type { Seat } from '@/services/playgame/engine/types/ids';
 import { openInspect } from './inspector';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
@@ -29,21 +30,20 @@ interface BoardCardProps {
 }
 
 export const BoardCard = (props: BoardCardProps) => {
-  const { ui, engineState, isResolving, localSeat } = usePlayGame();
+  const match = useMatchSession();
+  const { ui, presentedState, isResolving } = usePlayUi();
   const { bindCardRef } = useVfx();
-  const viewerSeat = (): Seat => props.viewerSeat ?? localSeat;
-
-  const cardId = () => props.card.id as CardId;
+  const viewerSeat = (): Seat => props.viewerSeat ?? match.localSeat;
 
   createEffect(() => {
     const sources = props.card.textDisabled
       ? [{ id: `${props.card.id}-glitch`, sourceId: props.card.id, kind: 'glitch' as const, intensity: 1, priority: 5 }]
       : [];
-    cardVfxRegistry.reconcilePersistent(cardId(), sources);
+    cardVfxRegistry.reconcilePersistent(props.card.id, sources);
   });
   const stagedCardIds = (): readonly string[] =>
     props.stagedCardIds
-    ?? engineState().stagedPlays.map(staged => staged.cardId);
+    ?? presentedState().stagedCards;
   const interactive = (): boolean => props.interactive ?? true;
   const inspectable = (): boolean => props.inspectable ?? interactive();
 
@@ -126,7 +126,7 @@ export const BoardCard = (props: BoardCardProps) => {
       }}
       onClick={onClick}
     >
-      <CardVfxStack cardId={cardId()}>
+      <CardVfxStack cardId={props.card.id}>
         <div class="cost">{props.card.cost}</div>
         {props.card.type !== 'spell'
           ? <div class={'power ' + powerClass()}>{props.card.power}</div>

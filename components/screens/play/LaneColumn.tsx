@@ -1,5 +1,5 @@
 import type { JSX } from 'solid-js';
-import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
 import { LaneSlots } from './LaneSlots';
@@ -14,8 +14,8 @@ interface LaneColumnProps {
   bottomCards: ResolvedCard[];
   topPower: number;
   bottomPower: number;
-  topBreakdown: LanePowerBreakdown;
-  bottomBreakdown: LanePowerBreakdown;
+  topBreakdown: SeatLanePowerReadModel;
+  bottomBreakdown: SeatLanePowerReadModel;
   interactive: boolean;
   inspectable: boolean;
   viewerSeat: Seat;

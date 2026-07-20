@@ -1,4 +1,4 @@
-import type { CardId, Owner } from '../../engine/types/ids';
+import type { Owner } from '../../engine/types/ids';
 
 export type CardVisualFace = 'faceUp' | 'faceDown';
 
@@ -10,7 +10,7 @@ export type CardVisualSourceKind =
   | 'generated';
 
 export interface CardVisualSnapshot {
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly rect: DOMRect;
   readonly rotationDegrees: number;
   readonly face: CardVisualFace;
@@ -19,7 +19,7 @@ export interface CardVisualSnapshot {
 }
 
 export interface CanonicalCardEndpoint {
-  readonly cardId: CardId;
+  readonly cardId: string;
   resolveElement(): HTMLElement | null;
   resolveRect(): DOMRect | null;
   resolveRotationDegrees(): number;
@@ -79,7 +79,7 @@ export interface CardMotionStyle {
 
 export interface CardMotionDiagnostic {
   readonly sessionId: string;
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly route: string;
   readonly phase: CardMotionPhase;
   readonly kind:

@@ -19,6 +19,7 @@ import type {
   Seat,
 } from '../engine/types/ids';
 import type { MatchState } from '../engine/types/state';
+import type { EventTransition } from '../engine/transactionTimeline';
 import { storedPowerDelta } from '../engine/powerLedger';
 import type {
   CommittedTransactionTimeline,
@@ -29,17 +30,29 @@ import type {
   RuntimeIntent,
 } from './contracts';
 import type { MatchSession } from './matchSession';
-import type { MatchPerformanceProfile } from './performanceTelemetry';
+import { renderRuntimeReplay } from './replayExport';
+import type {
+  FramePresentationTiming,
+  MatchPerformanceProfile,
+} from './performanceTelemetry';
 import {
   projectBootstrapForSeat,
+  overlaySeatPrivatePlan,
+  projectAnimationEventForSeat,
+  projectMatchStateForSeat,
   projectSnapshotForSeat,
   projectTransactionTimelineForSeat,
   resolveSeatCardTokenForAuthority,
   type SeatBootstrap,
   type SeatCardToken,
   type SeatMatchSnapshot,
+  type SeatReplayTimeline,
   type SeatTransactionTimeline,
 } from './projection';
+import type {
+  SeatCardStatReadModel,
+  SeatLanePowerReadModel,
+} from './seatReadModels';
 
 export interface SeatMatchInitialization {
   readonly setup: SeatMatchSnapshot;
@@ -80,63 +93,6 @@ export type SeatCommandResult =
       readonly status: 'duplicate';
       readonly original: SeatCommandReceipt;
     });
-
-export interface SeatPowerHistoryRow {
-  readonly turn: number;
-  readonly frame: number;
-  readonly sourceLabel: string;
-  readonly delta: number;
-  readonly total: number;
-}
-
-export interface SeatCostHistoryRow {
-  readonly turn: number;
-  readonly frame: number;
-  readonly sourceLabel: string;
-  readonly delta: number;
-  readonly total: number;
-}
-
-export interface SeatLiveModifierRow {
-  readonly sourceLabel: string;
-  readonly delta: number;
-}
-
-export interface SeatCardStatReadModel {
-  readonly token: SeatCardToken;
-  readonly name: string;
-  readonly basePower: number | null;
-  readonly effectivePower: number | null;
-  readonly powerHistory: readonly SeatPowerHistoryRow[];
-  readonly livePowerModifiers: readonly SeatLiveModifierRow[];
-  readonly baseCost: number;
-  readonly effectiveCost: number;
-  readonly costHistory: readonly SeatCostHistoryRow[];
-  readonly liveCostModifiers: readonly SeatLiveModifierRow[];
-}
-
-export interface SeatLaneCardPowerRow {
-  readonly label: string;
-  readonly basePower: number;
-  readonly permanentDelta: number;
-  readonly ongoingDelta: number;
-  readonly finalPower: number;
-}
-
-export interface SeatLanePowerReadModel {
-  readonly lane: LaneId;
-  readonly owner: Seat;
-  readonly cards: readonly SeatLaneCardPowerRow[];
-  readonly cardSubtotal: number;
-  readonly laneAdditions: readonly SeatLiveModifierRow[];
-  readonly subtotalAfterAdditions: number;
-  readonly multipliers: readonly {
-    readonly sourceLabel: string;
-    readonly factor: number;
-  }[];
-  readonly effectiveMultiplier: number;
-  readonly total: number;
-}
 
 /**
  * Trusted local bridge between canonical MatchSession authority and the
@@ -242,6 +198,67 @@ export class LocalMatchSessionAdapter {
 
   performanceProfile(): MatchPerformanceProfile {
     return this.#session.runtime.performanceProfile();
+  }
+
+  replay(): SeatReplayTimeline {
+    const rendered = renderRuntimeReplay(
+      this.#session.exportReplay(),
+      this.manifest,
+    );
+    const steps = rendered.steps.map((step, index) => {
+      const before = index === 0
+        ? rendered.initialState
+        : rendered.steps[index - 1]!.state;
+      const event = step.event;
+      const transactionId = step.transactionId;
+      const projectedEvent = event && transactionId && step.scope
+        ? projectAnimationEventForSeat({
+            index: index - 1,
+            transactionId,
+            framedEvent: step.framedEvent!,
+            frame: step.frame,
+            scope: step.scope,
+            event,
+            before,
+            after: step.state,
+          } satisfies EventTransition, this.#viewerSeat)
+        : null;
+      return {
+        cursor: step.cursor,
+        ...(transactionId === undefined ? {} : { transactionId }),
+        frame: step.frame,
+        scope: step.scope,
+        event: projectedEvent,
+        state: projectMatchStateForSeat(
+          step.state,
+          this.#viewerSeat,
+          this.manifest,
+        ),
+      };
+    });
+    return {
+      steps,
+      finalState: steps.at(-1)?.state
+        ?? projectMatchStateForSeat(
+          rendered.finalState,
+          this.#viewerSeat,
+          this.manifest,
+        ),
+    };
+  }
+
+  presentationStateForFrame(
+    frame: SeatTransactionTimeline['frames'][number],
+  ) {
+    return overlaySeatPrivatePlan(
+      frame.after,
+      this.snapshot().state,
+      this.#viewerSeat,
+    );
+  }
+
+  recordFramePresentationTiming(timing: FramePresentationTiming): void {
+    this.#session.performanceTelemetry.recordFramePresentation(timing);
   }
 
   cardStatReadModel(
@@ -403,6 +420,7 @@ export class LocalMatchSessionAdapter {
     const location = getLocationRuntime(
       state,
       sourceId as LocationCardInstanceId,
+      this.manifest,
     );
     if (location) {
       return getLocationTemplate(this.manifest, location.defId)?.name

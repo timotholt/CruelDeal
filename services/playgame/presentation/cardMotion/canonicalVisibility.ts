@@ -1,8 +1,6 @@
-import type { CardId } from '../../engine/types/ids';
-
 export interface CanonicalVisibilityLease {
   readonly sessionId: string;
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly element: HTMLElement;
   readonly released: boolean;
   release(): void;
@@ -10,14 +8,14 @@ export interface CanonicalVisibilityLease {
 
 interface LeaseRecord {
   readonly sessionId: string;
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly element: HTMLElement;
   readonly previousVisibility: string;
   released: boolean;
 }
 
 export class CanonicalVisibilityRegistry {
-  private readonly ownerByCard = new Map<CardId, string>();
+  private readonly ownerByCard = new Map<string, string>();
   private readonly leasesBySession = new Map<string, Set<LeaseRecord>>();
 
   get activeLeaseCount(): number {
@@ -28,7 +26,7 @@ export class CanonicalVisibilityRegistry {
 
   acquire(
     sessionId: string,
-    cardId: CardId,
+    cardId: string,
     element: HTMLElement,
   ): CanonicalVisibilityLease {
     const owner = this.ownerByCard.get(cardId);

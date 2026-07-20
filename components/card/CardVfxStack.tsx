@@ -11,8 +11,7 @@
  * slice.
  */
 
-import { createSignal, onCleanup, For } from 'solid-js';
-import type { CardId } from '@/services/playgame/engine/types/ids';
+import { createEffect, createSignal, onCleanup, For } from 'solid-js';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardTransientVfx } from '@/services/vfx/card-effects/types';
 import type { JSX } from 'solid-js';
@@ -28,20 +27,25 @@ const CHANNEL_Z: Record<string, number> = {
 };
 
 interface CardVfxStackProps {
-  cardId: CardId;
+  cardId: string;
   children: JSX.Element;
 }
 
 export function CardVfxStack(props: CardVfxStackProps) {
-  const [layers, setLayers] = createSignal(cardVfxRegistry.getLayers(props.cardId));
+  const [layers, setLayers] = createSignal(
+    cardVfxRegistry.getLayers(''),
+  );
 
-  const unsub = cardVfxRegistry.subscribe(props.cardId, () => {
-    setLayers(cardVfxRegistry.getLayers(props.cardId));
-  });
-
-  onCleanup(() => {
-    unsub();
-    cardVfxRegistry.clearCard(props.cardId, 'card-unmounted');
+  createEffect(() => {
+    const cardId = props.cardId;
+    setLayers(cardVfxRegistry.getLayers(cardId));
+    const unsubscribe = cardVfxRegistry.subscribe(cardId, () => {
+      setLayers(cardVfxRegistry.getLayers(cardId));
+    });
+    onCleanup(() => {
+      unsubscribe();
+      cardVfxRegistry.clearCard(cardId, 'card-unmounted');
+    });
   });
 
   function handleAnimationEnd(record: CardTransientVfx) {

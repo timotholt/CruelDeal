@@ -7,9 +7,8 @@
  * lands on the newly rendered destination before ownership returns to DOM.
  */
 
-import type { CardId, LaneId, Seat } from '@/services/playgame/engine/types/ids';
-import { isActiveLane } from '@/services/playgame/engine/laneTopology';
-import type { MatchState } from '@/services/playgame/engine/types/state';
+import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
+import type { SeatVisibleMatchState } from '@/services/playgame/runtime/projection';
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 import {
   captureCardVisual,
@@ -45,7 +44,7 @@ type DropTarget =
 export interface DragDropOpts {
   boardEl: HTMLElement;
   localSeat: Seat;
-  engineState: () => MatchState;
+  engineState: () => SeatVisibleMatchState;
   isResolving: () => boolean;
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
@@ -100,7 +99,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   };
 
   const isPending = (cardId: string): boolean =>
-    engineState().stagedPlays.some(staged => staged.cardId === cardId);
+    engineState().stagedCards.includes(cardId);
 
   const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
     if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
@@ -114,8 +113,8 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     if (zone.dataset.dropZone !== 'lane') return null;
     const laneId = Number(zone.dataset.laneId) as LaneId;
     const state = engineState();
-    const lane = state.lanesById[laneId];
-    if (!isActiveLane(state, laneId) || !lane) return null;
+    const lane = state.lanes.find(candidate => candidate.id === laneId);
+    if (!lane || lane.status !== 'ACTIVE') return null;
     if (lane.cards[localSeat].length >= 4) return null;
     return { kind: 'lane', element: zone, laneId };
   };
@@ -132,7 +131,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   };
 
   const beginVisualDrag = (drag: ActivePointerDrag): void => {
-    const cardId = drag.cardId as CardId;
+    const cardId = drag.cardId;
     const snapshot = captureCardVisual(cardId, drag.visualSourceEl);
     const motionSession = motionSurface.cardMotion.begin({
       cardId,
@@ -219,7 +218,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   ): Promise<void> => {
     const session = drag.motionSession;
     if (!session) return;
-    const endpoint = motionSurface.cardMotion.endpoint(drag.cardId as CardId);
+    const endpoint = motionSurface.cardMotion.endpoint(drag.cardId);
     const result = await session.animateTo(endpoint, {
       durationMs: LANDING_DURATION_MS,
       easing: 'cubic-bezier(.4,0,.2,1)',
@@ -236,7 +235,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   const performDrop = async (drag: ActivePointerDrag): Promise<void> => {
     const target = drag.target;
     const siblingIds = [
-      ...engineState().stagedPlays.map(staged => String(staged.cardId)),
+      ...engineState().stagedCards,
       ...localHand().map((card) => card.id),
     ].filter((id) => id !== drag.cardId);
     const oldRects = captureCardRects(siblingIds, cardRefs);

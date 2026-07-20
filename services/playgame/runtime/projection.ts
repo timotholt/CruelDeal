@@ -1,6 +1,10 @@
 import type { Manifest } from '../engine/manifest/types';
 import { cyrb128 } from '../engine/rng';
-import { getCardCost, getCardPower } from '../engine/projections';
+import {
+  getCardCost,
+  getCardPower,
+  getLanePower,
+} from '../engine/projections';
 import { getAllCardStates } from '../engine/projections/cardRuntime';
 import {
   getLocationState,
@@ -103,7 +107,7 @@ export function projectBootstrapForSeat(
 export interface SeatVisibleCard {
   readonly token: SeatCardToken;
   readonly owner: Owner;
-  readonly zone: Exclude<CardZone, 'DECK' | 'BANISHED'>;
+  readonly zone: Exclude<CardZone, 'DECK'>;
   readonly lane: LaneId | null;
   readonly revealed: boolean;
   /** Absent while this card's identity is hidden from the viewer. */
@@ -129,6 +133,7 @@ export interface SeatVisibleLane {
   readonly status: MatchState['lanesById'][LaneId]['status'];
   readonly location: SeatVisibleLocation | null;
   readonly cards: Readonly<Record<Owner, readonly SeatCardToken[]>>;
+  readonly power: Readonly<Record<Owner, number>>;
 }
 
 /**
@@ -153,6 +158,7 @@ export interface SeatVisibleMatchState {
   readonly stagedCards: readonly SeatCardToken[];
   readonly discard: Readonly<Record<Owner, readonly SeatCardToken[]>>;
   readonly destroyed: Readonly<Record<Owner, readonly SeatCardToken[]>>;
+  readonly banished: Readonly<Record<Owner, readonly SeatCardToken[]>>;
   readonly banishedCounts: Readonly<Record<Owner, number>>;
   readonly result: MatchResult | null;
 }
@@ -223,6 +229,20 @@ export interface SeatTransactionTimeline {
   readonly revision: MatchRevision;
   readonly viewerSeat: Seat;
   readonly frames: readonly SeatTransactionFrame[];
+  readonly finalState: SeatVisibleMatchState;
+}
+
+export interface SeatReplayStep {
+  readonly cursor: number;
+  readonly transactionId?: string;
+  readonly frame: Frame;
+  readonly scope: TemporalScope | null;
+  readonly event: SeatAnimationEvent | null;
+  readonly state: SeatVisibleMatchState;
+}
+
+export interface SeatReplayTimeline {
+  readonly steps: readonly SeatReplayStep[];
   readonly finalState: SeatVisibleMatchState;
 }
 
@@ -313,7 +333,7 @@ function zoneTokens(
   state: MatchState,
   viewerSeat: Seat,
   owner: Owner,
-  zone: 'DISCARD' | 'DESTROYED',
+  zone: 'DISCARD' | 'DESTROYED' | 'BANISHED',
 ): readonly SeatCardToken[] {
   return getAllCardStates(state)
     .filter(card => card.owner === owner && card.zone === zone)
@@ -326,7 +346,7 @@ export function projectMatchStateForSeat(
   manifest: Manifest,
 ): SeatVisibleMatchState {
   const cards = getAllCardStates(state)
-    .filter(card => card.zone !== 'DECK' && card.zone !== 'BANISHED')
+    .filter(card => card.zone !== 'DECK')
     .map((card): SeatVisibleCard => {
       const visible = card.owner === viewerSeat || card.revealed;
       const base: SeatVisibleCard = {
@@ -373,6 +393,10 @@ export function projectMatchStateForSeat(
         P0: lane.cards.P0.map(id => cardToken(state, viewerSeat, id)),
         P1: lane.cards.P1.map(id => cardToken(state, viewerSeat, id)),
       },
+      power: {
+        P0: getLanePower(state, lane.id, 'P0', manifest),
+        P1: getLanePower(state, lane.id, 'P1', manifest),
+      },
     };
   });
 
@@ -406,6 +430,10 @@ export function projectMatchStateForSeat(
       P0: zoneTokens(state, viewerSeat, 'P0', 'DESTROYED'),
       P1: zoneTokens(state, viewerSeat, 'P1', 'DESTROYED'),
     },
+    banished: {
+      P0: zoneTokens(state, viewerSeat, 'P0', 'BANISHED'),
+      P1: zoneTokens(state, viewerSeat, 'P1', 'BANISHED'),
+    },
     banishedCounts: {
       P0: banishedCounts('P0'),
       P1: banishedCounts('P1'),
@@ -415,6 +443,80 @@ export function projectMatchStateForSeat(
       lanesWon: { ...state.result.lanesWon },
       totalPower: { ...state.result.totalPower },
     },
+  };
+}
+
+/**
+ * Reapply the viewer's current private staging plan to an older projected
+ * committed frame. This is projection composition only: it operates on
+ * opaque seat tokens and never retains canonical state or transitions.
+ */
+export function overlaySeatPrivatePlan(
+  committed: SeatVisibleMatchState,
+  working: SeatVisibleMatchState,
+  viewerSeat: Seat,
+): SeatVisibleMatchState {
+  const ownedStaged = working.stagedCards.filter(token =>
+    working.cards.some(card =>
+      card.token === token && card.owner === viewerSeat
+    )
+  );
+  if (ownedStaged.length === 0) return committed;
+
+  const staged = new Set(ownedStaged);
+  const workingStagedCards = working.cards.filter(card =>
+    staged.has(card.token)
+  );
+  const committedViewerStaged = new Set(
+    committed.stagedCards.filter(token =>
+      committed.cards.some(card =>
+        card.token === token && card.owner === viewerSeat
+      )
+    ),
+  );
+  return {
+    ...committed,
+    energy: {
+      ...committed.energy,
+      [viewerSeat]: working.energy[viewerSeat],
+    },
+    hands: {
+      ...committed.hands,
+      [viewerSeat]: committed.hands[viewerSeat].filter(
+        token => !staged.has(token),
+      ),
+    },
+    cards: [
+      ...committed.cards.filter(card => !staged.has(card.token)),
+      ...workingStagedCards,
+    ],
+    lanes: committed.lanes.map(lane => {
+      const stagedHere = workingStagedCards
+        .filter(card => card.lane === lane.id)
+        .map(card => card.token);
+      return {
+        ...lane,
+        cards: {
+          ...lane.cards,
+          [viewerSeat]: [
+            ...lane.cards[viewerSeat].filter(token => !staged.has(token)),
+            ...stagedHere,
+          ],
+        },
+        power: {
+          ...lane.power,
+          [viewerSeat]: working.lanes.find(
+            candidate => candidate.id === lane.id,
+          )?.power[viewerSeat] ?? lane.power[viewerSeat],
+        },
+      };
+    }),
+    stagedCards: [
+      ...committed.stagedCards.filter(
+        token => !committedViewerStaged.has(token),
+      ),
+      ...ownedStaged,
+    ],
   };
 }
 

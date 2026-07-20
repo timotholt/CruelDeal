@@ -1,4 +1,3 @@
-import type { CardId } from '@/services/playgame/engine/types/ids';
 import type {
   CardTransientVfx,
   CardPersistentVfxGroup,
@@ -20,10 +19,10 @@ type CardState = {
   listeners: Set<() => void>;
 };
 
-const cards = new Map<CardId, CardState>();
+const cards = new Map<string, CardState>();
 const dedupeKeys = new Map<string, number>();
 
-function getOrCreate(cardId: CardId): CardState {
+function getOrCreate(cardId: string): CardState {
   let s = cards.get(cardId);
   if (!s) {
     s = { transient: new Map(), persistent: new Map(), listeners: new Set() };
@@ -32,11 +31,11 @@ function getOrCreate(cardId: CardId): CardState {
   return s;
 }
 
-function notify(cardId: CardId): void {
+function notify(cardId: string): void {
   cards.get(cardId)?.listeners.forEach((fn) => fn());
 }
 
-function removeTransient(cardId: CardId, id: string): void {
+function removeTransient(cardId: string, id: string): void {
   const s = cards.get(cardId);
   if (!s) return;
   s.transient.delete(id);
@@ -93,7 +92,7 @@ export const cardVfxRegistry: CardVfxRegistry = {
     return id;
   },
 
-  reconcilePersistent(cardId: CardId, sources: CardPersistentFxSource[]): void {
+  reconcilePersistent(cardId: string, sources: CardPersistentFxSource[]): void {
     const s = getOrCreate(cardId);
     const now = Date.now();
 
@@ -194,7 +193,7 @@ export const cardVfxRegistry: CardVfxRegistry = {
     }
   },
 
-  clearCard(cardId: CardId, _reason: VfxClearReason): void {
+  clearCard(cardId: string, _reason: VfxClearReason): void {
     const s = cards.get(cardId);
     if (!s) return;
     s.transient.clear();
@@ -210,7 +209,7 @@ export const cardVfxRegistry: CardVfxRegistry = {
     }
   },
 
-  getLayers(cardId: CardId): CardVfxRenderModel {
+  getLayers(cardId: string): CardVfxRenderModel {
     const s = cards.get(cardId);
     if (!s) return { transient: [], persistent: [] };
     return {
@@ -219,7 +218,7 @@ export const cardVfxRegistry: CardVfxRegistry = {
     };
   },
 
-  subscribe(cardId: CardId, listener: () => void): () => void {
+  subscribe(cardId: string, listener: () => void): () => void {
     const s = getOrCreate(cardId);
     s.listeners.add(listener);
     return () => s.listeners.delete(listener);

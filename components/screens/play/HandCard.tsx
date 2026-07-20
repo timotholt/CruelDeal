@@ -14,7 +14,6 @@ import { useVfx } from '../../game/VfxHost';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { openInspect } from './inspector';
 import { CardVfxStack } from '../../card/CardVfxStack';
-import type { CardId } from '@/services/playgame/engine/types/ids';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
 interface HandCardProps {
@@ -27,7 +26,6 @@ interface HandCardProps {
 
 export const HandCard = (props: HandCardProps) => {
   const { bindCardRef } = useVfx();
-  const cardId = () => props.card.id as CardId;
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
   const isInspectable = createMemo(() => props.inspectable !== false && !isHidden());
@@ -36,7 +34,7 @@ export const HandCard = (props: HandCardProps) => {
     const sources = props.card.textDisabled
       ? [{ id: `${props.card.id}-glitch`, sourceId: props.card.id, kind: 'glitch' as const, intensity: 1, priority: 5 }]
       : [];
-    cardVfxRegistry.reconcilePersistent(cardId(), sources);
+    cardVfxRegistry.reconcilePersistent(props.card.id, sources);
   });
 
   const powerClass = (): string => {
@@ -79,7 +77,7 @@ export const HandCard = (props: HandCardProps) => {
           cursor: isInteractive() ? 'pointer' : 'default',
         }}
       >
-        <CardVfxStack cardId={props.card.id as CardId}>
+        <CardVfxStack cardId={props.card.id}>
           <div class="cost">{props.card.cost}</div>
           {props.card.type !== 'spell'
             ? <div class={'power ' + powerClass()}>{props.card.power}</div>

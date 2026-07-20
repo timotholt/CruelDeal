@@ -25,7 +25,6 @@
  */
 
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
-import type { CardId } from '@/services/playgame/engine/types/ids';
 import {
   captureCardVisual,
   type LogicalCardEndpoint,
@@ -48,10 +47,9 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
   const el = cardElMap.get(cardId);
   if (!el?.isConnected) return;
 
-  const typedCardId = cardId as CardId;
-  const snapshot = captureCardVisual(typedCardId, el);
+  const snapshot = captureCardVisual(cardId, el);
   const session = motionSurface.cardMotion.begin({
-    cardId: typedCardId,
+    cardId,
     route: 'reveal',
     basis: { kind: 'clone', snapshot },
     startRect: snapshot.rect,
@@ -90,7 +88,7 @@ export async function revealCardCinematic(opts: RevealCinematicOpts): Promise<vo
   await wait(REVEAL_CINEMATIC_TIMING.holdMs);
 
   // Phase 3 — return to the current canonical layout box.
-  const endpoint = motionSurface.cardMotion.endpoint(typedCardId);
+  const endpoint = motionSurface.cardMotion.endpoint(cardId);
   const returnResult = await session.animateTo(endpoint, {
     durationMs: REVEAL_CINEMATIC_TIMING.returnMs,
     easing: 'cubic-bezier(.4,0,.2,1)',

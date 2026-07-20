@@ -7,7 +7,9 @@
 
 import { For, createMemo } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
-import { PlayGameProvider, usePlayGame } from '@/contexts/PlayGameContext';
+import { PlayProviders } from '@/contexts/PlayProviders';
+import { useMatchSession } from '@/contexts/MatchSessionContext';
+import { usePlayUi } from '@/contexts/PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
@@ -28,28 +30,37 @@ function makeMatchSeed() {
 }
 
 const CityGameBoard = (props: CityMapScreenProps) => {
-  const pg = usePlayGame();
-  const { engineState, manifest, localSeat, remoteSeat, seatMeta } = pg;
-  const localHand = createMemo(() => getHandForSeat(engineState(), localSeat, manifest));
-  const remoteHandSize = createMemo(() => engineState().hand[remoteSeat].length);
-  const localDeckSize = createMemo(() => engineState().deck[localSeat].length);
-  const remoteDeckSize = createMemo(() => engineState().deck[remoteSeat].length);
+  const match = useMatchSession();
+  const playUi = usePlayUi();
+  const { manifest, localSeat, remoteSeat, bootstrap } = match;
+  const state = playUi.presentedState;
+  const localHand = createMemo(() => getHandForSeat(
+    state(),
+    localSeat,
+    manifest,
+    match.actions.cardStatReadModel,
+  ));
+  const remoteHandSize = createMemo(() => state().hands[remoteSeat].length);
+  const localDeckSize = createMemo(() => state().deckCounts[localSeat]);
+  const remoteDeckSize = createMemo(() => state().deckCounts[remoteSeat]);
+  const localName = () => bootstrap.participants[localSeat].displayName;
+  const remoteName = () => bootstrap.participants[remoteSeat].displayName;
 
   return (
     <div class="board city-game-board ready" id="board">
       <div class="hud-top city-game-board__hud">
         <div class="hud-top__side hud-top__side--left">
           <div class="city-player-chip city-player-chip--local">
-            <span class="city-player-chip__avatar">{seatMeta[localSeat].name.slice(0, 1)}</span>
+            <span class="city-player-chip__avatar">{localName().slice(0, 1)}</span>
             <span class="city-player-chip__meta">
-              <span class="city-player-chip__name">{seatMeta[localSeat].name}</span>
+              <span class="city-player-chip__name">{localName()}</span>
               <span class="city-player-chip__sub">Deck {localDeckSize()}</span>
             </span>
           </div>
         </div>
 
         <div class="hud-top__center">
-          <TurnOrb turn={engineState().turn} />
+          <TurnOrb turn={state().turn} />
         </div>
 
         <div class="hud-top__side hud-top__side--right">
@@ -59,20 +70,20 @@ const CityGameBoard = (props: CityMapScreenProps) => {
               <span class="opponent-stat__label">Deck</span>
               <span class="opponent-stat__value">{remoteDeckSize()}</span>
             </div>
-            <EnergyBadge value={engineState().energy[remoteSeat]} title={`Opponent energy ${engineState().energy[remoteSeat]}`} />
+            <EnergyBadge value={state().energy[remoteSeat]} title={`Opponent energy ${state().energy[remoteSeat]}`} />
             <div class="city-player-chip city-player-chip--remote">
               <span class="city-player-chip__meta city-player-chip__meta--right">
-                <span class="city-player-chip__name">{seatMeta[remoteSeat].name}</span>
+                <span class="city-player-chip__name">{remoteName()}</span>
                 <span class="city-player-chip__sub">Rival</span>
               </span>
-              <span class="city-player-chip__avatar city-player-chip__avatar--remote">{seatMeta[remoteSeat].name.slice(0, 1)}</span>
+              <span class="city-player-chip__avatar city-player-chip__avatar--remote">{remoteName().slice(0, 1)}</span>
             </div>
           </div>
         </div>
       </div>
 
       <div class="board-game-area city-map-game-area">
-        <CityMapBoard seed={engineState().rng.seed} interactive showVenueTooltips />
+        <CityMapBoard seed={bootstrap.matchId} interactive showVenueTooltips />
       </div>
 
       <div class="city-hand-row">
@@ -87,7 +98,7 @@ const CityGameBoard = (props: CityMapScreenProps) => {
             {(card) => (
               <HandCard
                 card={card}
-                playable={card.cost <= engineState().energy[localSeat]}
+                playable={card.cost <= state().energy[localSeat]}
                 interactive={false}
               />
             )}
@@ -99,8 +110,8 @@ const CityGameBoard = (props: CityMapScreenProps) => {
         <button class="retreat-btn" type="button" onClick={() => props.onExit?.()}>
           RETREAT
         </button>
-        <button class="energy-button" type="button" title={`Your energy ${engineState().energy[localSeat]}`}>
-          <EnergyBadge value={engineState().energy[localSeat]} />
+        <button class="energy-button" type="button" title={`Your energy ${state().energy[localSeat]}`}>
+          <EnergyBadge value={state().energy[localSeat]} />
         </button>
         <button class="end-turn" type="button">
           END TURN
@@ -117,10 +128,10 @@ export const CityMapScreen = (props: CityMapScreenProps) => {
   return (
     <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
       <VfxHost class="board-wrap" id="boardWrap">
-        <PlayGameProvider session={session}>
+        <PlayProviders session={session}>
           <BoardSizer />
           <CityGameBoard onExit={props.onExit} />
-        </PlayGameProvider>
+        </PlayProviders>
       </VfxHost>
     </div>
   );

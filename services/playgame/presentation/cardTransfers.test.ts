@@ -15,10 +15,17 @@ import type { CardId, LaneId } from '../engine/types/ids';
 import type { EffectRef } from '../engine/types/ability';
 import { getCardRuntime } from '../engine/projections';
 import {
-  assertTransferCoverage,
-  deriveCardTransfers,
+  assertTransferCoverage as assertProjectedTransferCoverage,
+  deriveCardTransfers as deriveProjectedCardTransfers,
   resolveCardTransferFace,
 } from './cardTransfers';
+import {
+  projectAnimationEventForSeat,
+  projectMatchStateForSeat,
+} from '../runtime/projection';
+import type { MatchState } from '../engine/types/state';
+import type { EventTransition } from '../engine/transactionTimeline';
+import type { Frame } from '../engine/types/timeline';
 
 let failures = 0;
 const pass = (label: string) => { console.log(`PASS: ${label}`); };
@@ -33,6 +40,56 @@ const eq = <T>(actual: T, expected: T, label: string) => {
 
 const source: EffectRef = { sourceId: 'sys' as CardId, effectKind: 'SYSTEM', reason: 'TEST' };
 const event = <T extends MatchEvent>(e: T): T => e;
+
+const projected = (
+  before: MatchState,
+  matchEvent: MatchEvent,
+  after: MatchState,
+) => {
+  const frame = 1 as Frame;
+  const scope = { turn: after.turn, phase: 'RESOLUTION' as const };
+  const transition: EventTransition = {
+    index: 0,
+    transactionId: 'transfer-test',
+    framedEvent: { frame, scope, event: matchEvent },
+    frame,
+    scope,
+    event: matchEvent,
+    before,
+    after,
+  };
+  const projectedEvent = projectAnimationEventForSeat(transition, 'P0');
+  if (!projectedEvent) throw new Error('fixture event was redacted');
+  return {
+    before: projectMatchStateForSeat(before, 'P0', BOOTSTRAP_MANIFEST),
+    event: projectedEvent,
+    after: projectMatchStateForSeat(after, 'P0', BOOTSTRAP_MANIFEST),
+  };
+};
+
+const deriveCardTransfers = (
+  before: MatchState,
+  matchEvent: MatchEvent,
+  after: MatchState,
+) => {
+  const view = projected(before, matchEvent, after);
+  return deriveProjectedCardTransfers(view.before, view.event, view.after);
+};
+
+const assertTransferCoverage = (
+  before: MatchState,
+  matchEvent: MatchEvent,
+  after: MatchState,
+  transfers: ReturnType<typeof deriveProjectedCardTransfers>,
+) => {
+  const view = projected(before, matchEvent, after);
+  assertProjectedTransferCoverage(
+    view.before,
+    view.event,
+    view.after,
+    transfers,
+  );
+};
 
 const stateWithHandCard = () => {
   let s = createInitialMatchState(

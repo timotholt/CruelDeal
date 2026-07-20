@@ -1,14 +1,15 @@
-import type { MatchState as EngineMatchState } from '../engine/types/state';
-import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import { resolveCard, type ResolvedCard } from '../view';
+import type {
+  SeatTransactionFrame,
+  SeatVisibleMatchState,
+} from '../runtime/projection';
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { Timeline } from '@/services/vfx/timeline';
 import { describeEventChoreography, type EventChoreography, type SfxCue, type VfxCue } from './choreography';
 import { HAND_SLOT_RESERVE_MS } from './handPresentation';
 import { releaseHandSlots, withHandReservations } from './handReservations';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
-import type { CardId } from '../engine/types/ids';
 import {
   canonicalVisualElement,
   captureCardVisual,
@@ -59,7 +60,7 @@ const playSfx = (ctx: PlayScriptCtx, cues: readonly SfxCue[], timing: SfxCue['ti
 const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
   switch (cue.kind) {
     case 'power-flash': {
-      const cardId = cue.cardId as CardId;
+      const cardId = cue.cardId;
       const isBuff = cue.delta > 0;
       cardVfxRegistry.createTransient({
         cardId,
@@ -77,7 +78,7 @@ const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
     }
 
     case 'destroy-burst': {
-      const cardId = cue.cardId as CardId;
+      const cardId = cue.cardId;
       cardVfxRegistry.createTransient({
         cardId,
         eventType: 'CARD_DESTROYED',
@@ -104,7 +105,7 @@ const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
     }
 
     case 'glitch-flash': {
-      const cardId = cue.cardId as CardId;
+      const cardId = cue.cardId;
       cardVfxRegistry.createTransient({
         cardId,
         eventType: 'CARD_TRANSFORMED',
@@ -131,7 +132,7 @@ const playVfxCue = (ctx: PlayScriptCtx, cue: VfxCue): void => {
     }
 
     case 'move-trail': {
-      const cardId = cue.cardId as CardId;
+      const cardId = cue.cardId;
       const causeClass = cue.effectKind.toLowerCase().replaceAll('_', '-');
       cardVfxRegistry.createTransient({
         cardId,
@@ -203,7 +204,6 @@ const shouldPrepareSourceBeforeDispatch = (
   (transfer.from.kind === 'LANE'
     || (transfer.from.kind === 'HAND' && transfer.from.owner === ctx.localSeat))
   && transfer.style.route !== 'layout-only'
-  && !(transfer.from.kind === 'DECK' && transfer.to.kind === 'HAND')
 );
 
 const prepareTransferBeforeDispatch = (
@@ -336,12 +336,17 @@ const animateOneTransfer = async (
 const reserveVisibleHandDestinations = (
   ctx: PlayScriptCtx,
   transfers: readonly CardTransfer[],
-  afterState: EngineMatchState,
+  afterState: SeatVisibleMatchState,
 ): ResolvedCard[] => {
   const reserved: ResolvedCard[] = [];
   for (const transfer of transfers) {
     if (transfer.to.kind !== 'HAND' || transfer.to.owner !== ctx.localSeat) continue;
-    const resolved = resolveCard(transfer.cardId, afterState, ctx.manifest);
+    const resolved = resolveCard(
+      transfer.cardId,
+      afterState,
+      ctx.manifest,
+      ctx.cardStatReadModel,
+    );
     if (!resolved) continue;
     reserved.push(resolved);
   }
@@ -350,18 +355,24 @@ const reserveVisibleHandDestinations = (
 
 export async function animateEvent(
   ctx: PlayScriptCtx,
-  frame: EventTransition,
+  frame: SeatTransactionFrame,
   dispatchPresentedFrame: () => void = () => undefined,
   hooks: {
     readonly onTransferAnimation?: (transfer: CardTransfer) => void;
   } = {},
 ): Promise<void> {
   const { event, before, after } = frame;
+  if (!event) {
+    dispatchPresentedFrame();
+    return;
+  }
   const choreography = describeEventChoreography(event);
   playSfx(ctx, choreography.sfx, 'on-start');
 
   const transfers = deriveCardTransfers(before, event, after);
-  if (import.meta.env.DEV) assertTransferCoverage(before, event, after, transfers);
+  if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+    assertTransferCoverage(before, event, after, transfers);
+  }
 
   if (transfers.length === 0) {
     playSfx(ctx, choreography.sfx, 'on-dispatch');

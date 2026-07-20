@@ -1,26 +1,18 @@
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import type { Manifest } from '@/services/playgame/engine/manifest/types';
-import type { ReplayStep } from '@/services/playgame/engine/replay';
-import type { MatchRuntimeReplayExport } from '@/services/playgame/runtime/contracts';
 import type { MatchPerformanceProfile } from '@/services/playgame/runtime/performanceTelemetry';
-import {
-  annotateReplayEventJson,
-  createReplayActorResolver,
-  createReplayNameResolver,
-  describeReplayStep,
-} from '@/services/playgame/debug/replayPresentation';
+import type { SeatReplayStep } from '@/services/playgame/runtime/projection';
+import type { Seat } from '@/services/playgame/engine/types/ids';
 
 interface ReplayDrawerProps {
   open: boolean;
   followingLive: boolean;
   cursor: number;
   stepCount: number;
-  steps: readonly ReplayStep[];
-  manifest: Manifest;
-  replay: MatchRuntimeReplayExport;
+  steps: readonly SeatReplayStep[];
   performanceProfile: MatchPerformanceProfile;
-  selectedStep: ReplayStep | null;
+  selectedStep: SeatReplayStep | null;
+  seatNames: Readonly<Record<Seat, string>>;
   clientStatus: string;
   onCursorChange: (cursor: number) => void;
   onCopyFrameJson: () => Promise<void>;
@@ -31,10 +23,22 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   let drawerEl: HTMLDivElement | undefined;
   let stopDrag: (() => void) | null = null;
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
-  const names = createMemo(() => createReplayNameResolver(props.steps, props.manifest));
-  const actors = createMemo(() => createReplayActorResolver(props.replay));
-  const selectedDescription = createMemo(() => describeReplayStep(props.selectedStep, names(), actors()));
-  const eventJson = createMemo(() => annotateReplayEventJson(props.selectedStep, names()));
+  const selectedDescription = createMemo(() => {
+    const step = props.selectedStep;
+    if (!step?.event) return { actor: 'Game', summary: 'Initial state' };
+    const owner = step.event.data.owner;
+    return {
+      actor: owner === 'P0' || owner === 'P1'
+        ? props.seatNames[owner]
+        : 'Game',
+      summary: step.event.type
+        .toLowerCase()
+        .replaceAll('_', ' ')
+        .replace(/^\w/, letter => letter.toUpperCase()),
+    };
+  });
+  const eventJson = createMemo(() =>
+    JSON.stringify(props.selectedStep?.event ?? null, null, 2));
   const selectedTiming = createMemo(() => {
     const step = props.selectedStep;
     if (!step?.transactionId) return null;
@@ -215,7 +219,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                 {(step) => (
                   <div class="replay-panel__stats">
                     <div>Turn {step().state.turn}</div>
-                    <div>Priority: {actors().playerLabel(step().state.priority)}</div>
+                    <div>Priority: {props.seatNames[step().state.priority]}</div>
                     <div>Player 1 Energy = {step().state.energy.P0}, Player 2 Energy = {step().state.energy.P1}</div>
                   </div>
                 )}

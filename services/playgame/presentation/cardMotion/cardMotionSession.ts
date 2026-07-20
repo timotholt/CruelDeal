@@ -1,4 +1,3 @@
-import type { CardId } from '../../engine/types/ids';
 import {
   canonicalCardEndpoint,
   createCardSurrogate,
@@ -43,7 +42,7 @@ const endpointFace = (
 );
 
 export interface BeginCardMotionOptions {
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly route: string;
   readonly basis: SurrogateBasis;
   readonly startRect: DOMRect;
@@ -56,7 +55,7 @@ export interface BeginCardMotionOptions {
 
 export interface CardMotionSession {
   readonly id: string;
-  readonly cardId: CardId;
+  readonly cardId: string;
   readonly surrogate: HTMLElement;
   readonly phase: CardMotionPhase;
   animateTo(endpoint: CardMotionEndpoint, style: CardMotionStyle): Promise<CardMotionResult | null>;
@@ -71,7 +70,7 @@ export interface CardMotionScope {
   readonly activeLeaseCount: number;
   readonly diagnostics: readonly CardMotionDiagnostic[];
   begin(options: BeginCardMotionOptions): CardMotionSession;
-  endpoint(cardId: CardId): CanonicalCardEndpoint;
+  endpoint(cardId: string): CanonicalCardEndpoint;
   cancelAll(reason: CardMotionCancelReason): void;
   dispose(): void;
 }
@@ -84,7 +83,7 @@ class MotionSession implements CardMotionSession {
 
   constructor(
     readonly id: string,
-    readonly cardId: CardId,
+    readonly cardId: string,
     private readonly route: string,
     private readonly host: CardMotionHost,
     private readonly visual: CardMotionSurrogate,
@@ -264,7 +263,7 @@ class MotionSession implements CardMotionSession {
 }
 
 export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => {
-  const sessions = new Map<CardId, MotionSession>();
+  const sessions = new Map<string, MotionSession>();
   const leases = new CanonicalVisibilityRegistry();
   const diagnosticEntries: CardMotionDiagnostic[] = [];
   let nextSessionId = 1;

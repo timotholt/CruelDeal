@@ -16,14 +16,11 @@ const card = (type: 'character' | 'spell'): ResolvedCard => ({
   type,
   text: '',
   textDisabled: false,
-  powerLedger: [],
-  powerModifiers: [],
-  costLog: [],
-  costHistory: [],
   owner: 'P0',
   zone: 'DISCARD',
   revealed: true,
   storedPowerDelta: 0,
+  stats: null,
 });
 
 let container: HTMLDivElement | undefined;

@@ -7,7 +7,7 @@
 
 import { createSignal, Show } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
-import { PlayGameProvider } from '@/contexts/PlayGameContext';
+import { PlayProviders } from '@/contexts/PlayProviders';
 import { PlayBoard } from './play/PlayBoard';
 import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
 import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
@@ -48,9 +48,9 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
       <Show when={session() ?? false} keyed>
         {(matchSession) => (
           <VfxHost class="board-wrap" id="boardWrap">
-            <PlayGameProvider session={matchSession}>
+            <PlayProviders session={matchSession}>
               <PlayBoard onExit={props.onExit} />
-            </PlayGameProvider>
+            </PlayProviders>
           </VfxHost>
         )}
       </Show>

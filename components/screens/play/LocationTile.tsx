@@ -6,7 +6,7 @@
  */
 
 import type { ResolvedLocation } from '@/services/playgame/view';
-import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import { openInspect } from './inspector';
 
 interface LocationTileProps {
@@ -14,8 +14,8 @@ interface LocationTileProps {
   laneIdx: number;
   bottomPower: number;
   topPower: number;
-  bottomBreakdown: LanePowerBreakdown;
-  topBreakdown: LanePowerBreakdown;
+  bottomBreakdown: SeatLanePowerReadModel;
+  topBreakdown: SeatLanePowerReadModel;
   interactive?: boolean;
 }
 

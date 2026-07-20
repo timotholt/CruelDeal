@@ -1,5 +1,3 @@
-import type { CardId } from '@/services/playgame/engine/types/ids';
-
 export type CardPersistentFxKind =
   | 'fire'
   | 'ice'
@@ -54,7 +52,7 @@ export type CardVfxPhase = 'entering' | 'active' | 'exiting' | 'complete';
 
 export type CardTransientVfx = {
   id: string;
-  cardId: CardId;
+  cardId: string;
   source: {
     kind: 'event';
     eventId?: string;
@@ -75,7 +73,7 @@ export type CardTransientVfx = {
 
 export type CardPersistentVfxGroup = {
   id: string;
-  cardId: CardId;
+  cardId: string;
   groupKind: 'ongoing' | 'status' | 'copied-text' | 'disabled-text';
   visualKind: string;
   sources: readonly {
@@ -108,7 +106,7 @@ export type VfxClearReason =
   | 'reduced-motion';
 
 export type CreateTransientVfxRequest = {
-  cardId: CardId;
+  cardId: string;
   eventType: string;
   channel: CardTransientVfx['channel'];
   effectKind: string;
@@ -122,11 +120,11 @@ export type CreateTransientVfxRequest = {
 
 export interface CardVfxRegistry {
   createTransient(request: CreateTransientVfxRequest): string | null;
-  reconcilePersistent(cardId: CardId, sources: CardPersistentFxSource[]): void;
+  reconcilePersistent(cardId: string, sources: CardPersistentFxSource[]): void;
   complete(recordId: string): void;
-  clearCard(cardId: CardId, reason: VfxClearReason): void;
+  clearCard(cardId: string, reason: VfxClearReason): void;
   clearAll(reason: VfxClearReason): void;
-  getLayers(cardId: CardId): CardVfxRenderModel;
-  subscribe(cardId: CardId, listener: () => void): () => void;
+  getLayers(cardId: string): CardVfxRenderModel;
+  subscribe(cardId: string, listener: () => void): () => void;
   tick(nowMs: number): void;
 }

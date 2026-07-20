@@ -1,12 +1,18 @@
-import type { MatchEvent } from '../engine/types/events';
-import type { CardId, LaneId, Owner } from '../engine/types/ids';
-import type { CardZone, MatchState } from '../engine/types/state';
+import type { LaneId, Owner } from '../engine/types/ids';
+import type {
+  SeatAnimationEvent,
+  SeatCardToken,
+  SeatVisibleCard,
+  SeatVisibleMatchState,
+} from '../runtime/projection';
 import type { CardVisualFace } from './cardMotion';
 import {
-  getAllCardIds,
-  getCardPlacement,
-  type CardPlacement,
-} from '../engine/projections/cardRuntime';
+  eventBoolean,
+  eventCardToken,
+  eventLane,
+  eventOwner,
+  eventRecord,
+} from './projectedEvent';
 
 export type CardZoneRef =
   | { kind: 'DECK'; owner: Owner }
@@ -37,20 +43,35 @@ export type TransferStyle = {
   sfx?: string;
 };
 
-export type TransferTiming = {
-  dispatch: 'before-flight' | 'after-flight';
-};
-
-export type TransferLayoutPlan = {
-  captureBefore: readonly CardZoneRef[];
-  slideAfter: readonly CardZoneRef[];
-};
-
 export type CardTransferFace =
   | 'preserve'
   | 'faceUp'
   | 'faceDown'
   | 'ownerVisible';
+
+export type CardTransfer = {
+  cardId: SeatCardToken;
+  owner: Owner;
+  from: CardZoneRef;
+  to: CardZoneRef;
+  reason: SeatAnimationEvent['type'];
+  face: CardTransferFace;
+  timing: { dispatch: 'before-flight' | 'after-flight' };
+  style: TransferStyle;
+  layout: {
+    captureBefore: readonly CardZoneRef[];
+    slideAfter: readonly CardZoneRef[];
+  };
+};
+
+export type ZoneAnchorKey =
+  | `${Owner}:deck`
+  | `${Owner}:hand`
+  | `${Owner}:discard`
+  | `${Owner}:destroyed`
+  | `${Owner}:banished`
+  | `${Owner}:lane:${LaneId}`
+  | 'generated';
 
 export function resolveCardTransferFace(
   face: CardTransferFace,
@@ -65,40 +86,9 @@ export function resolveCardTransferFace(
   }
 }
 
-export type CardTransfer = {
-  cardId: CardId;
-  owner: Owner;
-  from: CardZoneRef;
-  to: CardZoneRef;
-  reason: MatchEvent['type'];
-  face: CardTransferFace;
-  timing: TransferTiming;
-  style: TransferStyle;
-  layout: TransferLayoutPlan;
-};
-
-export type ZoneAnchorKey =
-  | `${Owner}:deck`
-  | `${Owner}:hand`
-  | `${Owner}:discard`
-  | `${Owner}:destroyed`
-  | `${Owner}:banished`
-  | `${Owner}:lane:${LaneId}`
-  | 'generated';
-
-const baseStyle: TransferStyle = {
-  route: 'layout-only',
-  durationMs: 320,
-  easing: 'cubic-bezier(.4,0,.2,1)',
-  zIndex: 80,
-  arc: 'small',
-  spin: 'none',
-  opacity: 'preserve',
-  scale: { from: 1, to: 1 },
-};
-
-const visibleZone = (zone: CardZoneRef): boolean => zone.kind === 'HAND' || zone.kind === 'LANE';
-const anchorZone = (zone: CardZoneRef): boolean => zone.kind !== 'HAND' && zone.kind !== 'LANE';
+const visibleZone = (zone: CardZoneRef): boolean =>
+  zone.kind === 'HAND' || zone.kind === 'LANE';
+const anchorZone = (zone: CardZoneRef): boolean => !visibleZone(zone);
 
 export function zoneAnchorKey(zone: CardZoneRef): ZoneAnchorKey | null {
   switch (zone.kind) {
@@ -113,19 +103,30 @@ export function zoneAnchorKey(zone: CardZoneRef): ZoneAnchorKey | null {
   }
 }
 
-function styleFor(from: CardZoneRef, to: CardZoneRef, reason: MatchEvent['type']): TransferStyle {
+const baseStyle: TransferStyle = {
+  route: 'layout-only',
+  durationMs: 320,
+  easing: 'cubic-bezier(.4,0,.2,1)',
+  zIndex: 80,
+  arc: 'small',
+  spin: 'none',
+  opacity: 'preserve',
+  scale: { from: 1, to: 1 },
+};
+
+function styleFor(
+  from: CardZoneRef,
+  to: CardZoneRef,
+  reason: SeatAnimationEvent['type'],
+): TransferStyle {
   const route: TransferRoute = visibleZone(from) && visibleZone(to)
     ? 'visible-to-visible'
     : visibleZone(from) && anchorZone(to)
       ? 'visible-to-anchor'
       : anchorZone(from) && visibleZone(to)
         ? 'anchor-to-visible'
-        : anchorZone(from) && anchorZone(to)
-          ? 'anchor-to-anchor'
-          : 'layout-only';
-
-  let style: TransferStyle = { ...baseStyle, route, scale: { ...baseStyle.scale } };
-
+        : 'anchor-to-anchor';
+  let style = { ...baseStyle, route, scale: { ...baseStyle.scale } };
   if (from.kind === 'LANE' && to.kind === 'LANE') {
     style = { ...style, durationMs: 360, arc: 'small', sfx: 'move' };
   } else if (from.kind === 'HAND' && to.kind === 'LANE') {
@@ -135,167 +136,235 @@ function styleFor(from: CardZoneRef, to: CardZoneRef, reason: MatchEvent['type']
   } else if (from.kind === 'DECK' && to.kind === 'HAND') {
     style = { ...style, durationMs: 360, spin: 'flip', sfx: 'draw' };
   } else if (from.kind === 'GENERATED' && visibleZone(to)) {
-    style = { ...style, durationMs: 300, scale: { from: 0.76, to: 1 }, sfx: 'draw' };
-  } else if (visibleZone(from) && ['DISCARD', 'DESTROYED', 'BANISHED'].includes(to.kind)) {
-    style = { ...style, durationMs: 280, opacity: 'fadeOut', scale: { from: 1, to: 0.48 }, sfx: to.kind === 'DESTROYED' ? 'destroy' : 'move' };
-  } else if (['DISCARD', 'DESTROYED', 'BANISHED'].includes(from.kind) && visibleZone(to)) {
-    style = { ...style, durationMs: 340, opacity: 'fadeIn', scale: { from: 0.72, to: 1 }, sfx: 'move' };
+    style = {
+      ...style,
+      durationMs: 300,
+      scale: { from: 0.76, to: 1 },
+      sfx: 'draw',
+    };
+  } else if (
+    visibleZone(from)
+    && (to.kind === 'DISCARD'
+      || to.kind === 'DESTROYED'
+      || to.kind === 'BANISHED')
+  ) {
+    style = {
+      ...style,
+      durationMs: 280,
+      opacity: 'fadeOut',
+      scale: { from: 1, to: 0.48 },
+      sfx: to.kind === 'DESTROYED' ? 'destroy' : 'move',
+    };
   }
-
   if (reason === 'CARD_BANISHED') {
-    style = { ...style, durationMs: 260, opacity: 'fadeOut', scale: { from: 1, to: 0.35 }, sfx: 'destroy' };
+    style = {
+      ...style,
+      durationMs: 260,
+      opacity: 'fadeOut',
+      scale: { from: 1, to: 0.35 },
+      sfx: 'destroy',
+    };
   }
-
   return style;
 }
 
-function zoneOfCard(state: MatchState, cardId: CardId): CardZoneRef | null {
-  const card = getCardPlacement(state, cardId);
-  if (!card) return null;
-  return zoneOfInstance(card);
+function cardAt(
+  state: SeatVisibleMatchState,
+  token: SeatCardToken,
+): SeatVisibleCard | null {
+  return state.cards.find(card => card.token === token) ?? null;
 }
 
-function zoneOfInstance(card: CardPlacement): CardZoneRef {
+function zoneOfCard(
+  state: SeatVisibleMatchState,
+  token: SeatCardToken,
+): CardZoneRef | null {
+  const card = cardAt(state, token);
+  if (!card) return null;
   switch (card.zone) {
-    case 'DECK': {
-      const index = card.position.zone === 'DECK' ? card.position.index : -1;
-      return { kind: 'DECK', owner: card.owner, ...(index >= 0 ? { index } : {}) } as CardZoneRef;
-    }
-    case 'HAND': {
-      const index = card.position.zone === 'HAND' ? card.position.index : -1;
-      return { kind: 'HAND', owner: card.owner, ...(index >= 0 ? { index } : {}) };
-    }
+    case 'HAND':
+      return {
+        kind: 'HAND',
+        owner: card.owner,
+        index: state.hands[card.owner].indexOf(token),
+      };
     case 'LANE': {
-      const lane = card.position.zone === 'LANE' ? card.position.laneId : 0 as LaneId;
-      const index = card.position.zone === 'LANE' && card.position.slot !== null
-        ? card.position.slot - 1
-        : -1;
-      return { kind: 'LANE', owner: card.owner, lane: lane as LaneId, ...(index >= 0 ? { index } : {}) };
+      if (card.lane === null) return null;
+      const lane = state.lanes.find(candidate => candidate.id === card.lane);
+      return {
+        kind: 'LANE',
+        owner: card.owner,
+        lane: card.lane,
+        index: lane?.cards[card.owner].indexOf(token),
+      };
     }
     case 'DISCARD':
       return { kind: 'DISCARD', owner: card.owner };
     case 'DESTROYED':
       return { kind: 'DESTROYED', owner: card.owner };
-    case 'BANISHED':
-      return { kind: 'BANISHED', owner: card.owner };
+    default:
+      return null;
   }
 }
 
-function destinationZone(owner: Owner, destination: Extract<MatchEvent, { type: 'CARD_ZONE_CHANGED' }>['destination']): CardZoneRef {
-  switch (destination.kind) {
+function destinationZone(
+  owner: Owner,
+  destination: Readonly<Record<string, unknown>> | null,
+): CardZoneRef | null {
+  switch (destination?.kind) {
     case 'HAND': return { kind: 'HAND', owner };
     case 'DECK': return { kind: 'DECK', owner };
-    case 'LANE': return { kind: 'LANE', owner, lane: destination.lane };
+    case 'LANE':
+      return typeof destination.lane === 'number'
+        ? { kind: 'LANE', owner, lane: destination.lane as LaneId }
+        : null;
+    default:
+      return null;
   }
 }
 
 function transfer(
-  before: MatchState,
-  after: MatchState,
-  event: MatchEvent,
-  cardId: CardId,
+  before: SeatVisibleMatchState,
+  after: SeatVisibleMatchState,
+  event: SeatAnimationEvent,
+  token: SeatCardToken,
   from: CardZoneRef | null,
   to: CardZoneRef | null,
-  face: CardTransfer['face'] = 'preserve',
-): CardTransfer[] {
-  const card = getCardPlacement(after, cardId) ?? getCardPlacement(before, cardId);
+  face: CardTransferFace = 'preserve',
+): readonly CardTransfer[] {
+  const card = cardAt(after, token) ?? cardAt(before, token);
   if (!card || !from || !to) return [];
-  const style = styleFor(from, to, event.type);
-  const touched = [from, to].filter((zone) => zone.kind === 'HAND' || zone.kind === 'LANE');
+  const touched = [from, to].filter(visibleZone);
   return [{
-    cardId,
+    cardId: token,
     owner: card.owner,
     from,
     to,
     reason: event.type,
-    // Hand visibility is a viewer-relative rule, not a property that may be
-    // inferred from a transient source or destination DOM node.
     face: to.kind === 'HAND' ? 'ownerVisible' : face,
     timing: { dispatch: 'before-flight' },
-    style,
-    layout: {
-      captureBefore: touched,
-      slideAfter: touched,
-    },
+    style: styleFor(from, to, event.type),
+    layout: { captureBefore: touched, slideAfter: touched },
   }];
 }
 
-export function deriveCardTransfers(before: MatchState, event: MatchEvent, after: MatchState): readonly CardTransfer[] {
+export function deriveCardTransfers(
+  before: SeatVisibleMatchState,
+  event: SeatAnimationEvent,
+  after: SeatVisibleMatchState,
+): readonly CardTransfer[] {
+  const token = eventCardToken(event);
+  if (!token) return [];
+  const owner = eventOwner(event)
+    ?? cardAt(before, token)?.owner
+    ?? cardAt(after, token)?.owner
+    ?? null;
   switch (event.type) {
     case 'CARD_DRAWN':
-      return transfer(before, after, event, event.cardId, { kind: 'DECK', owner: event.owner }, zoneOfCard(after, event.cardId), 'faceUp');
-
-    case 'CARD_STAGED':
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'LANE', owner: event.owner, lane: event.lane }, 'faceDown');
-
+      return owner
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            { kind: 'DECK', owner },
+            zoneOfCard(after, token),
+            'faceUp',
+          )
+        : [];
+    case 'CARD_STAGED': {
+      const lane = eventLane(event);
+      return owner && lane !== null
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            zoneOfCard(before, token),
+            { kind: 'LANE', owner, lane },
+            'faceDown',
+          )
+        : [];
+    }
     case 'CARD_MOVED': {
-      const card = getCardPlacement(before, event.cardId) ??
-        getCardPlacement(after, event.cardId);
-      if (!card) return [];
-      return transfer(
-        before,
-        after,
-        event,
-        event.cardId,
-        { kind: 'LANE', owner: card.owner, lane: event.fromLane },
-        { kind: 'LANE', owner: card.owner, lane: event.toLane },
-      );
+      const fromLane = eventLane(event, 'fromLane');
+      const toLane = eventLane(event, 'toLane');
+      return owner && fromLane !== null && toLane !== null
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            { kind: 'LANE', owner, lane: fromLane },
+            { kind: 'LANE', owner, lane: toLane },
+          )
+        : [];
     }
-
-    case 'CARD_ZONE_CHANGED': {
-      const owner = getCardPlacement(before, event.cardId)?.owner ??
-        getCardPlacement(after, event.cardId)?.owner;
-      if (!owner) return [];
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), destinationZone(owner, event.destination));
-    }
-
+    case 'CARD_ZONE_CHANGED':
+      return owner
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            zoneOfCard(before, token),
+            destinationZone(owner, eventRecord(event, 'destination')),
+          )
+        : [];
     case 'CARD_RETURNED_TO_LANE': {
-      const owner = getCardPlacement(before, event.cardId)?.owner ??
-        getCardPlacement(after, event.cardId)?.owner;
-      if (!owner) return [];
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'LANE', owner, lane: event.lane }, event.revealed ? 'faceUp' : 'faceDown');
+      const lane = eventLane(event);
+      return owner && lane !== null
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            zoneOfCard(before, token),
+            { kind: 'LANE', owner, lane },
+            eventBoolean(event, 'revealed') ? 'faceUp' : 'faceDown',
+          )
+        : [];
     }
-
-    case 'CARD_CREATED':
+    case 'CARD_CREATED': {
+      const destination = eventRecord(event, 'destination');
+      return owner
+        ? transfer(
+            before,
+            after,
+            event,
+            token,
+            { kind: 'GENERATED', owner },
+            destinationZone(owner, destination),
+            destination?.kind === 'LANE' && destination.revealed === false
+              ? 'faceDown'
+              : 'faceUp',
+          )
+        : [];
+    }
+    case 'CARD_DISCARDED':
+    case 'CARD_DESTROYED':
+    case 'CARD_BANISHED': {
+      if (!owner) return [];
+      const kind = event.type === 'CARD_DISCARDED'
+        ? 'DISCARD'
+        : event.type === 'CARD_DESTROYED'
+          ? 'DESTROYED'
+          : 'BANISHED';
       return transfer(
         before,
         after,
         event,
-        event.cardId,
-        { kind: 'GENERATED', owner: event.owner },
-        destinationZone(event.owner, event.destination),
-        event.destination.kind === 'LANE' && !event.destination.revealed
-          ? 'faceDown'
-          : 'faceUp',
+        token,
+        zoneOfCard(before, token),
+        { kind, owner },
       );
-
-    case 'CARD_DISCARDED': {
-      const owner = getCardPlacement(before, event.cardId)?.owner ??
-        getCardPlacement(after, event.cardId)?.owner;
-      if (!owner) return [];
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'DISCARD', owner });
     }
-
-    case 'CARD_DESTROYED': {
-      const owner = getCardPlacement(before, event.cardId)?.owner ??
-        getCardPlacement(after, event.cardId)?.owner;
-      if (!owner) return [];
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'DESTROYED', owner });
-    }
-
-    case 'CARD_BANISHED': {
-      const owner = getCardPlacement(before, event.cardId)?.owner ??
-        getCardPlacement(after, event.cardId)?.owner;
-      if (!owner) return [];
-      return transfer(before, after, event, event.cardId, zoneOfCard(before, event.cardId), { kind: 'BANISHED', owner });
-    }
-
     default:
       return [];
   }
 }
 
-const structuralCardEventTypes = new Set<MatchEvent['type']>([
+const structuralCardEventTypes = new Set<SeatAnimationEvent['type']>([
   'CARD_DRAWN',
   'CARD_STAGED',
   'CARD_MOVED',
@@ -307,29 +376,31 @@ const structuralCardEventTypes = new Set<MatchEvent['type']>([
   'CARD_BANISHED',
 ]);
 
-function changedCards(before: MatchState, after: MatchState): CardId[] {
-  const ids = new Set([...getAllCardIds(before), ...getAllCardIds(after)]);
-  const changed: CardId[] = [];
-  for (const id of ids) {
-    const a = getCardPlacement(before, id);
-    const b = getCardPlacement(after, id);
-    if (!a || !b) {
-      changed.push(id);
-      continue;
-    }
-    if (a.zone !== b.zone || a.lane !== b.lane) changed.push(id);
-  }
-  return changed;
+function cardPlacementKey(card: SeatVisibleCard | null): string {
+  return card ? `${card.zone}|${card.lane ?? ''}|${card.owner}` : 'absent';
 }
 
-export function assertTransferCoverage(before: MatchState, event: MatchEvent, after: MatchState, transfers: readonly CardTransfer[]): void {
+export function assertTransferCoverage(
+  before: SeatVisibleMatchState,
+  event: SeatAnimationEvent,
+  after: SeatVisibleMatchState,
+  transfers: readonly CardTransfer[],
+): void {
   if (!structuralCardEventTypes.has(event.type)) return;
-  const changed = changedCards(before, after);
+  const tokens = new Set([
+    ...before.cards.map(card => card.token),
+    ...after.cards.map(card => card.token),
+  ]);
+  const changed = [...tokens].filter(token =>
+    cardPlacementKey(cardAt(before, token))
+      !== cardPlacementKey(cardAt(after, token)));
   if (changed.length === 0) return;
-  const covered = new Set(transfers.map(t => t.cardId));
-  const missing = changed.filter(id => !covered.has(id));
+  const covered = new Set(transfers.map(transfer => transfer.cardId));
+  const missing = changed.filter(token => !covered.has(token));
   if (missing.length > 0) {
-    throw new Error(`Missing card transfer animation for ${event.type}: ${missing.join(', ')}`);
+    throw new Error(
+      `Missing card transfer animation for ${event.type}: ${missing.join(', ')}`,
+    );
   }
 }
 
@@ -337,6 +408,12 @@ export function isVisibleZone(zone: CardZoneRef): boolean {
   return visibleZone(zone);
 }
 
-export function isCardPileZone(zone: CardZoneRef): zone is Extract<CardZoneRef, { kind: CardZone }> {
-  return ['DISCARD', 'DESTROYED', 'BANISHED'].includes(zone.kind);
+export function isCardPileZone(
+  zone: CardZoneRef,
+): zone is Extract<CardZoneRef, {
+  kind: 'DISCARD' | 'DESTROYED' | 'BANISHED';
+}> {
+  return zone.kind === 'DISCARD'
+    || zone.kind === 'DESTROYED'
+    || zone.kind === 'BANISHED';
 }

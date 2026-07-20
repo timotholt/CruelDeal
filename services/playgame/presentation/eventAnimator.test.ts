@@ -8,6 +8,11 @@ import type { MatchEvent } from '../engine/types/events';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { PlayScriptCtx } from '../script/actions';
 import type { CardId, LaneId } from '../engine/types/ids';
+import {
+  projectAnimationEventForSeat,
+  projectMatchStateForSeat,
+  type SeatTransactionFrame,
+} from '../runtime/projection';
 import { animateEvent, fallbackRectForZone } from './eventAnimator';
 import { createPlayMotionSurface } from './playMotionSurface';
 
@@ -16,6 +21,16 @@ const drawCause = {
   effectKind: 'SYSTEM',
   reason: 'TEST_DRAW',
 } as const;
+
+const projectFrame = (frame: EventTransition): SeatTransactionFrame => ({
+  index: frame.index,
+  transactionId: frame.transactionId,
+  frame: frame.frame,
+  scope: frame.scope,
+  event: projectAnimationEventForSeat(frame, 'P0'),
+  before: projectMatchStateForSeat(frame.before, 'P0', BOOTSTRAP_MANIFEST),
+  after: projectMatchStateForSeat(frame.after, 'P0', BOOTSTRAP_MANIFEST),
+});
 
 describe('event animator transfer origins', () => {
   it('falls remote hand transfers back to the opponent hand region at board top-center', () => {
@@ -60,6 +75,11 @@ describe('event animator transfer origins', () => {
         cardId,
         lane: 0 as LaneId,
         energyPaid: 1,
+        cause: {
+          sourceId: 'system:moved-transfer-test' as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TEST_STAGE',
+        },
       }, BOOTSTRAP_MANIFEST);
       const event = {
         type: 'CARD_MOVED' as const,
@@ -88,6 +108,8 @@ describe('event animator transfer origins', () => {
         before,
         after,
       };
+      const projectedFrame = projectFrame(frame);
+      const token = projectedFrame.event?.data.card as string;
 
       const boardWrap = document.createElement('div');
       const boardEl = document.createElement('div');
@@ -95,7 +117,7 @@ describe('event animator transfer origins', () => {
       const toastArea = document.createElement('div');
       const cardEl = document.createElement('div');
       cardEl.className = 'card lane-card';
-      cardEl.dataset.cardId = cardId;
+      cardEl.dataset.cardId = token;
       cardEl.dataset.cardRestingRotation = '1.7deg';
       cardEl.style.setProperty('--card-tilt', '1.7deg');
       let adopted = false;
@@ -108,7 +130,7 @@ describe('event animator transfer origins', () => {
       document.body.append(boardWrap);
 
       const calls: string[] = [];
-      const cardRefs = new Map([[cardId as string, cardEl]]);
+      const cardRefs = new Map([[token, cardEl]]);
       const motionSurface = createPlayMotionSurface({
         frame: boardWrap,
         overlay,
@@ -116,7 +138,7 @@ describe('event animator transfer origins', () => {
         zoneRefs: new Map(),
       });
       const ctx = {
-        state: before,
+        state: projectedFrame.before,
         ui: {
           handReservations: [],
           history: [],
@@ -133,11 +155,12 @@ describe('event animator transfer origins', () => {
         toastArea,
         cardRefs,
         zoneRefs: new Map(),
+        cardStatReadModel: () => null,
         presentCommittedFrame: vi.fn(),
         finishTurnPresentation: vi.fn(),
       } as unknown as PlayScriptCtx;
 
-      const animation = animateEvent(ctx, frame, () => {
+      const animation = animateEvent(ctx, projectedFrame, () => {
         adopted = true;
         calls.push('adopt');
       }, {
@@ -191,6 +214,11 @@ describe('event animator transfer origins', () => {
         cardId,
         lane: 0 as LaneId,
         energyPaid: 1,
+        cause: {
+          sourceId: 'system:leon-return-test' as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TEST_STAGE',
+        },
       }, BOOTSTRAP_MANIFEST);
       before = apply(before, { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }, BOOTSTRAP_MANIFEST);
       const event = {
@@ -219,6 +247,8 @@ describe('event animator transfer origins', () => {
         before,
         after,
       };
+      const projectedFrame = projectFrame(frame);
+      const token = projectedFrame.event?.data.card as string;
 
       const boardWrap = document.createElement('div');
       const boardEl = document.createElement('div');
@@ -226,21 +256,21 @@ describe('event animator transfer origins', () => {
       const toastArea = document.createElement('div');
       const source = document.createElement('div');
       source.className = 'card lane-card facedown';
-      source.dataset.cardId = cardId;
+      source.dataset.cardId = token;
       source.getBoundingClientRect = () => new DOMRect(80, 280, 70, 100);
       const handWrapper = document.createElement('div');
       handWrapper.className = 'hand-card-motion';
-      handWrapper.dataset.cardId = cardId;
+      handWrapper.dataset.cardId = token;
       const destination = document.createElement('div');
       destination.className = 'card';
-      destination.dataset.cardId = cardId;
+      destination.dataset.cardId = token;
       destination.getBoundingClientRect = () => new DOMRect(180, 620, 70, 100);
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
       boardEl.append(source);
       boardWrap.append(boardEl, toastArea, overlay);
       document.body.append(boardWrap);
 
-      const cardRefs = new Map<string, HTMLElement>([[cardId, source]]);
+      const cardRefs = new Map<string, HTMLElement>([[token, source]]);
       const motionSurface = createPlayMotionSurface({
         frame: boardWrap,
         overlay,
@@ -248,7 +278,7 @@ describe('event animator transfer origins', () => {
         zoneRefs: new Map(),
       });
       const ctx = {
-        state: before,
+        state: projectedFrame.before,
         ui: {
           handReservations: [],
           history: [],
@@ -265,15 +295,16 @@ describe('event animator transfer origins', () => {
         toastArea,
         cardRefs,
         zoneRefs: new Map(),
+        cardStatReadModel: () => null,
         presentCommittedFrame: vi.fn(),
         finishTurnPresentation: vi.fn(),
       } as unknown as PlayScriptCtx;
 
-      const animation = animateEvent(ctx, frame, () => {
+      const animation = animateEvent(ctx, projectedFrame, () => {
         source.remove();
         handWrapper.append(destination);
         boardEl.append(handWrapper);
-        cardRefs.set(cardId, handWrapper);
+        cardRefs.set(token, handWrapper);
       });
 
       const surrogate = overlay.querySelector('.transfer-flyer') as HTMLElement;
@@ -316,6 +347,11 @@ describe('event animator transfer origins', () => {
         cardId,
         lane: 1 as LaneId,
         energyPaid: 1,
+        cause: {
+          sourceId: 'system:remote-stage-test' as CardId,
+          effectKind: 'SYSTEM' as const,
+          reason: 'TEST_STAGE',
+        },
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
       const framedEvent = {
@@ -333,6 +369,8 @@ describe('event animator transfer origins', () => {
         before,
         after,
       };
+      const projectedFrame = projectFrame(frame);
+      const token = projectedFrame.event?.data.card as string;
 
       const boardWrap = document.createElement('div');
       const boardEl = document.createElement('div');
@@ -341,7 +379,7 @@ describe('event animator transfer origins', () => {
       const remoteHand = document.createElement('div');
       const destination = document.createElement('div');
       destination.className = 'card lane-card enemy facedown pending';
-      destination.dataset.cardId = cardId;
+      destination.dataset.cardId = token;
       destination.textContent = 'PROTECTED CARD IDENTITY';
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
       remoteHand.getBoundingClientRect = () => new DOMRect(180, 20, 70, 100);
@@ -358,7 +396,7 @@ describe('event animator transfer origins', () => {
         zoneRefs,
       });
       const ctx = {
-        state: before,
+        state: projectedFrame.before,
         ui: {
           handReservations: [],
           history: [],
@@ -375,13 +413,14 @@ describe('event animator transfer origins', () => {
         toastArea,
         cardRefs,
         zoneRefs,
+        cardStatReadModel: () => null,
         presentCommittedFrame: vi.fn(),
         finishTurnPresentation: vi.fn(),
       } as unknown as PlayScriptCtx;
 
-      const animation = animateEvent(ctx, frame, () => {
+      const animation = animateEvent(ctx, projectedFrame, () => {
         boardEl.append(destination);
-        cardRefs.set(cardId, destination);
+        cardRefs.set(token, destination);
       });
       const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
       expect(surrogate).not.toBeNull();

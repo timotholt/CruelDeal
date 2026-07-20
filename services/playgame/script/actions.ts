@@ -2,11 +2,13 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { revealPendingCinematic } from '@/services/vfx/animations/reveal-cinematic';
 import type { Manifest } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
-import type { MatchState as EngineMatchState } from '../engine/types/state';
-import type { EventTransition } from '../engine/transactionTimeline';
-import type { CommittedTransactionTimeline } from '../runtime/contracts';
+import type {
+  SeatCardToken,
+  SeatTransactionFrame,
+  SeatTransactionTimeline,
+  SeatVisibleMatchState,
+} from '../runtime/projection';
 import type { ZoneAnchorKey } from '../presentation/cardTransfers';
-import { getLocationState } from '../engine/projections/locationRuntime';
 import { getLocationTemplate } from '../engine/projections/locationTemplate';
 import type { PlayMotionSurface } from '../presentation/playMotionSurface';
 import { animateEvent } from '../presentation/eventAnimator';
@@ -27,9 +29,11 @@ import {
   monotonicNow,
   type FramePresentationTiming,
 } from '../runtime/performanceTelemetry';
+import { eventLane, eventNumber, eventString } from '../presentation/projectedEvent';
+import type { CardStatReader } from '../view';
 
 export interface PlayScriptCtx extends Record<string, unknown> {
-  state: EngineMatchState;
+  state: SeatVisibleMatchState;
   ui: UiState;
   setUi: SetStoreFunction<UiState>;
   manifest: Manifest;
@@ -41,10 +45,11 @@ export interface PlayScriptCtx extends Record<string, unknown> {
   cardRefs: Map<string, HTMLElement>;
   zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
   deckEl?: HTMLElement;
+  cardStatReadModel: CardStatReader;
   sfx?: (name: string) => void;
   cancelled?: boolean;
   onCancel?: () => void;
-  presentCommittedFrame: (frame: EventTransition) => void;
+  presentCommittedFrame: (frame: SeatTransactionFrame) => void;
   recordFramePresentationTiming?: (timing: FramePresentationTiming) => void;
   finishTurnPresentation: () => void;
   presentPlayfieldEvent: PlayfieldEventPresenter;
@@ -60,7 +65,7 @@ const OPENING_TURN_BANNER_DURATION_MS = 1_800;
 const OPENING_TURN_BANNER_HOLD_MS = OPENING_TURN_BANNER_DURATION_MS + 100;
 
 type PresentationOutcome = 'completed' | 'failed' | 'timed-out';
-type BeforeFrameHook = (frame: EventTransition) => Promise<void> | void;
+type BeforeFrameHook = (frame: SeatTransactionFrame) => Promise<void> | void;
 
 const settlePresentationWithin = (
   presentation: Promise<void>,
@@ -96,18 +101,21 @@ export const toast = (text: string, opts: { duration?: number } = {}): Step => a
 
 const paceLocationReveal = async (
   c: PlayScriptCtx,
-  frame: EventTransition,
+  frame: SeatTransactionFrame,
   presentFrame: () => void,
 ): Promise<void> => {
-  if (frame.event.type !== 'LOCATION_REVEALED') return;
-  const lane = frame.event.lane;
+  if (frame.event?.type !== 'LOCATION_REVEALED') return;
+  const lane = eventLane(frame.event);
+  if (lane === null) return;
   const halfDuration = LOCATION_REVEAL_DURATION_MS / 2;
   const laneElement = c.boardEl.querySelector(`.lane-map[data-lane="${lane}"]`) as HTMLElement | null;
   const tileElement = c.boardEl.querySelector(`.location[data-lane="${lane}"]`) as HTMLElement | null;
 
-  const location = getLocationState(frame.after, frame.event.locationId);
-  const mapPath = location
-    ? getLocationTemplate(c.manifest, location.defId)?.mapArtPath
+  const defId = eventString(frame.event, 'defId')
+    ?? frame.after.lanes.find(candidate => candidate.id === lane)
+      ?.location?.defId;
+  const mapPath = defId
+    ? getLocationTemplate(c.manifest, defId)?.mapArtPath
     : undefined;
 
   // The map begins its complete fade while the still-visible hidden tile
@@ -169,9 +177,13 @@ const paceLocationReveal = async (
 
 const paceFrame = async (
   c: PlayScriptCtx,
-  frame: EventTransition,
+  frame: SeatTransactionFrame,
   presentFrame: () => void,
 ): Promise<void> => {
+  if (!frame.event) {
+    presentFrame();
+    return;
+  }
   if (frame.event.type === 'TURN_RESOLUTION_STARTED') {
     // The synthetic local-lock beat has already painted. This canonical frame
     // now adopts authority without introducing a second facing transition.
@@ -183,15 +195,19 @@ const paceFrame = async (
     // later bookkeeping and the location reveal behind the same cue order used
     // by the opening storyboard.
     presentFrame();
-    showToast(c.toastArea, `TURN ${frame.event.turn}`, {
+    showToast(
+      c.toastArea,
+      `TURN ${eventNumber(frame.event, 'turn') ?? frame.after.turn}`,
+      {
       duration: TURN_BANNER_DURATION_MS,
-    });
+      },
+    );
     await waitFor(TURN_BANNER_HOLD_MS);
     return;
   }
   if (frame.event.type === 'MATCH_ENDED') {
     presentFrame();
-    c.setUi('lockedResult', frame.event.result);
+    c.setUi('lockedResult', frame.after.result);
     c.setUi('showEndGamePrompt', true);
     return;
   }
@@ -201,7 +217,9 @@ const paceFrame = async (
   }
   if (frame.event.type === 'CARD_REVEALED') {
     await revealPendingCinematic({
-      pendingIds: [frame.event.cardId],
+      pendingIds: [
+        eventString(frame.event, 'card') as SeatCardToken,
+      ].filter(Boolean),
       cardElMap: c.cardRefs,
       motionSurface: c.motionSurface,
       sfx: c.sfx,
@@ -213,9 +231,9 @@ const paceFrame = async (
 
 const paceTimeline = async (
   c: PlayScriptCtx,
-  timeline: CommittedTransactionTimeline,
+  timeline: SeatTransactionTimeline,
   eventIndexes = planCommittedEventPacing(
-    timeline.transaction.framedEvents.map(({ event }) => event),
+    timeline.frames.map(frame => frame.event),
   ).orderedEventIndexes,
   beforeFrame?: BeforeFrameHook,
 ): Promise<void> => {
@@ -255,16 +273,18 @@ const paceTimeline = async (
       presentFrame();
       acceptingAnimationDispatch = false;
       const endedAtMs = monotonicNow();
-      c.recordFramePresentationTiming?.({
-        transactionId: frame.transactionId,
-        frame: frame.frame,
-        eventType: frame.event.type,
-        beatKind: beat.kind,
-        outcome,
-        startedAtMs,
-        endedAtMs,
-        durationMs: elapsed(startedAtMs, endedAtMs),
-      });
+      if (frame.event) {
+        c.recordFramePresentationTiming?.({
+          transactionId: frame.transactionId,
+          frame: frame.frame,
+          eventType: frame.event.type,
+          beatKind: beat.kind,
+          outcome,
+          startedAtMs,
+          endedAtMs,
+          durationMs: elapsed(startedAtMs, endedAtMs),
+        });
+      }
       if (outcome !== 'completed') {
         c.motionSurface?.cardMotion.cancelAll(
           outcome === 'timed-out' ? 'presentation-timeout' : 'presentation-invalidated',
@@ -279,7 +299,7 @@ const paceTimeline = async (
   }
 };
 
-export const paceCommittedOpening = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
+export const paceCommittedOpening = (timeline: SeatTransactionTimeline): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   let turnBannerPresented = false;
   await paceTimeline(
@@ -287,7 +307,10 @@ export const paceCommittedOpening = (timeline: CommittedTransactionTimeline): St
     timeline,
     undefined,
     async (frame) => {
-      if (turnBannerPresented || frame.event.type !== 'LOCATION_REVEALED') return;
+      if (
+        turnBannerPresented
+        || frame.event?.type !== 'LOCATION_REVEALED'
+      ) return;
       turnBannerPresented = true;
       showToast(c.toastArea, 'TURN 1', {
         duration: OPENING_TURN_BANNER_DURATION_MS,
@@ -297,7 +320,7 @@ export const paceCommittedOpening = (timeline: CommittedTransactionTimeline): St
   );
 };
 
-export const paceCommittedTurn = (timeline: CommittedTransactionTimeline): Step => async (ctx) => {
+export const paceCommittedTurn = (timeline: SeatTransactionTimeline): Step => async (ctx) => {
   const c = ctx as PlayScriptCtx;
   try {
     await paceTimeline(c, timeline);

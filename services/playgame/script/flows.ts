@@ -14,7 +14,7 @@ import {
   presentPlayfieldEvent,
   toast,
 } from './actions';
-import type { CommittedTransactionTimeline } from '../runtime/contracts';
+import type { SeatTransactionTimeline } from '../runtime/projection';
 
 const TURN_RESOLUTION_ENTRY_DELAY_MS = 80;
 
@@ -29,7 +29,7 @@ const TURN_RESOLUTION_ENTRY_DELAY_MS = 80;
  *   6. pace the committed location reveal
  *   7. pace the committed turn-start draw
  */
-export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
+export const openingSequence = (timeline: SeatTransactionTimeline): Step =>
   serial(
     presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' }),
     wait(200),
@@ -64,7 +64,7 @@ export const openingSequence = (timeline: CommittedTransactionTimeline): Step =>
  *   4. Pace turn bookkeeping, draws, and location reveals in frame order.
  *   5. Unlock the UI presentation sidecar.
  */
-export const resolveTurnFlow = (timeline: CommittedTransactionTimeline): Step =>
+export const resolveTurnFlow = (timeline: SeatTransactionTimeline): Step =>
   serial(
     wait(TURN_RESOLUTION_ENTRY_DELAY_MS),
     paceCommittedTurn(timeline),

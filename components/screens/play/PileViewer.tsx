@@ -1,15 +1,17 @@
 import { For, Show } from 'solid-js';
-import type { CardZone } from '@/services/playgame/engine/types/state';
-import type { ResolvedCard } from '@/services/playgame/view';
+import type {
+  ResolvedCard,
+  VisiblePileZone,
+} from '@/services/playgame/view';
 
 interface PileViewerProps {
   ownerName: string;
-  zone: CardZone;
+  zone: VisiblePileZone;
   cards: readonly ResolvedCard[];
   onClose: () => void;
 }
 
-const zoneLabel = (zone: CardZone): string => {
+const zoneLabel = (zone: VisiblePileZone): string => {
   switch (zone) {
     case 'DISCARD':
       return 'Discard';
@@ -17,21 +19,19 @@ const zoneLabel = (zone: CardZone): string => {
       return 'Destroyed';
     case 'BANISHED':
       return 'Banished';
-    default:
-      return zone;
   }
 };
 
 export const PileViewer = (props: PileViewerProps) => {
   return (
-    <div class="pile-viewer" onClick={props.onClose}>
+    <div class="pile-viewer" onClick={() => props.onClose()}>
       <div class="pile-viewer__panel" onClick={(e) => e.stopPropagation()}>
         <div class="pile-viewer__header">
           <div>
             <div class="pile-viewer__eyebrow">{props.ownerName}</div>
             <div class="pile-viewer__title">{zoneLabel(props.zone)} Pile</div>
           </div>
-          <button class="pile-viewer__close" type="button" onClick={props.onClose}>Close</button>
+          <button class="pile-viewer__close" type="button" onClick={() => props.onClose()}>Close</button>
         </div>
 
         <div class="pile-viewer__count">{props.cards.length} card{props.cards.length === 1 ? '' : 's'}</div>

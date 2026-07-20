@@ -18,12 +18,8 @@ import { For, Show, createEffect, createMemo, createSignal, onCleanup, onMount }
 import { useVfx } from '../../game/VfxHost';
 import { Portal } from '../../ui/Portal';
 import { ModalBackdrop } from '../../ui/ModalBackdrop';
-import { usePlayGame } from '@/contexts/PlayGameContext';
-import {
-  getCardRuntime,
-  getLanePowerBreakdown,
-  type LanePowerBreakdown,
-} from '@/services/playgame/engine/projections';
+import { useMatchSession } from '@/contexts/MatchSessionContext';
+import { usePlayUi } from '@/contexts/PlayUiContext';
 import {
   getCardsInZoneForSeat,
   type ResolvedCard,
@@ -31,12 +27,12 @@ import {
   getHandForSeat,
   getLaneCardsForSeat,
   getLocation,
-  getLanePower,
+  type VisiblePileZone,
 } from '@/services/playgame/view';
-import type { MatchState as EngineMatchState } from '@/services/playgame/engine/types/state';
 import type { LaneId } from '@/services/playgame/engine/types/ids';
-import type { CardZone } from '@/services/playgame/engine/types/state';
-import { renderRuntimeReplay } from '@/services/playgame/runtime/replayExport';
+import type {
+  SeatLanePowerReadModel,
+} from '@/services/playgame/runtime/seatReadModels';
 import { createScript, type Script } from '@/services/playgame/script/runner';
 import type { PlayScriptCtx } from '@/services/playgame/script/actions';
 import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
@@ -58,7 +54,6 @@ import { MiniDeckIndicator } from './MiniDeckIndicator';
 import { selectInteractiveHand } from './handInteractivity';
 import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
-import { activeLaneIds } from '@/services/playgame/engine/laneTopology';
 import { createPlayfieldEventPresenter } from '@/services/playgame/presentation/playfieldEvents';
 
 interface PlayBoardProps {
@@ -72,11 +67,23 @@ type ReplayClientActivity =
   | null;
 
 export const PlayBoard = (props: PlayBoardProps) => {
-  const pg = usePlayGame();
+  const match = useMatchSession();
+  const playUi = usePlayUi();
   const {
-    engineState, manifest, ui, setUi, isResolving, actions,
-    localSeat, remoteSeat, seatMeta, openingTimeline,
-  } = pg;
+    manifest, localSeat, remoteSeat, bootstrap, openingTimeline,
+  } = match;
+  const {
+    presentedState: engineState,
+    ui,
+    setUi,
+    isResolving,
+    actions: uiActions,
+  } = playUi;
+  const actions = match.actions;
+  const seatMeta = {
+    P0: { name: bootstrap.participants.P0.displayName },
+    P1: { name: bootstrap.participants.P1.displayName },
+  } as const;
   const { cardRefs, zoneRefs, motionSurface, bindZoneRef } = useVfx();
   const [replayOpen, setReplayOpen] = createSignal(false);
   const [replayCursor, setReplayCursor] = createSignal(0);
@@ -84,18 +91,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
   const [replayClientActivity, setReplayClientActivity] = createSignal<ReplayClientActivity>(null);
   const [openMenuSeat, setOpenMenuSeat] = createSignal<'P0' | 'P1' | null>(null);
-  const [openPile, setOpenPile] = createSignal<{ owner: 'P0' | 'P1'; zone: CardZone } | null>(null);
+  const [openPile, setOpenPile] = createSignal<{
+    owner: 'P0' | 'P1';
+    zone: VisiblePileZone;
+  } | null>(null);
 
-  const runtimeReplay = createMemo(() => {
-    // Track committed presentation progress; the export itself remains a
-    // read-only bootstrap + genesis + transaction-record snapshot.
-    void engineState().timeline.frame;
-    return pg.exportRuntimeReplay();
-  });
-  const replayTimeline = createMemo(() => {
-    const replay = runtimeReplay();
-    return replay ? renderRuntimeReplay(replay, manifest) : null;
-  });
+  const replayTimeline = createMemo(() => match.replay());
   const replayLastCursor = createMemo(() => Math.max(0, (replayTimeline()?.steps.length ?? 1) - 1));
   const replayStep = createMemo(() => {
     const timeline = replayTimeline();
@@ -123,7 +124,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     }
   });
   const inspectingReplayHistory = createMemo(() => replayCursor() < replayLastCursor());
-  const presentedState = createMemo<EngineMatchState>(() => (
+  const presentedState = createMemo(() => (
     inspectingReplayHistory() ? replayStep()?.state ?? engineState() : engineState()
   ));
   const boardLocked = createMemo(() => turnFlowRunning() || isResolving() || presentedState().phase === 'RESOLVING');
@@ -134,7 +135,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
     phase: presentedState().phase,
     liveResolutionLocked: ui.isFlipped,
   }));
-  const laneIds = createMemo<readonly LaneId[]>(() => activeLaneIds(presentedState()));
+  const laneIds = createMemo<readonly LaneId[]>(() =>
+    presentedState().lanes
+      .filter(lane => lane.status === 'ACTIVE')
+      .map(lane => lane.id));
 
   createEffect(() => {
     const maxIndex = replayLastCursor();
@@ -154,7 +158,15 @@ export const PlayBoard = (props: PlayBoardProps) => {
   });
 
   // ── Derived projections ─────────────────────────────────────────────────
-  const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(presentedState(), localSeat, manifest));
+  const statReader = () => inspectingReplayHistory()
+    ? undefined
+    : actions.cardStatReadModel;
+  const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(
+    presentedState(),
+    localSeat,
+    manifest,
+    statReader(),
+  ));
   const reservedHandIds = createMemo<Set<string>>(() => (
     inspectingReplayHistory() ? new Set<string>() : new Set(ui.handReservations.map((card) => card.id))
   ));
@@ -163,14 +175,66 @@ export const PlayBoard = (props: PlayBoardProps) => {
     return selectInteractiveHand(hand(), reserved);
   });
 
-  const bottomLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, localSeat, manifest);
-  const topLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(presentedState(), i, remoteSeat, manifest);
+  const bottomLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(
+    presentedState(),
+    i,
+    localSeat,
+    manifest,
+    statReader(),
+  );
+  const topLane = (i: LaneId): ResolvedCard[] => getLaneCardsForSeat(
+    presentedState(),
+    i,
+    remoteSeat,
+    manifest,
+    statReader(),
+  );
   const laneLoc = (i: LaneId): ResolvedLocation =>
-    getLocation(presentedState(), i, manifest, localSeat);
-  const bottomPower = (i: LaneId): number => getLanePower(presentedState(), i, localSeat, manifest);
-  const topPower = (i: LaneId): number => getLanePower(presentedState(), i, remoteSeat, manifest);
-  const bottomBreakdown = (i: LaneId): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, localSeat, manifest);
-  const topBreakdown = (i: LaneId): LanePowerBreakdown => getLanePowerBreakdown(presentedState(), i, remoteSeat, manifest);
+    getLocation(presentedState(), i, manifest);
+  const laneState = (i: LaneId) =>
+    presentedState().lanes.find(lane => lane.id === i);
+  const bottomPower = (i: LaneId): number =>
+    laneState(i)?.power[localSeat] ?? 0;
+  const topPower = (i: LaneId): number =>
+    laneState(i)?.power[remoteSeat] ?? 0;
+  const fallbackBreakdown = (
+    lane: LaneId,
+    owner: 'P0' | 'P1',
+  ): SeatLanePowerReadModel => {
+    const cards = getLaneCardsForSeat(
+      presentedState(),
+      lane,
+      owner,
+      manifest,
+    ).map(card => ({
+      label: card.name,
+      basePower: card.basePower,
+      permanentDelta: card.storedPowerDelta,
+      ongoingDelta: 0,
+      finalPower: card.power,
+    }));
+    const total = laneState(lane)?.power[owner] ?? 0;
+    return {
+      lane,
+      owner,
+      cards,
+      cardSubtotal: cards.reduce((sum, card) => sum + card.finalPower, 0),
+      laneAdditions: [],
+      subtotalAfterAdditions: total,
+      multipliers: [],
+      effectiveMultiplier: 1,
+      total,
+    };
+  };
+  const breakdown = (lane: LaneId, owner: 'P0' | 'P1') =>
+    inspectingReplayHistory()
+      ? fallbackBreakdown(lane, owner)
+      : actions.lanePowerReadModel(lane, owner)
+        ?? fallbackBreakdown(lane, owner);
+  const bottomBreakdown = (i: LaneId): SeatLanePowerReadModel =>
+    breakdown(i, localSeat);
+  const topBreakdown = (i: LaneId): SeatLanePowerReadModel =>
+    breakdown(i, remoteSeat);
   const localHasPriority = createMemo(() => presentedState().priority === localSeat);
 
   useLaneHighlight({
@@ -186,15 +250,26 @@ export const PlayBoard = (props: PlayBoardProps) => {
     boardEl: () => boardEl,
     laneIds,
   });
-  const localDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DISCARD', manifest));
-  const localDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'DESTROYED', manifest));
-  const localBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), localSeat, 'BANISHED', manifest));
-  const remoteDiscard = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'DISCARD', manifest));
-  const remoteDestroyed = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'DESTROYED', manifest));
-  const remoteBanished = createMemo(() => getCardsInZoneForSeat(presentedState(), remoteSeat, 'BANISHED', manifest));
-  const remoteHandSize = createMemo(() => presentedState().hand[remoteSeat].length);
-  const localDeckSize = createMemo(() => presentedState().deck[localSeat].length);
-  const remoteDeckSize = createMemo(() => presentedState().deck[remoteSeat].length);
+  const zoneCards = (seat: 'P0' | 'P1', zone: VisiblePileZone) =>
+    getCardsInZoneForSeat(
+      presentedState(),
+      seat,
+      zone,
+      manifest,
+      statReader(),
+    );
+  const localDiscard = createMemo(() => zoneCards(localSeat, 'DISCARD'));
+  const localDestroyed = createMemo(() => zoneCards(localSeat, 'DESTROYED'));
+  const localBanished = createMemo(() => zoneCards(localSeat, 'BANISHED'));
+  const remoteDiscard = createMemo(() => zoneCards(remoteSeat, 'DISCARD'));
+  const remoteDestroyed = createMemo(() => zoneCards(remoteSeat, 'DESTROYED'));
+  const remoteBanished = createMemo(() => zoneCards(remoteSeat, 'BANISHED'));
+  const remoteHandSize = createMemo(() =>
+    presentedState().hands[remoteSeat].length);
+  const localDeckSize = createMemo(() =>
+    presentedState().deckCounts[localSeat]);
+  const remoteDeckSize = createMemo(() =>
+    presentedState().deckCounts[remoteSeat]);
   const recordedOutcomeLabel = createMemo(() => {
     const result = ui.lockedResult;
     if (!result) return null;
@@ -205,11 +280,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const handleUndoPending = async (): Promise<void> => {
     if (!boardInteractive() || isResolving()) return;
     const liveState = engineState();
-    const lastStaged = [...liveState.stagedPlays]
-      .reverse()
-      .find(staged =>
-        getCardRuntime(liveState, staged.cardId, manifest)?.owner === localSeat,
-      )?.cardId;
+    const lastStaged = [...liveState.stagedCards].reverse().find(token =>
+      liveState.cards.find(card => card.token === token)?.owner === localSeat);
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
@@ -227,7 +299,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   let boardEl: HTMLDivElement | undefined;
   let toastAreaEl: HTMLDivElement | undefined;
-  let deckEl: HTMLDivElement | undefined;
+  let deckEl: HTMLElement | undefined;
 
   onMount(() => {
     const closeMenus = (e: MouseEvent) => {
@@ -283,9 +355,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
       cardRefs,
       zoneRefs,
       deckEl,
-      presentCommittedFrame: actions.presentCommittedFrame,
-      recordFramePresentationTiming: actions.recordFramePresentationTiming,
-      finishTurnPresentation: actions.finishTurnPresentation,
+      cardStatReadModel: actions.cardStatReadModel,
+      presentCommittedFrame: uiActions.presentCommittedFrame,
+      recordFramePresentationTiming:
+        uiActions.recordFramePresentationTiming,
+      finishTurnPresentation: uiActions.finishTurnPresentation,
       presentPlayfieldEvent: createPlayfieldEventPresenter(playRoot),
     };
     ctx.onCancel = () => {
@@ -311,7 +385,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
     setOpenMenuSeat((current) => current === seat ? null : seat);
   };
 
-  const handleOpenPile = (owner: 'P0' | 'P1', zone: CardZone): void => {
+  const handleOpenPile = (
+    owner: 'P0' | 'P1',
+    zone: VisiblePileZone,
+  ): void => {
     if (!boardInteractive()) return;
     setOpenMenuSeat(null);
     setOpenPile({ owner, zone });
@@ -336,7 +413,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   };
 
   const copyGameJson = async (): Promise<void> => {
-    const json = JSON.stringify(pg.exportRuntimeReplay(), null, 2);
+    const json = JSON.stringify(match.replay(), null, 2);
     await navigator.clipboard.writeText(json);
   };
 
@@ -355,7 +432,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               counts={{
                 discard: localDiscard().length,
                 destroyed: localDestroyed().length,
-                banished: localBanished().length,
+                banished: presentedState().banishedCounts[localSeat],
               }}
               onToggle={() => togglePlayerMenu(localSeat)}
               onOpenPile={(zone) => handleOpenPile(localSeat, zone)}
@@ -393,7 +470,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
               counts={{
                 discard: remoteDiscard().length,
                 destroyed: remoteDestroyed().length,
-                banished: remoteBanished().length,
+                banished: presentedState().banishedCounts[remoteSeat],
               }}
               onToggle={() => togglePlayerMenu(remoteSeat)}
               onOpenPile={(zone) => handleOpenPile(remoteSeat, zone)}
@@ -429,9 +506,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
                   interactive={boardInteractive()}
                   inspectable={boardInspectable()}
                   viewerSeat={localSeat}
-                  stagedCardIds={presentedState().stagedPlays.map(
-                    staged => staged.cardId,
-                  )}
+                  stagedCardIds={presentedState().stagedCards}
                   resolutionLocked={boardCardResolutionLocked()}
                 />
               )}
@@ -485,12 +560,16 @@ export const PlayBoard = (props: PlayBoardProps) => {
               onClick={() => {
                 if (!boardInteractive() || !script || turnFlowRunning()) return;
                 setTurnFlowRunning(true);
+                uiActions.beginTurnPresentation();
                 setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
                 void actions.endTurn((seat) => {
                   setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
                 })
                   .then((timeline) => {
-                    if (!timeline) return undefined;
+                    if (!timeline) {
+                      uiActions.finishTurnPresentation();
+                      return undefined;
+                    }
                     setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
                     return script?.run(resolveTurnFlow(timeline));
                   })
@@ -530,10 +609,12 @@ export const PlayBoard = (props: PlayBoardProps) => {
               cursor={replayCursor()}
               stepCount={timeline().steps.length}
               steps={timeline().steps}
-              manifest={manifest}
-              replay={runtimeReplay()!}
-              performanceProfile={pg.performanceProfile()}
+              performanceProfile={match.performanceProfile()}
               selectedStep={replayStep()}
+              seatNames={{
+                P0: seatMeta.P0.name,
+                P1: seatMeta.P1.name,
+              }}
               clientStatus={replayClientStatus()}
               onCursorChange={selectReplayCursor}
               onCopyFrameJson={copyFrameJson}

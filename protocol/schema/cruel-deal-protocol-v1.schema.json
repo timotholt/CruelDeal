@@ -1606,7 +1606,8 @@
             "HAND",
             "LANE",
             "DISCARD",
-            "DESTROYED"
+            "DESTROYED",
+            "BANISHED"
           ]
         },
         "lane": {
@@ -1743,13 +1744,30 @@
             "P1"
           ],
           "additionalProperties": false
+        },
+        "power": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            },
+            "P1": {
+              "$ref": "#/$defs/SafeSignedInteger"
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
         }
       },
       "required": [
         "id",
         "status",
         "location",
-        "cards"
+        "cards",
+        "power"
       ],
       "additionalProperties": false
     },
@@ -1929,6 +1947,30 @@
           ],
           "additionalProperties": false
         },
+        "banished": {
+          "type": "object",
+          "properties": {
+            "P0": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "P1": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "P0",
+            "P1"
+          ],
+          "additionalProperties": false
+        },
         "banishedCounts": {
           "type": "object",
           "properties": {
@@ -1971,6 +2013,7 @@
         "stagedCards",
         "discard",
         "destroyed",
+        "banished",
         "banishedCounts",
         "result"
       ],

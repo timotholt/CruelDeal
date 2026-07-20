@@ -1,4 +1,3 @@
-import type { CardId } from '../../engine/types/ids';
 import { cardRestingRotationDegrees } from '@/services/vfx/animations/card-resting-transform';
 import type {
   CanonicalCardEndpoint,
@@ -75,7 +74,7 @@ const sanitizeClone = (clone: HTMLElement): HTMLElement => {
 };
 
 export const captureCardVisual = (
-  cardId: CardId,
+  cardId: string,
   element: HTMLElement,
   sourceKind: CardVisualSourceKind = 'visible-card',
 ): CardVisualSnapshot => {
@@ -91,20 +90,20 @@ export const captureCardVisual = (
 };
 
 export const canonicalCardEndpoint = (
-  cardId: CardId,
+  cardId: string,
   cardRefs: Map<string, HTMLElement>,
 ): CanonicalCardEndpoint => ({
   cardId,
-  resolveElement: () => canonicalVisualElement(cardRefs.get(cardId as string) ?? null),
+  resolveElement: () => canonicalVisualElement(cardRefs.get(cardId) ?? null),
   resolveRect: () => {
-    const element = canonicalVisualElement(cardRefs.get(cardId as string) ?? null);
+    const element = canonicalVisualElement(cardRefs.get(cardId) ?? null);
     return element?.isConnected ? normalizedCardRect(element) : null;
   },
   resolveRotationDegrees: () => (
-    cardRestingRotationDegrees(canonicalVisualElement(cardRefs.get(cardId as string) ?? null))
+    cardRestingRotationDegrees(canonicalVisualElement(cardRefs.get(cardId) ?? null))
   ),
   resolveFace: () => {
-    const element = canonicalVisualElement(cardRefs.get(cardId as string) ?? null);
+    const element = canonicalVisualElement(cardRefs.get(cardId) ?? null);
     return element ? faceOf(element) : 'faceUp';
   },
 });
@@ -156,7 +155,7 @@ export const createCardSurrogate = (
   host: CardMotionHost,
   options: {
     sessionId: string;
-    cardId: CardId;
+    cardId: string;
     route: string;
     basis: SurrogateBasis;
     startRect: DOMRect;
@@ -169,7 +168,7 @@ export const createCardSurrogate = (
   const root = document.createElement('div');
   root.className = `card-motion-surrogate ${options.className ?? ''}`.trim();
   root.dataset.cardMotionSession = options.sessionId;
-  root.dataset.cardId = options.cardId as string;
+  root.dataset.cardId = options.cardId;
   root.dataset.motionRoute = options.route;
   root.dataset.motionPhase = 'captured';
   root.style.position = 'absolute';

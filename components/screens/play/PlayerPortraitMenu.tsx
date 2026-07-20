@@ -1,5 +1,5 @@
 import type { Seat } from '@/services/playgame/engine/types/ids';
-import type { CardZone } from '@/services/playgame/engine/types/state';
+import type { VisiblePileZone } from '@/services/playgame/view';
 import { useVfx } from '../../game/VfxHost';
 
 interface PlayerPortraitMenuProps {
@@ -14,7 +14,7 @@ interface PlayerPortraitMenuProps {
     banished: number;
   };
   onToggle: () => void;
-  onOpenPile: (zone: CardZone) => void;
+  onOpenPile: (zone: VisiblePileZone) => void;
 }
 
 export const PlayerPortraitMenu = (props: PlayerPortraitMenuProps) => {
@@ -36,7 +36,7 @@ export const PlayerPortraitMenu = (props: PlayerPortraitMenuProps) => {
         aria-haspopup="true"
         aria-expanded={props.open}
         title={`${props.name} zones`}
-        onClick={props.onToggle}
+        onClick={() => props.onToggle()}
       >
         <span class="portrait-trigger__face">{props.name.slice(0, 1)}</span>
       </button>

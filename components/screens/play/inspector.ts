@@ -8,7 +8,7 @@
 
 import { createSignal } from 'solid-js';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
-import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 
 export type InspectTarget =
   | {
@@ -25,8 +25,8 @@ export type InspectTarget =
       laneIdx: number;
       bottomPower: number;
       topPower: number;
-      bottomBreakdown: LanePowerBreakdown;
-      topBreakdown: LanePowerBreakdown;
+      bottomBreakdown: SeatLanePowerReadModel;
+      topBreakdown: SeatLanePowerReadModel;
       element: HTMLElement;
     };
 

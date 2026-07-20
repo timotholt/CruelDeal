@@ -5,6 +5,7 @@ import { orderedTestLocationDeck } from '@/services/playgame/engine/testkit/runt
 import { createPlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { setupDragDrop } from './useDragDrop';
+import { projectMatchStateForSeat } from '@/services/playgame/runtime/projection';
 
 const pointerEvent = (
   type: string,
@@ -78,7 +79,8 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     const dispose = setupDragDrop({
       boardEl: board,
       localSeat: 'P0',
-      engineState: () => state,
+      engineState: () =>
+        projectMatchStateForSeat(state, 'P0', BOOTSTRAP_MANIFEST),
       isResolving: () => false,
       localHand: () => [{ id: 'pointer-card' } as ResolvedCard],
       cardRefs,
@@ -160,7 +162,8 @@ describe('pointer visual handoff', () => {
     const dispose = setupDragDrop({
       boardEl: board,
       localSeat: 'P0',
-      engineState: () => state,
+      engineState: () =>
+        projectMatchStateForSeat(state, 'P0', BOOTSTRAP_MANIFEST),
       isResolving: () => false,
       localHand: () => [{ id: 'pointer-card' } as ResolvedCard],
       cardRefs,

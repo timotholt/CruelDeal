@@ -1,6 +1,6 @@
 import { Show, onMount, onCleanup, createSignal } from 'solid-js';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
-import type { LanePowerBreakdown } from '@/services/playgame/engine/projections';
+import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import { LanePowerPanel } from './LanePowerPanel';
 import { StatLogPanel } from './StatLogPanel';
 
@@ -18,8 +18,8 @@ interface ZoomInspectorProps {
     laneIdx: number;
     bottomPower: number;
     topPower: number;
-    bottomBreakdown: LanePowerBreakdown;
-    topBreakdown: LanePowerBreakdown;
+    bottomBreakdown: SeatLanePowerReadModel;
+    topBreakdown: SeatLanePowerReadModel;
     element: HTMLElement;
   };
   onClose: () => void;
@@ -254,29 +254,28 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
             laneLogSide() === 'top'
               ? (props.target as {
                   kind: 'location';
-                  topBreakdown: LanePowerBreakdown;
-                  bottomBreakdown: LanePowerBreakdown;
+                  topBreakdown: SeatLanePowerReadModel;
+                  bottomBreakdown: SeatLanePowerReadModel;
                 }).topBreakdown
               : (props.target as {
                   kind: 'location';
-                  topBreakdown: LanePowerBreakdown;
-                  bottomBreakdown: LanePowerBreakdown;
+                  topBreakdown: SeatLanePowerReadModel;
+                  bottomBreakdown: SeatLanePowerReadModel;
                 }).bottomBreakdown
           }
           onClose={() => setLaneLogSide(null)}
         />
       </Show>
 
-      <Show when={props.target.kind === 'card' && props.target.card.type !== 'spell' && logKind()}>
+      <Show when={
+        props.target.kind === 'card'
+        && props.target.card.type !== 'spell'
+        && props.target.card.stats
+        && logKind()
+      }>
         <StatLogPanel
           kind={logKind() as 'power' | 'cost'}
-          basePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.basePower}
-          effectivePower={(props.target as { kind: 'card'; card: ResolvedCard }).card.power}
-          baseCost={(props.target as { kind: 'card'; card: ResolvedCard }).card.baseCost}
-          powerLedger={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerLedger}
-          powerModifiers={(props.target as { kind: 'card'; card: ResolvedCard }).card.powerModifiers}
-          costLog={(props.target as { kind: 'card'; card: ResolvedCard }).card.costLog}
-          costHistory={(props.target as { kind: 'card'; card: ResolvedCard }).card.costHistory}
+          stats={(props.target as { kind: 'card'; card: ResolvedCard }).card.stats!}
           onClose={() => setLogKind(null)}
         />
       </Show>

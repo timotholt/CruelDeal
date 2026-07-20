@@ -6,6 +6,7 @@ import type { MatchEvent } from '../engine/types/events';
 import type { CardId, LaneId } from '../engine/types/ids';
 import { buildRuntimeFixture } from '../engine/testkit';
 import type { CommittedTransactionTimeline } from '../runtime/contracts';
+import { projectTransactionTimelineForSeat } from '../runtime/projection';
 import { planCommittedResolutionWalk } from './committedTimeline';
 
 describe('committed END TURN choreography', () => {
@@ -39,6 +40,11 @@ describe('committed END TURN choreography', () => {
         lane: 0 as LaneId,
         owner: 'P1',
         energyPaid: 1,
+        cause: {
+          sourceId: 'remote-priority' as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TEST_STAGE',
+        },
       },
       {
         type: 'CARD_STAGED',
@@ -47,6 +53,11 @@ describe('committed END TURN choreography', () => {
         lane: 1 as LaneId,
         owner: 'P0',
         energyPaid: 1,
+        cause: {
+          sourceId: 'local-now' as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TEST_STAGE',
+        },
       },
       {
         type: 'CARD_STAGED',
@@ -55,6 +66,11 @@ describe('committed END TURN choreography', () => {
         lane: 2 as LaneId,
         owner: 'P0',
         energyPaid: 1,
+        cause: {
+          sourceId: 'local-delayed' as CardId,
+          effectKind: 'SYSTEM',
+          reason: 'TEST_STAGE',
+        },
       },
       { type: 'TURN_RESOLUTION_STARTED', turn: 2 },
       { type: 'CARD_REVEALED', cardId: 'remote-priority' as CardId, cause: { sourceId: 'remote-priority' as CardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } },
@@ -84,7 +100,12 @@ describe('committed END TURN choreography', () => {
       finalState: built.finalState,
     };
 
-    const walk = planCommittedResolutionWalk(timeline, 'P0');
+    const projected = projectTransactionTimelineForSeat(
+      timeline,
+      'P0',
+      BOOTSTRAP_MANIFEST,
+    );
+    const walk = planCommittedResolutionWalk(projected, 'P0');
     const designerSteps = walk
       .filter((beat) => [
         'local-lock',
@@ -95,9 +116,14 @@ describe('committed END TURN choreography', () => {
       .map((beat) => beat.kind);
     const revealedIds = walk.flatMap((beat) => (
       beat.kind === 'priority-reveal' || beat.kind === 'non-priority-reveal'
-        ? [beat.frame.event.type === 'CARD_REVEALED' ? beat.frame.event.cardId : null]
+        ? [beat.frame.event?.type === 'CARD_REVEALED'
+            ? beat.frame.event.data.card
+            : null]
         : []
     )).filter(Boolean);
+    const stagedTokens = projected.frames
+      .filter(frame => frame.event?.type === 'CARD_STAGED')
+      .map(frame => frame.event?.data.card);
 
     expect(designerSteps).toEqual([
       'local-lock',
@@ -105,7 +131,7 @@ describe('committed END TURN choreography', () => {
       'priority-reveal',
       'non-priority-reveal',
     ]);
-    expect(revealedIds).toEqual(['remote-priority', 'local-now']);
-    expect(revealedIds).not.toContain('local-delayed');
+    expect(revealedIds).toEqual(stagedTokens.slice(0, 2));
+    expect(revealedIds).not.toContain(stagedTokens[2]);
   });
 });

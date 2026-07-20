@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { MatchEvent } from '../engine/types/events';
-import type { EventTransition } from '../engine/transactionTimeline';
-import type { CommittedTransactionTimeline } from '../runtime/contracts';
+import { asFrame } from '../engine/types/timeline';
+import type {
+  SeatAnimationEvent,
+  SeatTransactionFrame,
+  SeatTransactionTimeline,
+  SeatVisibleMatchState,
+} from '../runtime/projection';
 import {
   paceCommittedOpening,
   paceCommittedTurn,
@@ -10,26 +14,55 @@ import {
 } from './actions';
 import type { ScriptCtx } from './runner';
 
-const transition = (frame: number, event: MatchEvent): EventTransition => ({
+const state = (
+  overrides: Partial<SeatVisibleMatchState> = {},
+): SeatVisibleMatchState => ({
+  turn: 1,
+  phase: 'AWAITING_INTENT',
+  priority: 'P0',
+  energy: { P0: 1, P1: 1 },
+  maxEnergy: { P0: 1, P1: 1 },
+  nextTurnEnergyBonus: { P0: 0, P1: 0 },
+  deckCounts: { P0: 0, P1: 0 },
+  locationDeckCount: 0,
+  hands: { P0: [], P1: [] },
+  cards: [],
+  lanes: [],
+  stagedCards: [],
+  discard: { P0: [], P1: [] },
+  destroyed: { P0: [], P1: [] },
+  banished: { P0: [], P1: [] },
+  banishedCounts: { P0: 0, P1: 0 },
+  result: null,
+  ...overrides,
+});
+
+const transition = (
+  frame: number,
+  event: SeatAnimationEvent,
+  before = state(),
+  after = before,
+): SeatTransactionFrame => ({
+  index: frame - 1,
   transactionId: 'turn-banner-order',
-  frame,
+  frame: asFrame(frame),
+  scope: { turn: 1, phase: 'ACTION' },
   event,
-  before: {} as EventTransition['before'],
-  after: {} as EventTransition['after'],
+  before,
+  after,
 });
 
 const timelineFrom = (
-  transitions: readonly EventTransition[],
-): CommittedTransactionTimeline => ({
-  transaction: {
-    framedEvents: transitions.map(({ transactionId, frame, event }) => ({
-      transactionId,
-      frame,
-      event,
-    })),
-  },
-  transitions,
-} as unknown as CommittedTransactionTimeline);
+  frames: readonly SeatTransactionFrame[],
+): SeatTransactionTimeline => ({
+  transactionId: 'turn-banner-order',
+  matchId: 'presentation-test',
+  baseRevision: 0,
+  revision: 1,
+  viewerSeat: 'P0',
+  frames,
+  finalState: frames.at(-1)?.after ?? state(),
+});
 
 describe('committed turn presentation', () => {
   afterEach(() => {
@@ -41,24 +74,26 @@ describe('committed turn presentation', () => {
     const transitions = [
       transition(1, {
         type: 'TURN_STARTED',
-        turn: 2,
-        priority: 'P0',
-        priorityReason: 'RETAINED',
+        data: {
+          turn: 2,
+          priority: 'P0',
+          priorityReason: 'RETAINED',
+        },
       }),
-      transition(2, { type: 'TURN_ENDED', turn: 2 }),
+      transition(2, { type: 'TURN_ENDED', data: { turn: 2 } }),
     ];
     const timeline = timelineFrom(transitions);
     const toastArea = document.createElement('div');
-    const presented: MatchEvent['type'][] = [];
+    const presented: SeatAnimationEvent['type'][] = [];
     const finishTurnPresentation = vi.fn();
     const ctx = {
-      state: { phase: 'AWAITING_INTENT' },
+      state: state(),
       ui: { lockedResult: null },
       localSeat: 'P0',
       toastArea,
       setUi: vi.fn(),
-      presentCommittedFrame: (frame: EventTransition) => {
-        presented.push(frame.event.type);
+      presentCommittedFrame: (frame: SeatTransactionFrame) => {
+        if (frame.event) presented.push(frame.event.type);
       },
       finishTurnPresentation,
     } as unknown as PlayScriptCtx;
@@ -82,32 +117,26 @@ describe('committed turn presentation', () => {
     vi.useFakeTimers();
     const location = transition(2, {
       type: 'LOCATION_REVEALED',
-      lane: 0,
-      locationId: 'opening-location' as never,
-      cause: {
-        sourceId: 'opening-location',
-        effectKind: 'SYSTEM',
-        reason: 'OPENING',
+      data: {
+        lane: 0,
+        location: 'opening-location',
+        defId: 'opening-location',
       },
     });
     const transitions = [
-      transition(1, { type: 'TURN_ENDED', turn: 0 }),
-      {
-        ...location,
-        before: { locationStore: {} } as EventTransition['before'],
-        after: { locationStore: {} } as EventTransition['after'],
-      },
+      transition(1, { type: 'TURN_ENDED', data: { turn: 0 } }),
+      location,
     ];
     const toastArea = document.createElement('div');
-    const presented: MatchEvent['type'][] = [];
+    const presented: SeatAnimationEvent['type'][] = [];
     const ctx = {
       localSeat: 'P0',
       boardEl: document.createElement('div'),
       toastArea,
       manifest: {},
       setUi: vi.fn(),
-      presentCommittedFrame: (frame: EventTransition) => {
-        presented.push(frame.event.type);
+      presentCommittedFrame: (frame: SeatTransactionFrame) => {
+        if (frame.event) presented.push(frame.event.type);
       },
     } as unknown as PlayScriptCtx;
     const step = paceCommittedOpening(timelineFrom(transitions)) as (
@@ -120,10 +149,10 @@ describe('committed turn presentation', () => {
     expect(presented).toEqual(['TURN_ENDED']);
     expect(toastArea.textContent).toBe('TURN 1');
 
-    await vi.advanceTimersByTimeAsync(1_900);
+    await vi.advanceTimersByTimeAsync(1_800);
     expect(presented).toEqual(['TURN_ENDED']);
 
-    await vi.advanceTimersByTimeAsync(350);
+    await vi.advanceTimersByTimeAsync(450);
     expect(presented).toEqual(['TURN_ENDED', 'LOCATION_REVEALED']);
 
     await vi.advanceTimersByTimeAsync(350);
@@ -137,11 +166,16 @@ describe('committed turn presentation', () => {
       totalPower: { P0: 20, P1: 15 },
     };
     const transitions = [
-      transition(1, { type: 'MATCH_ENDED', result }),
-      transition(2, { type: 'TURN_ENDED', turn: 6 }),
+      transition(
+        1,
+        { type: 'MATCH_ENDED', data: { result } },
+        state(),
+        state({ result }),
+      ),
+      transition(2, { type: 'TURN_ENDED', data: { turn: 6 } }),
     ];
-    const presented: MatchEvent['type'][] = [];
-    const presentedWhenPromptOpened: MatchEvent['type'][][] = [];
+    const presented: SeatAnimationEvent['type'][] = [];
+    const presentedWhenPromptOpened: SeatAnimationEvent['type'][][] = [];
     const setUi = vi.fn((key: string, value: unknown) => {
       if (key === 'showEndGamePrompt' && value === true) {
         presentedWhenPromptOpened.push([...presented]);
@@ -151,8 +185,8 @@ describe('committed turn presentation', () => {
       localSeat: 'P0',
       toastArea: document.createElement('div'),
       setUi,
-      presentCommittedFrame: (frame: EventTransition) => {
-        presented.push(frame.event.type);
+      presentCommittedFrame: (frame: SeatTransactionFrame) => {
+        if (frame.event) presented.push(frame.event.type);
       },
       finishTurnPresentation: vi.fn(),
     } as unknown as PlayScriptCtx;
