@@ -1,21 +1,26 @@
 {
   "status": "playable",
   "poolOrder": 26,
-  "implementationNote": "Cards entering here receive the canonical END_OF_GAME reveal schedule.",
+  "implementationNote": "A pre-commit reveal-timing policy stores END_OF_GAME on cards played here.",
   "defId": "cryobank",
   "version": 1,
   "name": "Cryobank",
   "rarity": 1,
   "abilities": {
-    "onCardEnteredHere": [
+    "ongoing": [
       {
-        "kind": "SCHEDULE_REVEAL",
+        "kind": "REVEAL_TIMING_OVERRIDE",
         "target": {
-          "kind": "EVENT_CARD"
+          "kind": "SAME_LANE",
+          "of": {
+            "kind": "SELF"
+          },
+          "ownerFilter": "ANY_OWNER"
         },
         "timing": {
           "kind": "END_OF_GAME"
-        }
+        },
+        "stack": "MAX"
       }
     ]
   },

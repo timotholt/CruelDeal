@@ -99,6 +99,7 @@ const EXPECTED_MUTATION_CONSTRUCTION_SURFACES: CountInventory = {
     CARD_ZONE_CHANGED: 1,
   },
   'services/playgame/engine/resolve.ts': {
+    CARD_REVEAL_SCHEDULED: 1,
     CARD_STAGED: 1,
     CARD_UNSTAGED: 2,
     ENERGY_CHANGED: 4,

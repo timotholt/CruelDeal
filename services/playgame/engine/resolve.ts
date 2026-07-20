@@ -44,6 +44,7 @@ import {
   getCardRuntime,
 } from './projections/cardRuntime';
 import { getCardTemplate } from './projections/cardTemplate';
+import { getRevealTimingPolicy } from './kernel/policies/revealTiming';
 
 // ============================================================================
 // resolve — intent → events
@@ -123,6 +124,17 @@ function resolveStage(
     reason: 'CARD_PLAYED',
   };
   events.push(spent);
+
+  const candidate = apply(apply(state, staged, manifest), spent, manifest);
+  const revealTiming = getRevealTimingPolicy(candidate, intent.cardId, manifest);
+  if (revealTiming) {
+    events.push({
+      type: 'CARD_REVEAL_SCHEDULED',
+      cardId: intent.cardId,
+      timing: revealTiming.timing,
+      cause: revealTiming.cause,
+    });
+  }
 
   return events;
 }

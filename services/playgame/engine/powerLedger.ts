@@ -65,6 +65,28 @@ export function getStoredCardPowerDelta(
   return storedPowerDelta(card, template.basePower);
 }
 
+/**
+ * Permanent card power excluding live Ongoing/location projections.
+ *
+ * This is the value copied by effects that snapshot a card's own stored power
+ * (for example Security Detail). SHURI_DOUBLED is a stored card tag and
+ * therefore participates; lane auras do not.
+ */
+export function getPermanentCardPower(
+  state: MatchState,
+  cardId: CardId,
+  manifest: Manifest,
+): number {
+  const card = getCardRuntime(state, cardId, manifest);
+  if (!card) return 0;
+  const template = getCardTemplate(manifest, card.defId);
+  if (!template || template.basePower === null) return 0;
+  const permanent = template.basePower + storedPowerDelta(card, template.basePower);
+  return card.tags.some((tag) => tag.kind === 'SHURI_DOUBLED')
+    ? Math.floor(permanent * 2)
+    : permanent;
+}
+
 export function effectivePermanentPowerDelta(
   card: Pick<InternalCardRecord, 'powerLedger'>,
   basePower: number,

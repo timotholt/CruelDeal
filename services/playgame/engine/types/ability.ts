@@ -298,6 +298,21 @@ export type OngoingExpr =
   // Per-card effects
   | { kind: 'POWER_ADD'; target: Selector; delta: NumExpr; stack: StackingPolicy }
   | { kind: 'COST_ADD'; target: Selector; delta: NumExpr; stack: StackingPolicy }
+  /**
+   * Pre-commit play policy. The staging resolver evaluates this after placing
+   * the private candidate card in its lane, then stores the selected timing on
+   * the card as part of the same atomic command result. It is not a lifecycle
+   * reaction: staging/unstaging still fires no gameplay hooks.
+   */
+  | {
+      kind: 'REVEAL_TIMING_OVERRIDE';
+      target: Selector;
+      timing:
+        | { kind: 'TURN'; turn: NumExpr }
+        | { kind: 'END_OF_GAME' };
+      /** Multiple policies compose by latest reveal; END_OF_GAME is latest. */
+      stack: 'MAX';
+    }
 
   // Lane-level effects (apply after summing card powers in the lane)
   | { kind: 'LANE_POWER_ADD'; laneScope: LaneScope; delta: NumExpr; stack: StackingPolicy }

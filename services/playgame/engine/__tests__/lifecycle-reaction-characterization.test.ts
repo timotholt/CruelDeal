@@ -4,6 +4,7 @@ import { apply } from '../apply';
 import {
   evalEffect,
   executePlacementCommands,
+  revealPlayedCard,
   type EffectCtx,
 } from '../effects/evaluator';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
@@ -243,9 +244,121 @@ const addPowerToEventCard = (delta: number): EffectExpr => ({
 });
 
 describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
-  it('keeps private stage and unstage free of gameplay reactions', () => {
+  it('stores and reverses a pre-commit reveal schedule without firing a stage reaction', () => {
+    const delayed = card('delayed', 'plain', 'P0', 'HAND');
+    const cryobank = locationDef('cryobank', {
+      ongoing: [{
+        kind: 'REVEAL_TIMING_OVERRIDE',
+        target: {
+          kind: 'SAME_LANE',
+          of: { kind: 'SELF' },
+          ownerFilter: 'ANY_OWNER',
+        },
+        timing: { kind: 'END_OF_GAME' },
+        stack: 'MAX',
+      }],
+      onCardEnteredHere: [addPowerToEventCard(99)],
+    });
+    const gameManifest = manifest([cardDef('plain')], [cryobank]);
+    const initial = stateWith([delayed], {
+      locations: [{ lane: 0, defId: cryobank.defId }],
+    });
+
+    const stageEvents = resolve(initial, {
+      type: 'STAGE_CARD',
+      intentId: 'delay',
+      owner: 'P0',
+      cardId: delayed.id,
+      lane: 0,
+    }, createRng('delay'), gameManifest);
+    const staged = fold(initial, stageEvents, gameManifest);
+
+    expect(stageEvents.map((event) => event.type)).toEqual([
+      'CARD_STAGED',
+      'ENERGY_CHANGED',
+      'CARD_REVEAL_SCHEDULED',
+    ]);
+    expect(getCardState(staged, delayed.id)?.revealTiming)
+      .toEqual({ kind: 'END_OF_GAME' });
+    expect(getStoredCardPowerDelta(staged, delayed.id, gameManifest)).toBe(0);
+
+    const unstageEvents = resolve(staged, {
+      type: 'UNSTAGE_CARD',
+      intentId: 'cancel-delay',
+      owner: 'P0',
+      cardId: delayed.id,
+    }, createRng('cancel-delay'), gameManifest);
+    const unstaged = fold(staged, unstageEvents, gameManifest);
+
+    expect(unstageEvents.map((event) => event.type)).toEqual([
+      'CARD_UNSTAGED',
+      'ENERGY_CHANGED',
+    ]);
+    expect(getCardState(unstaged, delayed.id)?.revealTiming).toBeNull();
+  });
+
+  it('keeps builtin create-and-reveal work on the parent reveal queue and obeys capacity', () => {
+    const securityDetail = cardDef('security-detail', {
+      onReveal: [{
+        kind: 'CALL_BUILTIN',
+        fn: 'SECURITY_DETAIL',
+        args: {},
+      }],
+    });
+    const guard = cardDef('guard');
+    const wongLane = locationDef('wong-lane', {
+      ongoing: [{
+        kind: 'ON_REVEAL_MULTIPLIER',
+        target: {
+          kind: 'SAME_LANE',
+          of: { kind: 'SELF' },
+          ownerFilter: 'ANY_OWNER',
+        },
+        factor: { kind: 'LIT', n: 2 },
+        stack: 'MULTIPLICATIVE',
+      }],
+    });
+    const source = {
+      ...card('security', securityDetail.defId, 'P0', 'LANE', 0),
+      revealed: false,
+    };
+    const gameManifest = manifest([securityDetail, guard], [wongLane]);
+    const initial = stateWith([source], {
+      locations: [{ lane: 0, defId: wongLane.defId }],
+    });
+
+    const result = revealPlayedCard(
+      initial,
+      source.id,
+      gameManifest,
+      createRng('security-detail-parent-queue'),
+    );
+    const created = result.events.filter(
+      (event): event is Extract<MatchEvent, { type: 'CARD_CREATED' }> =>
+        event.type === 'CARD_CREATED',
+    );
+
+    expect(result.events.map((event) => event.type)).toEqual([
+      'CARD_REVEALED',
+      'OR_WINDOW_OPEN',
+      'CARD_CREATED',
+      'CARD_REVEALED',
+      'CARD_CREATED',
+      'CARD_REVEALED',
+      'CARD_CREATED',
+      'CARD_REVEALED',
+      'OR_WINDOW_CLOSE',
+    ]);
+    expect(created).toHaveLength(3);
+    expect(result.state.lanesById[0].cards.P0).toHaveLength(4);
+    expect(created.every((event) =>
+      getCardState(result.state, event.cardId)?.revealed)).toBe(true);
+  });
+
+  it('keeps private planning reaction-free and applies exact play/move hooks only after commit', () => {
     const stagedCard = card('staged-card', 'plain', 'P0', 'HAND');
     const gunStore = locationDef('gun-store', {
+      onCardPlayedHere: [addPowerToEventCard(2)],
       onCardEnteredHere: [addPowerToEventCard(2)],
     });
     const gameManifest = manifest([cardDef('plain')], [gunStore]);
@@ -282,6 +395,45 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       lane: null,
     });
     expect(getStoredCardPowerDelta(unstaged, stagedCard.id, gameManifest)).toBe(0);
+
+    const restageEvents = resolve(unstaged, {
+      type: 'STAGE_CARD',
+      intentId: 'restage',
+      owner: 'P0',
+      cardId: stagedCard.id,
+      lane: 0,
+    }, createRng('restage'), gameManifest);
+    const restaged = fold(unstaged, restageEvents, gameManifest);
+    const played = revealPlayedCard(
+      restaged,
+      stagedCard.id,
+      gameManifest,
+      createRng('reveal-play'),
+    );
+    expect(played.events.map(event => event.type)).toContain('CARD_PLAY_COMPLETED');
+    expect(getStoredCardPowerDelta(played.state, stagedCard.id, gameManifest)).toBe(2);
+
+    const movedAway = executePlacementCommands(played.state, [{
+      type: 'MOVE_CARD',
+      cardId: stagedCard.id,
+      toLane: 1,
+      cause: {
+        sourceId: stagedCard.id,
+        effectKind: 'SYSTEM',
+        reason: 'TEST_MOVE_AWAY',
+      },
+    }], { rng: createRng('move-away') }, gameManifest);
+    const movedBack = executePlacementCommands(movedAway.state, [{
+      type: 'MOVE_CARD',
+      cardId: stagedCard.id,
+      toLane: 0,
+      cause: {
+        sourceId: stagedCard.id,
+        effectKind: 'SYSTEM',
+        reason: 'TEST_MOVE_BACK',
+      },
+    }], { rng: createRng('move-back') }, gameManifest);
+    expect(getStoredCardPowerDelta(movedBack.state, stagedCard.id, gameManifest)).toBe(4);
   });
 
   it('routes generic and builtin MOVE through identical reactions', () => {
@@ -627,7 +779,13 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       cardDef('creator'),
       cardDef('anchor'),
       cardDef('token'),
-      cardDef('riff-raff-token'),
+      cardDef('riff-raff-token', {
+        onReveal: [{
+          kind: 'ADD_POWER',
+          target: { kind: 'SELF' },
+          delta: { kind: 'LIT', n: 2 },
+        }],
+      }),
     ], [entryLocation]);
     const creator = card('creator', 'creator', 'P0', 'LANE', 0);
     const anchor = card('anchor', 'anchor', 'P0', 'LANE', 1);
@@ -675,12 +833,21 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
     expect(builtin.events.map(event => event.type)).toEqual([
       'CARD_CREATED',
       'CARD_POWER_CHANGED',
+      'CARD_REVEALED',
+      'OR_WINDOW_OPEN',
+      'CARD_POWER_CHANGED',
+      'OR_WINDOW_CLOSE',
       'CARD_CREATED',
       'CARD_POWER_CHANGED',
+      'CARD_REVEALED',
+      'OR_WINDOW_OPEN',
+      'CARD_POWER_CHANGED',
+      'OR_WINDOW_CLOSE',
     ]);
     for (const event of builtin.events) {
       if (event.type === 'CARD_CREATED') {
-        expect(getStoredCardPowerDelta(builtin.state, event.cardId, gameManifest)).toBe(1);
+        expect(getStoredCardPowerDelta(builtin.state, event.cardId, gameManifest)).toBe(3);
+        expect(getCardState(builtin.state, event.cardId)?.revealed).toBe(true);
       }
     }
   });

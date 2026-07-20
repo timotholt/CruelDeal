@@ -754,6 +754,36 @@ dispatcher and immutable invocation representation.
 New friendly names are added only when existing semantic event filters cannot
 express the content rule unambiguously.
 
+### Precommit Reveal-Timing Policy
+
+Reveal timing for a hand-origin play is an operation policy, not an entry
+reaction. Locations such as Cryobank author:
+
+```json
+{
+  "kind": "REVEAL_TIMING_OVERRIDE",
+  "target": {
+    "kind": "SAME_LANE",
+    "of": { "kind": "SELF" },
+    "ownerFilter": "ANY_OWNER"
+  },
+  "timing": { "kind": "END_OF_GAME" },
+  "stack": "MAX"
+}
+```
+
+The stage command privately places the candidate card, evaluates active timing
+policies against that candidate lane, and emits `CARD_REVEAL_SCHEDULED` in the
+same atomic result as `CARD_STAGED` and the energy spend. This command output
+does not dispatch a lifecycle reaction. `onCardEnteredHere` therefore retains
+its exact lane-to-lane movement meaning and never fires for stage, unstage, or
+undo.
+
+Multiple policies compose by latest reveal: `END_OF_GAME` outranks every turn;
+otherwise the largest evaluated turn wins. The winning timing is stored on the
+card. Moving the card or replacing the source location does not retroactively
+rewrite it. Unstage/undo clears it with the rest of the private play.
+
 ## Nested On Reveal and Deck Deployment
 
 The kernel must support Wong/Jubilee/Odin-style nested resolution without
@@ -783,6 +813,12 @@ nested work, finishes before the parent effect's next sibling continues. A
 created card with no On Reveal ability still commits `CARD_REVEALED`, becomes
 face-up, and contributes Power immediately. Create-and-reveal never emits
 `CARD_PLAY_COMPLETED` and never counts as a hand-origin play.
+
+Built-ins that create lane cards lower to the same `CREATE_CARD` /
+`REVEAL_CARD` work during authored-effect expansion. They do not open a hidden
+sub-transaction inside the evaluator. Security Detail and Riff Raff are the
+initial production proofs: their created cards reveal, execute any authored
+On Reveal text, obey the shared queue budget, and stop at lane capacity.
 
 If creation is a normal no-op because the lane is full or the definition is
 invalid, the paired reveal is also a normal no-op because no matching card

@@ -382,11 +382,19 @@ describe('CALL_BUILTIN: SECURITY_DETAIL', () => {
       'loc0' as never,
     );
 
-    const { state: after } = runBuiltin('SECURITY_DETAIL', {}, state, manifest, 'self' as CardId, 'P0', 0);
+    const result = runBuiltin('SECURITY_DETAIL', {}, state, manifest, 'self' as CardId, 'P0', 0);
+    const after = result.state;
     const guards = after.lanesById[0].cards.P0.filter(id => id !== 'self');
 
     expect(getCardPower(after, 'self' as CardId, manifest)).toBe(4);
     expect(guards).toHaveLength(2);
+    expect(result.events.map(event => event.type)).toEqual([
+      'CARD_CREATED',
+      'CARD_REVEALED',
+      'CARD_CREATED',
+      'CARD_REVEALED',
+    ]);
+    expect(guards.map(id => getCardState(after, id)?.revealed)).toEqual([true, true]);
     expect(guards.map(id => getCardPower(after, id, manifest))).toEqual([2, 2]);
     expect(guards.map(id => getStoredCardPowerDelta(after, id, manifest))).toEqual([0, 0]);
   });

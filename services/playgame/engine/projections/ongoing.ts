@@ -200,6 +200,7 @@ function scaleNumericParams(expr: OngoingExpr, agg: number): OngoingExpr {
       return { ...expr, factor: { kind: 'MUL', a: expr.factor, b: { kind: 'LIT', n: agg } } };
     // Boolean auras unaffected.
     case 'EXTEND_GAME_TURNS':
+    case 'REVEAL_TIMING_OVERRIDE':
     case 'DISABLE_ON_REVEAL':
     case 'DISABLE_ONGOING':
     case 'BLOCK_PLAY':
@@ -273,6 +274,7 @@ function targetIncludes(
     case 'POWER_ADD':
     case 'COST_ADD':
     case 'ON_REVEAL_MULTIPLIER':
+    case 'REVEAL_TIMING_OVERRIDE':
     case 'DISABLE_ON_REVEAL':
     case 'DISABLE_ONGOING':
     case 'BLOCK_PLAY':

@@ -21,6 +21,7 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { Manifest } from '../manifest/types';
 import type { EffectCtx } from './evaluator';
 import type { PlacementCommand } from '../kernel/operations/placement';
+import type { RevealCommand } from '../kernel/revealTransaction';
 import { apply } from '../apply';
 import { getCardPower } from '../projections/power';
 import { getCardCost } from '../projections/cost';
@@ -34,7 +35,7 @@ import {
   adjustCardCost,
 } from '../operations/cardMutations';
 import { activeLaneIds } from '../laneTopology';
-import { storedPowerDelta } from '../powerLedger';
+import { getPermanentCardPower } from '../powerLedger';
 import {
   getAllCardIds,
   getCardLifecycle,
@@ -55,6 +56,14 @@ export interface BuiltinLifecycleCapabilities {
     options: {
       readonly rng: EffectCtx['rng'];
       readonly depth?: number;
+    },
+    manifest: Manifest,
+  ) => BuiltinResult;
+  readonly executeRevealCommands: (
+    state: MatchState,
+    commands: readonly RevealCommand[],
+    options: {
+      readonly rng: EffectCtx['rng'];
     },
     manifest: Manifest,
   ) => BuiltinResult;
@@ -96,6 +105,21 @@ function runPlacement(
     manifest,
   );
 }
+
+function runReveal(
+  state: MatchState,
+  commands: readonly RevealCommand[],
+  ctx: EffectCtx,
+  manifest: Manifest,
+  lifecycle: BuiltinLifecycleCapabilities,
+): BuiltinResult {
+  return lifecycle.executeRevealCommands(
+    state,
+    commands,
+    { rng: ctx.rng },
+    manifest,
+  );
+}
 type BuiltinHandler = (
   state: MatchState,
   fn: string,
@@ -125,21 +149,74 @@ function spawnSource(ctx: EffectCtx, forOwner: Owner): SpawnSource {
     : { kind: 'ENEMY_CREATED', sourceCardId };
 }
 
-function otherLanes(state: MatchState, lane: LaneId): LaneId[] {
-  return activeLaneIds(state).filter(laneId => laneId !== lane);
+export interface BuiltinRevealCreationPlan {
+  readonly cardId: CardId;
+  readonly owner: Owner;
+  readonly lane: LaneId;
+  readonly defId: string;
+  readonly spawnSource: SpawnSource;
+  readonly powerDelta: number;
 }
 
-function getPermanentCardPower(state: MatchState, cardId: CardId, manifest: Manifest): number {
-  const card = getCardRuntime(state, cardId, manifest);
-  if (!card) return 0;
-  const def = getCardTemplate(manifest, card.defId);
-  if (!def || def.basePower === null) return 0;
+/**
+ * Lower lane-token built-ins into content-neutral create-and-reveal plans.
+ *
+ * The reveal transaction consumes these plans on its parent queue. Direct
+ * builtin evaluation consumes the same plans through the reveal capability,
+ * so both routes share identity, capacity, provenance, and power semantics.
+ */
+export function planBuiltinRevealCreations(
+  state: MatchState,
+  fn: string,
+  ctx: EffectCtx,
+  manifest: Manifest,
+): readonly BuiltinRevealCreationPlan[] | null {
+  const owner = ctx.selfOwner;
+  const sourceLane = ctx.selfLane;
+  if (fn !== 'SECURITY_DETAIL' && fn !== 'RIFF_RAFF') return null;
+  if (owner === null || sourceLane === null) return [];
 
-  let power = def.basePower + storedPowerDelta(card, def.basePower);
-  if (card.tags.some(t => t.kind === 'SHURI_DOUBLED')) {
-    power = Math.floor(power * 2);
+  if (fn === 'SECURITY_DETAIL') {
+    const count = Math.max(
+      0,
+      Math.min(
+        2,
+        manifest.constants.laneCapacity
+          - state.lanesById[sourceLane].cards[owner].length,
+      ),
+    );
+    const sourcePower = ctx.self
+      ? getPermanentCardPower(state, ctx.self as CardId, manifest)
+      : 0;
+    const guardBasePower =
+      getCardTemplate(manifest, 'guard')?.basePower ?? sourcePower;
+    return Array.from({ length: count }, (_, index) => ({
+      cardId: mintCardId(ctx, `guard:${index}`),
+      owner,
+      lane: sourceLane,
+      defId: 'guard',
+      spawnSource: spawnSource(ctx, owner),
+      powerDelta: sourcePower - guardBasePower,
+    }));
   }
-  return power;
+
+  return activeLaneIds(state)
+    .filter((lane) =>
+      lane !== sourceLane
+      && state.lanesById[lane].cards[owner].length
+        < manifest.constants.laneCapacity)
+    .map((lane) => ({
+      cardId: mintCardId(ctx, `riff:${lane}`),
+      owner,
+      lane,
+      defId: 'riff-raff-token',
+      spawnSource: spawnSource(ctx, owner),
+      powerDelta: 0,
+    }));
+}
+
+function otherLanes(state: MatchState, lane: LaneId): LaneId[] {
+  return activeLaneIds(state).filter(laneId => laneId !== lane);
 }
 
 // ---- Handlers ---------------------------------------------------------------
@@ -670,26 +747,21 @@ function disableOngoingsThisLaneThisTurn(
   return { events, state: s };
 }
 
-function spawnTokenInLane(
+function executeRevealCreationPlan(
   state: MatchState,
   ctx: EffectCtx,
   manifest: Manifest,
-  owner: Owner,
-  lane: LaneId,
-  defId: string,
-  salt: string,
+  plan: BuiltinRevealCreationPlan,
   lifecycle: BuiltinLifecycleCapabilities,
 ): BuiltinResult {
-  if (state.lanesById[lane].cards[owner].length >= manifest.constants.laneCapacity) return noop(state);
-  const cardId = mintCardId(ctx, salt);
-  return runPlacement(state, [{
+  return runReveal(state, [{
     type: 'CREATE_CARD',
-    owner,
-    cardId,
-    defId,
+    owner: plan.owner,
+    cardId: plan.cardId,
+    defId: plan.defId,
     depth: ctx.depth,
-    spawnSource: spawnSource(ctx, owner),
-    destination: { kind: 'LANE', lane, revealed: false },
+    spawnSource: plan.spawnSource,
+    destination: { kind: 'LANE', lane: plan.lane, revealed: true },
     cause: ctx.source,
   }], ctx, manifest, lifecycle);
 }
@@ -703,21 +775,34 @@ function securityDetail(
   const lane = ctx.selfLane;
   const sourceId = ctx.self as CardId;
   if (owner === null || lane === null || !sourceId) return noop(state);
-  const sourcePower = getPermanentCardPower(state, sourceId, manifest);
-  const guardBasePower = getCardTemplate(manifest, 'guard')?.basePower ?? sourcePower;
+  const plans = planBuiltinRevealCreations(
+    state,
+    'SECURITY_DETAIL',
+    ctx,
+    manifest,
+  ) ?? [];
 
   const events: MatchEvent[] = [];
   let s = state;
-  for (let i = 0; i < 2; i++) {
-    const spawned = spawnTokenInLane(s, ctx, manifest, owner, lane, 'guard', `guard:${i}`, lifecycle);
+  for (const plan of plans) {
+    const spawned = executeRevealCreationPlan(
+      s,
+      ctx,
+      manifest,
+      plan,
+      lifecycle,
+    );
     if (spawned.events.length === 0) break;
     events.push(...spawned.events);
     s = spawned.state;
-    const addEvent = spawned.events[0];
-    if (addEvent.type !== 'CARD_CREATED') continue;
-    const delta = sourcePower - guardBasePower;
-    if (delta === 0) continue;
-    const powerChange = addStoredPower(s, addEvent.cardId, delta, ctx.source, manifest);
+    if (plan.powerDelta === 0) continue;
+    const powerChange = addStoredPower(
+      s,
+      plan.cardId,
+      plan.powerDelta,
+      ctx.source,
+      manifest,
+    );
     events.push(...powerChange.events);
     s = powerChange.state;
   }
@@ -943,8 +1028,20 @@ function riffRaff(
 
   const events: MatchEvent[] = [];
   let s = state;
-  for (const targetLane of activeLaneIds(state).filter(laneId => laneId !== lane)) {
-    const spawned = spawnTokenInLane(s, ctx, manifest, owner, targetLane, 'riff-raff-token', `riff:${targetLane}`, lifecycle);
+  const plans = planBuiltinRevealCreations(
+    state,
+    'RIFF_RAFF',
+    ctx,
+    manifest,
+  ) ?? [];
+  for (const plan of plans) {
+    const spawned = executeRevealCreationPlan(
+      s,
+      ctx,
+      manifest,
+      plan,
+      lifecycle,
+    );
     events.push(...spawned.events);
     s = spawned.state;
   }

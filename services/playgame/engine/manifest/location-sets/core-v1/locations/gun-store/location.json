@@ -1,12 +1,24 @@
 {
   "status": "playable",
   "poolOrder": 13,
-  "implementationNote": "Implemented with location onCardEnteredHere and EVENT_CARD.",
+  "implementationNote": "Uses the exact hand-play and lane-move lifecycle hooks; private staging has no reaction.",
   "defId": "gun-store",
   "version": 1,
   "name": "Gun Store",
   "rarity": 1,
   "abilities": {
+    "onCardPlayedHere": [
+      {
+        "kind": "ADD_POWER",
+        "target": {
+          "kind": "EVENT_CARD"
+        },
+        "delta": {
+          "kind": "LIT",
+          "n": 2
+        }
+      }
+    ],
     "onCardEnteredHere": [
       {
         "kind": "ADD_POWER",
@@ -22,7 +34,7 @@
   },
   "cosmetic": {
     "displayName": "GUN STORE",
-    "description": "Cards added to this location have +2 Power.",
+    "description": "Cards played or moved here gain +2 Power.",
     "accent": "#c0c7d4",
     "art": {
       "map": {

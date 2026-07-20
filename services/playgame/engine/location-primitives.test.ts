@@ -16,6 +16,7 @@ import {
 import { locationCardAtLane } from './laneTopology';
 import { getStoredCardPowerDelta } from './powerLedger';
 import { getFinalTurn } from './projections/gameEnd';
+import type { OngoingExpr } from './types/ability';
 
 const pass = (label: string) => console.log(`PASS: ${label}`);
 const fail = (label: string, extra?: unknown): never => {
@@ -61,6 +62,22 @@ const loc = (defId: string, abilities: LocationCardDef['abilities']): LocationCa
   rarity: 1,
   abilities,
   cosmetic: { displayName: defId, description: defId, art: { map: { path: '' } } },
+});
+
+const revealTimingLocation = (
+  defId: string,
+  timing: Extract<OngoingExpr, { kind: 'REVEAL_TIMING_OVERRIDE' }>['timing'],
+): LocationCardDef => loc(defId, {
+  ongoing: [{
+    kind: 'REVEAL_TIMING_OVERRIDE',
+    target: {
+      kind: 'SAME_LANE',
+      of: { kind: 'SELF' },
+      ownerFilter: 'ANY_OWNER',
+    },
+    timing,
+    stack: 'MAX',
+  }],
 });
 
 let idSeq = 0;
@@ -205,19 +222,13 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('next-turn-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const waitingRoom = loc('waiting-room', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: {
-        kind: 'TURN',
-        turn: {
-          kind: 'ADD',
-          a: { kind: 'CURRENT_TURN' },
-          b: { kind: 'LIT', n: 1 },
-        },
-      },
-    }],
+  const waitingRoom = revealTimingLocation('waiting-room', {
+    kind: 'TURN',
+    turn: {
+      kind: 'ADD',
+      a: { kind: 'CURRENT_TURN' },
+      b: { kind: 'LIT', n: 1 },
+    },
   });
   const c = card('next-turn-revealer', 'P0', 'HAND');
   const m = manifest([waitingRoom], [revealer]);
@@ -256,13 +267,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const bank = loc('bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('bank', { kind: 'END_OF_GAME' });
   const c = card('revealer', 'P0', 'HAND');
   const m = manifest([bank], [revealer]);
   let s = stateWith([c], bank, 5);
@@ -280,13 +285,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('extended-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const bank = loc('bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('bank', { kind: 'END_OF_GAME' });
   const limbo = loc('limbo', {
     ongoing: [{
       kind: 'EXTEND_GAME_TURNS',
@@ -367,13 +366,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('mobile-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const bank = loc('mobile-bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('mobile-bank', { kind: 'END_OF_GAME' });
   const c = card('mobile-revealer', 'P0', 'HAND');
   const m = manifest([bank], [revealer]);
   let s = stateWith([c], bank, 5);
@@ -401,13 +394,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('orphaned-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const bank = loc('orphaned-bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('orphaned-bank', { kind: 'END_OF_GAME' });
   const ruin = loc('orphaned-ruin', {});
   const c = card('orphaned-revealer', 'P0', 'HAND');
   const m = manifest([bank, ruin], [revealer]);
@@ -429,13 +416,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('last-moment-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 2 } }],
   });
-  const bank = loc('last-moment-bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('last-moment-bank', { kind: 'END_OF_GAME' });
   const c = card('last-moment-revealer', 'P0', 'HAND');
   const m = manifest([bank], [revealer]);
   let s = stateWith([c], bank, 6);
@@ -456,13 +437,7 @@ const resolveCurrentTurn = (state: MatchState, m: Manifest, seed: string) =>
   const revealer = basicCard('paired-revealer', {
     onReveal: [{ kind: 'ADD_POWER', target: { kind: 'SELF' }, delta: { kind: 'LIT', n: 1 } }],
   });
-  const bank = loc('paired-bank', {
-    onCardEnteredHere: [{
-      kind: 'SCHEDULE_REVEAL',
-      target: { kind: 'EVENT_CARD' },
-      timing: { kind: 'END_OF_GAME' },
-    }],
-  });
+  const bank = revealTimingLocation('paired-bank', { kind: 'END_OF_GAME' });
   const p0 = card('paired-revealer', 'P0', 'HAND');
   const p1 = card('paired-revealer', 'P1', 'HAND');
   const m = manifest([bank], [revealer]);

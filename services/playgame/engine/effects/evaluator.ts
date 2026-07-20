@@ -28,7 +28,7 @@ import { type EvalCtx } from '../projections/context';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { pickDefIdFromPool, resolveOwnerRef } from './pools';
-import { invokeBuiltin } from './builtins';
+import { invokeBuiltin, planBuiltinRevealCreations } from './builtins';
 import {
   addStoredPower,
   changeStoredPower,
@@ -699,6 +699,66 @@ function expandRevealAuthoredEffect(
           cause: { ...context.source, reason: 'CREATE_AND_REVEAL' },
         },
       }],
+    };
+  }
+  if (effect.kind === 'CALL_BUILTIN') {
+    const plans = planBuiltinRevealCreations(
+      state,
+      effect.fn,
+      liveContext,
+      manifest,
+    );
+    if (plans === null) return null;
+    return {
+      work: plans.flatMap((plan, index): RevealWork[] => {
+        const childContext = scopedRevealContext(
+          {
+            ...context,
+            eventCard: plan.cardId,
+            eventLane: plan.lane,
+            eventOwner: plan.owner,
+          },
+          state,
+          `builtin:${effect.fn}:${plan.lane}:${index}`,
+        );
+        const create: RevealWork = {
+          kind: 'COMMAND',
+          command: {
+            type: 'CREATE_CARD',
+            cardId: plan.cardId,
+            defId: plan.defId,
+            owner: plan.owner,
+            depth: context.depth + 1,
+            destination: {
+              kind: 'LANE',
+              lane: plan.lane,
+              revealed: true,
+            },
+            spawnSource: plan.spawnSource,
+            cause: {
+              ...context.source,
+              reason: `BUILTIN_${effect.fn}_CREATE_AND_REVEAL`,
+            },
+          },
+        };
+        if (plan.powerDelta === 0) return [create];
+        return [
+          create,
+          {
+            kind: 'EFFECT',
+            effect: {
+              kind: 'AUTHORED',
+              effect: {
+                kind: 'ADD_POWER',
+                target: { kind: 'EVENT_CARD' },
+                delta: { kind: 'LIT', n: plan.powerDelta },
+              },
+            },
+            context: childContext,
+            depth: context.depth + 1,
+          },
+        ];
+      }),
     };
   }
   return null;
@@ -1552,7 +1612,12 @@ export function evalEffect(
         effect.args ?? {},
         ctx,
         manifest,
-        { destroyCards, banishCards, executePlacementCommands },
+        {
+          destroyCards,
+          banishCards,
+          executePlacementCommands,
+          executeRevealCommands,
+        },
       );
   }
 }
