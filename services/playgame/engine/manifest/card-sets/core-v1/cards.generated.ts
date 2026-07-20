@@ -76,6 +76,7 @@ import LoadedSuitCard from './cards/loaded-suit/card.json';
 import MaintenanceCloudCard from './cards/maintenance-cloud/card.json';
 import MeatGrinderCard from './cards/meat-grinder/card.json';
 import MemoryBurnerCard from './cards/memory-burner/card.json';
+import MetalMuscleCard from './cards/metal-muscle/card.json';
 import MetroEnforcerCard from './cards/metro-enforcer/card.json';
 import MiddleManagerCard from './cards/middle-manager/card.json';
 import MilitaryFixerCard from './cards/military-fixer/card.json';
@@ -117,6 +118,7 @@ import SmartMatterArmorCard from './cards/smart-matter-armor/card.json';
 import SniperRifleCard from './cards/sniper-rifle/card.json';
 import SocialWorkerCard from './cards/social-worker/card.json';
 import StoredChargeCard from './cards/stored-charge/card.json';
+import StreetCopCard from './cards/street-cop/card.json';
 import StreetFixerCard from './cards/street-fixer/card.json';
 import StreetKidCard from './cards/street-kid/card.json';
 import StreetSamuraiCard from './cards/street-samurai/card.json';
@@ -206,6 +208,7 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'maintenance-cloud', card: MaintenanceCloudCard as unknown as CardDef },
   { folder: 'meat-grinder', card: MeatGrinderCard as unknown as CardDef },
   { folder: 'memory-burner', card: MemoryBurnerCard as unknown as CardDef },
+  { folder: 'metal-muscle', card: MetalMuscleCard as unknown as CardDef },
   { folder: 'metro-enforcer', card: MetroEnforcerCard as unknown as CardDef },
   { folder: 'middle-manager', card: MiddleManagerCard as unknown as CardDef },
   { folder: 'military-fixer', card: MilitaryFixerCard as unknown as CardDef },
@@ -247,6 +250,7 @@ export const CORE_V1_CARD_MODULES: readonly { folder: string; card: CardDef }[] 
   { folder: 'sniper-rifle', card: SniperRifleCard as unknown as CardDef },
   { folder: 'social-worker', card: SocialWorkerCard as unknown as CardDef },
   { folder: 'stored-charge', card: StoredChargeCard as unknown as CardDef },
+  { folder: 'street-cop', card: StreetCopCard as unknown as CardDef },
   { folder: 'street-fixer', card: StreetFixerCard as unknown as CardDef },
   { folder: 'street-kid', card: StreetKidCard as unknown as CardDef },
   { folder: 'street-samurai', card: StreetSamuraiCard as unknown as CardDef },

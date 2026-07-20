@@ -27,7 +27,9 @@ describe('complete active-manifest implementation audit', () => {
       'guard',
       'junk-card',
       'loaded-suit',
+      'metal-muscle',
       'riff-raff-token',
+      'street-cop',
       'street-kid',
       'street-samurai',
     ]);

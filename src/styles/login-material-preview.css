@@ -283,7 +283,7 @@
 }
 
 @media (max-width: 1120px) {
-  .login-material-phone {
+  .login-material-phone:not(.login-screen-phone) {
     width: min(360px, calc((58vh - 20px) * 9 / 16));
     height: min(58vh, calc((100vw - 20px) * 16 / 9));
     min-height: 0;

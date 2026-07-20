@@ -2,8 +2,8 @@
   "defId": "street-samurai",
   "version": 1,
   "name": "Street Samurai",
-  "basePower": 4,
-  "cost": 2,
+  "basePower": 5,
+  "cost": 3,
   "abilities": {},
   "cosmetic": {
     "displayName": "STREET SAMURAI",

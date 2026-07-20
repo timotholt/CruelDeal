@@ -2,8 +2,8 @@
   "defId": "citywide-mesh",
   "version": 1,
   "name": "Citywide Mesh",
-  "basePower": 5,
-  "cost": 6,
+  "basePower": 3,
+  "cost": 5,
   "abilities": {
     "ongoing": [
       {

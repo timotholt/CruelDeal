@@ -1,0 +1,17 @@
+{
+  "defId": "street-cop",
+  "version": 1,
+  "name": "Street Cop",
+  "basePower": 3,
+  "cost": 1,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "STREET COP",
+    "flavorText": "The badge is city issue. The authority is personal.",
+    "rulesText": "",
+    "accent": "#495057",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}

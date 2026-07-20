@@ -1,0 +1,17 @@
+{
+  "defId": "metal-muscle",
+  "version": 1,
+  "name": "Metal Muscle",
+  "basePower": 4,
+  "cost": 2,
+  "abilities": {},
+  "cosmetic": {
+    "displayName": "METAL MUSCLE",
+    "flavorText": "More chrome than judgment.",
+    "rulesText": "",
+    "accent": "#bc6c25",
+    "frame": "common",
+    "art": { "portrait": { "path": "" } }
+  },
+  "cardType": "character"
+}
