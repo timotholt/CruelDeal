@@ -7,15 +7,13 @@
  * delayed cards remain face-down after their staging order is cleared.
  */
 
-import { createEffect } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { useMatchSession } from '@/contexts/MatchSessionContext';
 import { usePlayUi } from '@/contexts/PlayUiContext';
-import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
+import type { ResolvedCard } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
-import { CardVfxStack } from '../../card/CardVfxStack';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
+import { CardFace } from './CardFace';
 
 interface BoardCardProps {
   card: ResolvedCard;
@@ -34,12 +32,6 @@ export const BoardCard = (props: BoardCardProps) => {
   const { bindCardRef } = useVfx();
   const viewerSeat = (): Seat => props.viewerSeat ?? match.localSeat;
 
-  createEffect(() => {
-    const sources = props.card.textDisabled
-      ? [{ id: `${props.card.id}-glitch`, sourceId: props.card.id, kind: 'glitch' as const, intensity: 1, priority: 5 }]
-      : [];
-    cardVfxRegistry.reconcilePersistent(props.card.id, sources);
-  });
   const stagedCardIds = (): readonly string[] =>
     props.stagedCardIds
     ?? presentedState().stagedCards;
@@ -71,9 +63,6 @@ export const BoardCard = (props: BoardCardProps) => {
     });
   };
   const isPending = isFaceDown;
-
-  const costClass = (): string => cardStatTone(props.card, 'cost');
-  const powerClass = (): string => cardStatTone(props.card, 'power');
 
   // Deterministic tilt per id so cards don't jitter between re-renders.
   const tilt = (): string => {
@@ -112,6 +101,7 @@ export const BoardCard = (props: BoardCardProps) => {
         (props.card.textDisabled ? ' text-disabled' : '')
       }
       data-card-id={props.card.id}
+      data-card-type={props.card.type}
       data-card-resting-rotation={tilt()}
       data-drag-source="lane"
       data-drag-enabled={String(isDraggablePending())}
@@ -121,19 +111,7 @@ export const BoardCard = (props: BoardCardProps) => {
       }}
       onClick={onClick}
     >
-      <CardVfxStack cardId={props.card.id}>
-        <div class={'cost ' + costClass()}>{props.card.cost}</div>
-        {props.card.type !== 'spell'
-          ? <div class={'power ' + powerClass()}>{props.card.power}</div>
-          : null}
-        {props.card.portraitPath
-          ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
-          : <div class="bar" style={{ background: props.card.art }} />
-        }
-        <div class="name">{props.card.name}</div>
-        <div class="type">{props.card.type}</div>
-        {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
-      </CardVfxStack>
+      <CardFace card={props.card} variant="play" />
     </div>
   );
 };

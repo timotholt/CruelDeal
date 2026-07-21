@@ -230,12 +230,46 @@ describe('Phase 1.21 presentation architecture fences', () => {
   it('keeps native HTML drag-and-drop out of canonical card components', () => {
     const handCard = source('./HandCard.tsx');
     const boardCard = source('./BoardCard.tsx');
+    const cardFace = source('./CardFace.tsx');
     for (const cardSource of [handCard, boardCard]) {
       expect(cardSource).not.toContain('draggable=');
       expect(cardSource).not.toContain('onDragStart');
       expect(cardSource).not.toContain('onDragEnd');
       expect(cardSource).toContain('data-drag-source');
+      expect(cardSource).toContain('<CardFace card={props.card} variant="play" />');
+      expect(cardSource).not.toContain('<CardVfxStack');
+      expect(cardSource).not.toContain("class={'cost '");
     }
+    expect(cardFace).toContain('<CardVfxStack cardId={card.id}>');
+    expect(cardFace).not.toContain('data-drag-source');
+  });
+
+  it('uses one card-face renderer without changing zone-owned geometry', () => {
+    const boardCard = source('./BoardCard.tsx');
+    const handCard = source('./HandCard.tsx');
+    const pileViewer = source('./PileViewer.tsx');
+    const cardFace = source('./CardFace.tsx');
+    expect(boardCard).toContain("'card lane-card'");
+    expect(handCard).toContain("class={'hand-card-motion'");
+    expect(handCard).toContain("class={'card'");
+    expect(pileViewer).toContain('<CardFace card={card} variant="pile" />');
+    expect(cardFace).toContain('showPower: card.type !== \'spell\'');
+    expect(cardFace).toContain('class="pile-card"');
+    expect(cardFace).toContain('class="portrait"');
+  });
+
+  it('gives spells a surface-only silhouette inside the canonical card box', () => {
+    const boardCard = source('./BoardCard.tsx');
+    const handCard = source('./HandCard.tsx');
+    const css = source('../../../src/styles/playgame.css');
+    expect(boardCard).toContain('data-card-type={props.card.type}');
+    expect(handCard).toContain('data-card-type={props.card.type}');
+    const spellRule = css.match(/\.card\[data-card-type="spell"\]\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(spellRule).toContain('clip-path: polygon(');
+    expect(spellRule).not.toContain('width:');
+    expect(spellRule).not.toContain('height:');
+    expect(spellRule).not.toContain('transform:');
+    expect(spellRule).not.toContain('transition:');
   });
 
   it('animates lane position without animating lane dimensions', () => {

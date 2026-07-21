@@ -9,12 +9,11 @@
  * iterated without touching engine-coupled files.
  */
 
-import { createEffect, createMemo } from 'solid-js';
+import { createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { usePlayUi } from '@/contexts/PlayUiContext';
-import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
-import { CardVfxStack } from '../../card/CardVfxStack';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { ResolvedCard } from '@/services/playgame/view';
+import { CardFace } from './CardFace';
 
 interface HandCardProps {
   card: ResolvedCard;
@@ -30,16 +29,6 @@ export const HandCard = (props: HandCardProps) => {
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
   const isInspectable = createMemo(() => props.inspectable !== false && !isHidden());
-
-  createEffect(() => {
-    const sources = props.card.textDisabled
-      ? [{ id: `${props.card.id}-glitch`, sourceId: props.card.id, kind: 'glitch' as const, intensity: 1, priority: 5 }]
-      : [];
-    cardVfxRegistry.reconcilePersistent(props.card.id, sources);
-  });
-
-  const costClass = (): string => cardStatTone(props.card, 'cost');
-  const powerClass = (): string => cardStatTone(props.card, 'power');
 
   const onClick = (e: MouseEvent): void => {
     if (!isInspectable()) return;
@@ -69,24 +58,13 @@ export const HandCard = (props: HandCardProps) => {
     >
       <div
         class={'card' + (props.card.textDisabled ? ' text-disabled' : '')}
+        data-card-type={props.card.type}
         style={{
           opacity: props.playable ? 1 : 0.5,
           cursor: isInteractive() ? 'pointer' : 'default',
         }}
       >
-        <CardVfxStack cardId={props.card.id}>
-          <div class={'cost ' + costClass()}>{props.card.cost}</div>
-          {props.card.type !== 'spell'
-            ? <div class={'power ' + powerClass()}>{props.card.power}</div>
-            : null}
-          {props.card.portraitPath
-            ? <img class="portrait" src={props.card.portraitPath} alt="" aria-hidden="true" />
-            : <div class="bar" style={{ background: props.card.art }} />
-          }
-          <div class="name">{props.card.name}</div>
-          <div class="type">{props.card.type}</div>
-          {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
-        </CardVfxStack>
+        <CardFace card={props.card} variant="play" />
       </div>
     </div>
   );

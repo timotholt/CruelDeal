@@ -3,6 +3,7 @@ import type {
   ResolvedCard,
   VisiblePileZone,
 } from '@/services/playgame/view';
+import { CardFace } from './CardFace';
 
 interface PileViewerProps {
   ownerName: string;
@@ -39,18 +40,7 @@ export const PileViewer = (props: PileViewerProps) => {
         <Show when={props.cards.length > 0} fallback={<div class="pile-viewer__empty">No cards here yet.</div>}>
           <div class="pile-viewer__grid">
             <For each={props.cards}>
-              {(card) => (
-                <div class="pile-card" data-card-type={card.type}>
-                  <div class="pile-card__badges">
-                    <span class="pile-card__cost">{card.cost}</span>
-                    {card.type !== 'spell'
-                      ? <span class="pile-card__power">{card.power}</span>
-                      : null}
-                  </div>
-                  <div class="pile-card__name">{card.name}</div>
-                  <div class="pile-card__type">{card.type}</div>
-                </div>
-              )}
+              {(card) => <CardFace card={card} variant="pile" />}
             </For>
           </div>
         </Show>

@@ -2,8 +2,8 @@
 
 ## Status
 
-Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is the
-next active phase.
+Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is
+active; its shared-card-rendering slice is complete and board sizing is next.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -901,7 +901,7 @@ Extract cohesive units without changing the visual design:
 
 **[BUILD LAST]** The four sub-refactors below land as four independent commits with focused verification.
 
-### Card Rendering
+### Card Rendering — COMPLETE
 
 - **[BUILD LAST]** Extract a shared card surface/face renderer used by:
   - `BoardCard`
@@ -1126,7 +1126,7 @@ npm run lint
 10. **[BUILD AFTER — COMPLETE]** Phase 3a animator frame conversion and DOM-ref relocation.
 11. **[BUILD AFTER — COMPLETE]** Phase 3b opening separation, script removal, and slicing removal.
 12. **[BUILD AFTER — COMPLETE]** Phase 4 `PlayBoard` decomposition.
-13. **[BUILD LAST]** Phase 5 shared card rendering.
+13. **[BUILD LAST — COMPLETE]** Phase 5 shared card rendering.
 14. **[BUILD LAST]** Phase 5 board sizing.
 15. **[BUILD LAST]** Phase 5 declarative lane maps.
 16. **[BUILD LAST]** Phase 5 instance-scoped VFX.

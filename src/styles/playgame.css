@@ -902,6 +902,23 @@
     border-radius: calc(var(--card-badge-size) * 0.3);
   }
 
+  /* Spell silhouette: the card keeps the exact same layout/animation box as
+     every other card. Only its painted surface is clipped into a circular
+     head and narrower stem, so refs, slots, drag rects, and motion transforms
+     continue to use the canonical 5:7 geometry. */
+  .card[data-card-type="spell"] {
+    clip-path: polygon(
+      50% 0%, 75% 4%, 93% 16%, 100% 32%, 95% 44%,
+      90% 50%, 90% 100%, 10% 100%, 10% 50%, 5% 44%,
+      0% 32%, 7% 16%, 25% 4%
+    );
+    border-radius: 0;
+  }
+  .card[data-card-type="spell"] .cost {
+    top: 4%;
+    left: 8%;
+  }
+
   /* ── Location cards ─────────────────────────────────────────────── */
   .location {
     background:
