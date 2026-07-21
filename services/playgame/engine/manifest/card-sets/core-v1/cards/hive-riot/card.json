@@ -2,7 +2,6 @@
   "defId": "hive-riot",
   "version": 1,
   "name": "Hive Riot",
-  "basePower": 4,
   "cost": 6,
   "abilities": {
     "onReveal": [

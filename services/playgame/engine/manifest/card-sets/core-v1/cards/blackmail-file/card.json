@@ -2,7 +2,6 @@
   "defId": "blackmail-file",
   "version": 1,
   "name": "Blackmail File",
-  "basePower": 2,
   "cost": 2,
   "abilities": {
     "onReveal": [

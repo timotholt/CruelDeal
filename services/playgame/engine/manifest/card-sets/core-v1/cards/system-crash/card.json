@@ -2,7 +2,6 @@
   "defId": "system-crash",
   "version": 1,
   "name": "System Crash",
-  "basePower": 3,
   "cost": 4,
   "abilities": {
     "onReveal": [

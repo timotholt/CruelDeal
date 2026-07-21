@@ -2,10 +2,9 @@
 
 ## Status
 
-Phases 1.5, 2, 3a, 3b, 4, 5, and 6 are implemented and exit-proven. Phase 7 is
-in progress: deterministic development-only match setup, CSS isolation, and the
-stylesheet responsibility split are complete; remaining content/tooling gates
-are next.
+Phases 1.5, 2, 3a, 3b, 4, 5, 6, and 7 are implemented and exit-proven. The
+local-runtime and UI refactor described by this plan is complete. The remaining
+items are the explicitly deferred live-server risks below.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -23,11 +22,11 @@ evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. Final Phase
 Phase 4 evidence is recorded in `docs/agent-checkpoints/phase4-exit.md`. Final
 Phase 5 evidence is recorded in `docs/agent-checkpoints/phase5-exit.md`. Final
 Phase 6 evidence is recorded in `docs/agent-checkpoints/phase6-exit.md`. The
-Phase 7 debug/setup evidence is recorded in
-`docs/agent-checkpoints/phase7-debug-setup.md`. The next Phase 7 slice is
-CSS responsibility splitting, following the isolation evidence in
-`docs/agent-checkpoints/phase7-css-isolation.md`. The completed split is
-recorded in `docs/agent-checkpoints/phase7-css-responsibilities.md`.
+Phase 7 debug/setup, CSS isolation, and stylesheet responsibility evidence is
+recorded in `docs/agent-checkpoints/phase7-debug-setup.md`,
+`docs/agent-checkpoints/phase7-css-isolation.md`, and
+`docs/agent-checkpoints/phase7-css-responsibilities.md`. Final Phase 7 evidence
+is recorded in `docs/agent-checkpoints/phase7-exit.md`.
 
 ## Cost Model
 

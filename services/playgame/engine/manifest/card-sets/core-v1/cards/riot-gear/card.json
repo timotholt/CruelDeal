@@ -2,7 +2,6 @@
   "defId": "riot-gear",
   "version": 1,
   "name": "Riot Gear",
-  "basePower": 0,
   "cost": 2,
   "abilities": {
     "onReveal": [

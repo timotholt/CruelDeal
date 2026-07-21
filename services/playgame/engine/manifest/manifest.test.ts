@@ -29,7 +29,7 @@ const expectTrue = (cond: boolean, label: string) => cond ? pass(label) : fail(l
 
 // ---- Counts ---------------------------------------------------------------
 
-expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 128, '128 active core-v1 cards in manifest');
+expectEq(Object.keys(BOOTSTRAP_MANIFEST.cards).length, 130, '130 active core-v1 cards in manifest');
 expectEq(
   Object.keys(BOOTSTRAP_MANIFEST.locations).length,
   38,
@@ -116,7 +116,11 @@ for (const [id, def] of Object.entries(BOOTSTRAP_MANIFEST.locations)) {
 
 for (const c of Object.values(BOOTSTRAP_MANIFEST.cards)) {
   expectTrue(c.cost >= 0 && c.cost <= 6, `${c.defId} cost in [0,6] (got ${c.cost})`);
-  expectTrue(c.basePower >= 0, `${c.defId} basePower >= 0 (got ${c.basePower})`);
+  if (c.cardType === 'spell') {
+    expectTrue(!('basePower' in c), `${c.defId} spell omits basePower`);
+  } else {
+    expectTrue(c.basePower >= 0, `${c.defId} basePower >= 0 (got ${c.basePower})`);
+  }
   expectTrue(c.version >= 1, `${c.defId} version >= 1`);
   expectTrue(c.cosmetic.displayName.length > 0, `${c.defId} has displayName`);
   // Vanilla cards with no abilities legitimately have empty rulesText.

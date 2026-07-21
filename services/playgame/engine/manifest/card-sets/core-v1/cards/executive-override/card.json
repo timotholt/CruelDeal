@@ -2,7 +2,6 @@
   "defId": "executive-override",
   "version": 1,
   "name": "Executive Override",
-  "basePower": 5,
   "cost": 6,
   "abilities": {
     "onReveal": [

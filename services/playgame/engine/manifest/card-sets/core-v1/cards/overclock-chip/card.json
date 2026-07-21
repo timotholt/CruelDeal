@@ -2,7 +2,6 @@
   "defId": "overclock-chip",
   "version": 1,
   "name": "Overclock Chip",
-  "basePower": 0,
   "cost": 1,
   "abilities": {
     "onReveal": [

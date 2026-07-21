@@ -2,7 +2,6 @@
   "defId": "frag-grenade",
   "version": 1,
   "name": "Frag Grenade",
-  "basePower": 0,
   "cost": 2,
   "abilities": {
     "onReveal": [

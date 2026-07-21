@@ -25,10 +25,10 @@ import {
 } from './replayPresentation';
 
 const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST, {
-  P0: [{ defId: 'bone-market' }],
-  P1: [{ defId: 'bone-market' }],
+  P0: Array.from({ length: 4 }, () => ({ defId: 'bone-market' })),
+  P1: Array.from({ length: 4 }, () => ({ defId: 'bone-market' })),
 }, orderedTestLocationDeck(BOOTSTRAP_MANIFEST));
-const cardId = state.deck.P0[0];
+const cardId = state.hand.P0[0];
 const location = locationCardAtLane(state, 0)!;
 
 const step = (event: MatchEvent): ReplayStep => ({

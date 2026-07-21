@@ -2,7 +2,6 @@
   "defId": "junk-packet",
   "version": 1,
   "name": "Junk Packet",
-  "basePower": 1,
   "cost": 1,
   "abilities": {
     "onReveal": [

@@ -9,7 +9,6 @@ export interface CardModule {
 export interface CardValidationIssue {
   cardId: string;
   message: string;
-  severity?: 'error' | 'warning';
 }
 
 const ACTIVE_CARD_SETS: Record<string, readonly CardModule[]> = {
@@ -35,13 +34,12 @@ export const validateCardModule = (module: CardModule): CardValidationIssue[] =>
     issues.push({ cardId, message: 'cardType must be character, device, or spell' });
   }
   if (!Number.isInteger(card.cost) || card.cost < 0 || card.cost > 6) issues.push({ cardId, message: 'cost must be an integer in [0,6]' });
-  if (!Number.isInteger(card.basePower) || card.basePower < 0) issues.push({ cardId, message: 'basePower must be an integer >= 0' });
-  if (card.cardType === 'spell' && card.basePower !== 0) {
-    issues.push({
-      cardId,
-      severity: 'warning',
-      message: `spell basePower (${card.basePower}) is meaningless and ignored; retained only for schema compatibility`,
-    });
+  if (card.cardType === 'spell') {
+    if ('basePower' in card) {
+      issues.push({ cardId, message: 'spell cards must not define basePower' });
+    }
+  } else if (!Number.isInteger(card.basePower) || (card.basePower ?? -1) < 0) {
+    issues.push({ cardId, message: 'character and device basePower must be an integer >= 0' });
   }
   if (!card.abilities || typeof card.abilities !== 'object') issues.push({ cardId, message: 'abilities must be an object' });
   if (!card.cosmetic || typeof card.cosmetic !== 'object') issues.push({ cardId, message: 'cosmetic must be an object' });
@@ -69,11 +67,10 @@ export const loadCardsFromSets = (setIds: readonly string[] = ['core-v1']): Reco
 
     for (const module of modules) {
       const issues = validateCardModule(module);
-      const errors = issues.filter(issue => issue.severity !== 'warning');
-      if (errors.length > 0) {
+      if (issues.length > 0) {
         throw new Error(
           `loadCardsFromSets: invalid card "${module.card?.defId ?? module.folder}"\n` +
-          errors.map((issue) => `- ${issue.message}`).join('\n'),
+          issues.map((issue) => `- ${issue.message}`).join('\n'),
         );
       }
       if (cards[module.card.defId]) {

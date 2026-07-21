@@ -53,20 +53,27 @@ export interface CardAbilities {
   onAnyCardPlayedHere?: EffectExpr[];
 }
 
-export interface CardDef {
+interface CardDefBase {
   defId: string;
   version: number;
   name: string;                         // display only; real display name is cosmetic
-  cardType: CardDomain;
-  /**
-   * Schema-compatibility field. For spells this value is meaningless: spells
-   * have no Power, and engine projections/selectors ignore it structurally.
-   */
-  basePower: number;
   cost: number;
   abilities: CardAbilities;
   cosmetic: CardCosmetic;
 }
+
+export interface PowerCardDef extends CardDefBase {
+  cardType: Exclude<CardDomain, 'spell'>;
+  basePower: number;
+}
+
+export interface SpellCardDef extends CardDefBase {
+  cardType: 'spell';
+  /** Spells do not have Power. Keeping a placeholder value is a schema error. */
+  basePower?: never;
+}
+
+export type CardDef = PowerCardDef | SpellCardDef;
 
 export interface CardCosmetic {
   displayName: string;

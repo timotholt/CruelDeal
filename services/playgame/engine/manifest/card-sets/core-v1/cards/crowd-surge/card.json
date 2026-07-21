@@ -2,7 +2,6 @@
   "defId": "crowd-surge",
   "version": 1,
   "name": "Crowd Surge",
-  "basePower": 4,
   "cost": 4,
   "abilities": {
     "onReveal": [

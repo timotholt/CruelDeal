@@ -2,7 +2,6 @@
   "defId": "hard-reset",
   "version": 1,
   "name": "Hard Reset",
-  "basePower": 5,
   "cost": 5,
   "abilities": {
     "onReveal": [

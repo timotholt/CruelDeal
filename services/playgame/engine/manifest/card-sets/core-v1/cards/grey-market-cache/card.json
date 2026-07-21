@@ -2,7 +2,6 @@
   "defId": "grey-market-cache",
   "version": 1,
   "name": "Grey Market Cache",
-  "basePower": 2,
   "cost": 3,
   "abilities": {
     "onReveal": [

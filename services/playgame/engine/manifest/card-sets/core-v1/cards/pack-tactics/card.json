@@ -2,7 +2,6 @@
   "defId": "pack-tactics",
   "version": 1,
   "name": "Pack Tactics",
-  "basePower": 2,
   "cost": 3,
   "abilities": {
     "onReveal": [

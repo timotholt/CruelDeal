@@ -2,7 +2,6 @@
   "defId": "traffic-spoofer",
   "version": 1,
   "name": "Traffic Spoofer",
-  "basePower": 5,
   "cost": 4,
   "abilities": {
     "onReveal": [

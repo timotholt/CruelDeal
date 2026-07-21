@@ -2,7 +2,6 @@
   "defId": "neon-singularity",
   "version": 1,
   "name": "Neon Singularity",
-  "basePower": 6,
   "cost": 6,
   "abilities": {
     "onReveal": [

@@ -2,7 +2,6 @@
   "defId": "emp-grenade",
   "version": 1,
   "name": "EMP Grenade",
-  "basePower": 2,
   "cost": 3,
   "abilities": {
     "onReveal": [
