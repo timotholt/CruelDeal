@@ -29,9 +29,7 @@ import { MatchHud } from './MatchHud';
 import { PlayOverlays } from './PlayOverlays';
 import { usePlayBoardViewModel } from './usePlayBoardViewModel';
 import { useLanePresentationRefs } from './useLanePresentationRefs';
-import {
-  prepareHandLayoutTransition,
-} from '@/services/playgame/presentation/handPresentation';
+import { prepareHandLayoutTransition } from '@/services/playgame/presentation/handPresentation';
 import {
   releaseAllHandSlots,
   releaseHandSlots,
@@ -49,9 +47,7 @@ interface PlayBoardProps {
 export const PlayBoard = (props: PlayBoardProps) => {
   const match = useMatchSession();
   const playUi = usePlayUi();
-  const {
-    manifest, localSeat, remoteSeat, bootstrap, openingTimeline,
-  } = match;
+  const { manifest, localSeat, remoteSeat, bootstrap, openingTimeline } = match;
   const {
     presentedState: engineState,
     ui,
@@ -80,7 +76,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     P0: { name: bootstrap.participants.P0.displayName },
     P1: { name: bootstrap.participants.P1.displayName },
   } as const;
-  const { cardRefs, motionSurface, bindZoneRef } = useVfx();
+  const { cardRefs, cardVfxRegistry, motionSurface, bindZoneRef } = useVfx();
   const lanePresentationRefs = useLanePresentationRefs();
   const replayTimeline = createMemo(() => match.debug?.replay() ?? null);
   const view = usePlayBoardViewModel({
@@ -182,13 +178,14 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const handleUndoPending = async (): Promise<void> => {
     if (!boardInteractive() || isResolving()) return;
     const liveState = engineState();
-    const lastStaged = [...liveState.stagedCards].reverse().find(token =>
-      liveState.cards.find(card => card.token === token)?.owner === localSeat);
+    const lastStaged = [...liveState.stagedCards]
+      .reverse()
+      .find(token => liveState.cards.find(card => card.token === token)?.owner === localSeat);
     if (!lastStaged) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
     // both the restored card and the shuffled hand into place.
-    const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
+    const allIds = [lastStaged as string, ...interactiveHand().map(c => c.id)];
     const handLayoutTransition = prepareHandLayoutTransition(allIds, cardRefs);
     setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
     const undone = await actions.undoPending().finally(() => setReplayClientActivity(null));
@@ -225,13 +222,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
       motionSurface: motion,
       stageCardInLane: async (cardId, lane) => {
         setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
-        return actions.stageCardInLane(cardId, lane)
-          .finally(() => setReplayClientActivity(null));
+        return actions.stageCardInLane(cardId, lane).finally(() => setReplayClientActivity(null));
       },
-      undoPendingCard: async (cardId) => {
+      undoPendingCard: async cardId => {
         setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
-        return actions.undoPendingCard(cardId)
-          .finally(() => setReplayClientActivity(null));
+        return actions.undoPendingCard(cardId).finally(() => setReplayClientActivity(null));
       },
     });
     onCleanup(unbindDnd);
@@ -242,6 +237,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       remoteSeat,
       motionSurface: motion,
       cardStatReadModel: actions.cardStatReadModel,
+      cardVfxRegistry,
       handSlots: {
         reserve: cards => reserveHandSlots({ setUi }, cards),
         release: cardIds => releaseHandSlots({ setUi }, cardIds),
@@ -256,11 +252,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
       browser: {
         locationMap: lanePresentationRefs.mapElement,
         locationTile: lanePresentationRefs.tileElement,
-        showToast: (message, options) => showToast(
-          toastAreaEl!,
-          message,
-          { duration: options.durationMs },
-        ),
+        showToast: (message, options) =>
+          showToast(toastAreaEl!, message, { duration: options.durationMs }),
       },
     });
     const openingPresentation = startOpeningPresentation({
@@ -289,13 +282,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
     if (!boardInteractive()) return;
-    setOpenMenuSeat((current) => current === seat ? null : seat);
+    setOpenMenuSeat(current => (current === seat ? null : seat));
   };
 
-  const handleOpenPile = (
-    owner: 'P0' | 'P1',
-    zone: VisiblePileZone,
-  ): void => {
+  const handleOpenPile = (owner: 'P0' | 'P1', zone: VisiblePileZone): void => {
     if (!boardInteractive()) return;
     setOpenMenuSeat(null);
     setOpenPile({ owner, zone });
@@ -314,10 +304,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const handleEndTurn = (): void => {
     if (!boardInteractive() || turnFlowRunning()) return;
     setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
-    void actions.endTurn((seat) => {
-      setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
-    })
-      .then((accepted) => {
+    void actions
+      .endTurn(seat => {
+        setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
+      })
+      .then(accepted => {
         if (!accepted) setReplayClientActivity(null);
       })
       .catch(() => setReplayClientActivity(null));
@@ -325,7 +316,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   return (
     <>
-      <div class="board play-frame" id="board" ref={(element) => { boardEl = element; }}>
+      <div
+        class="board play-frame"
+        id="board"
+        ref={element => {
+          boardEl = element;
+        }}
+      >
         <MatchHud
           localSeat={localSeat}
           remoteSeat={remoteSeat}
@@ -367,7 +364,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
           resolutionLocked={boardCardResolutionLocked()}
           replayAvailable={replayTimeline() !== null}
           replayOpen={replayOpen()}
-          onToggleReplay={() => setReplayOpen((open) => !open)}
+          onToggleReplay={() => setReplayOpen(open => !open)}
           bindMapRef={lanePresentationRefs.bindMap}
           bindLocationRef={lanePresentationRefs.bindTile}
         />
@@ -412,8 +409,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
           }}
         />
 
-        <div class="toast-area" id="toastArea" ref={(element) => { toastAreaEl = element; }} />
-
+        <div
+          class="toast-area"
+          id="toastArea"
+          ref={element => {
+            toastAreaEl = element;
+          }}
+        />
       </div>
       <PlayOverlays
         replayTimeline={replayTimeline()}

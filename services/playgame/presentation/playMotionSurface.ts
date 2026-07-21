@@ -1,8 +1,4 @@
-import type { ZoneAnchorKey } from './cardTransfers';
-import {
-  createCardMotionScope,
-  type CardMotionScope,
-} from './cardMotion';
+import { createCardMotionScope, type CardMotionScope } from './cardMotion';
 
 /**
  * The one coordinate system used by every temporary /play animation.
@@ -15,12 +11,12 @@ export interface PlayMotionSurface {
   readonly frame: HTMLElement;
   readonly overlay: HTMLElement;
   readonly cardRefs: Map<string, HTMLElement>;
-  readonly zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
+  readonly zoneRefs: Map<string, HTMLElement>;
   readonly cardMotion: CardMotionScope;
   frameRect: () => DOMRect;
   toLocalRect: (viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>) => DOMRect;
   cardRect: (cardId: string) => DOMRect | null;
-  zoneRect: (key: ZoneAnchorKey) => DOMRect | null;
+  zoneRect: (key: string) => DOMRect | null;
   mountTemporary: (element: HTMLElement) => () => void;
   dispose: () => void;
 }
@@ -29,7 +25,7 @@ interface CreatePlayMotionSurfaceOptions {
   frame: HTMLElement;
   overlay: HTMLElement;
   cardRefs: Map<string, HTMLElement>;
-  zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
+  zoneRefs: Map<string, HTMLElement>;
 }
 
 export const createPlayMotionSurface = (
@@ -49,9 +45,8 @@ export const createPlayMotionSurface = (
       viewportRect.height,
     );
   };
-  const connectedRect = (element: HTMLElement | undefined): DOMRect | null => (
-    element?.isConnected ? element.getBoundingClientRect() : null
-  );
+  const connectedRect = (element: HTMLElement | undefined): DOMRect | null =>
+    element?.isConnected ? element.getBoundingClientRect() : null;
 
   const mountTemporary = (element: HTMLElement): (() => void) => {
     if (disposed) return () => element.remove();
@@ -78,8 +73,8 @@ export const createPlayMotionSurface = (
     cardMotion,
     frameRect,
     toLocalRect,
-    cardRect: (cardId) => connectedRect(options.cardRefs.get(cardId)),
-    zoneRect: (key) => connectedRect(options.zoneRefs.get(key)),
+    cardRect: cardId => connectedRect(options.cardRefs.get(cardId)),
+    zoneRect: key => connectedRect(options.zoneRefs.get(key)),
     mountTemporary,
     dispose: () => {
       if (disposed) return;

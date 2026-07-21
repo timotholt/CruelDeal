@@ -30,8 +30,8 @@ import {
   type Accessor,
 } from 'solid-js';
 import { VFXEngine, vfxSfx } from '@/services/vfx';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
-import type { ZoneAnchorKey } from '@/services/playgame/presentation/cardTransfers';
+import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
 import {
   createPlayMotionSurface,
   type PlayMotionSurface,
@@ -47,14 +47,16 @@ export interface VfxContextValue {
   /** Live map of card instanceId -> current DOM element. */
   cardRefs: Map<string, HTMLElement>;
   /** Live map of logical card zone anchor -> current DOM element. */
-  zoneRefs: Map<ZoneAnchorKey, HTMLElement>;
+  zoneRefs: Map<string, HTMLElement>;
+  /** Card effects owned only by this mounted host. */
+  cardVfxRegistry: CardVfxRegistry;
   /**
    * Returns a Solid `ref` callback that registers the element under `id`
    * for the lifetime of the caller component. Usage:
    *   <div ref={bindCardRef(card.instanceId)}>...</div>
    */
   bindCardRef: (id: string) => (el: HTMLElement) => void;
-  bindZoneRef: (key: ZoneAnchorKey) => (el: HTMLElement) => void;
+  bindZoneRef: (key: string) => (el: HTMLElement) => void;
 }
 
 const VfxCtx = createContext<VfxContextValue>();
@@ -74,7 +76,8 @@ export const VfxHost = (props: VfxHostProps) => {
   const [board, setBoard] = createSignal<HTMLElement | null>(null);
   const [overlay, setOverlay] = createSignal<HTMLElement | null>(null);
   const cardRefs = new Map<string, HTMLElement>();
-  const zoneRefs = new Map<ZoneAnchorKey, HTMLElement>();
+  const zoneRefs = new Map<string, HTMLElement>();
+  const cardVfxRegistry = createCardVfxRegistry();
   const motionSurface = createMemo<PlayMotionSurface | null>(() => {
     const frame = board();
     const motionOverlay = overlay();
@@ -98,7 +101,7 @@ export const VfxHost = (props: VfxHostProps) => {
 
     onCleanup(() => {
       clearInterval(tickInterval);
-      cardVfxRegistry.clearAll('screen-unmounted');
+      cardVfxRegistry.dispose();
       motionSurface()?.dispose();
       eng.destroy();
       setEngine(null);
@@ -116,7 +119,7 @@ export const VfxHost = (props: VfxHostProps) => {
     });
   };
 
-  const bindZoneRef = (key: ZoneAnchorKey) => (el: HTMLElement) => {
+  const bindZoneRef = (key: string) => (el: HTMLElement) => {
     zoneRefs.set(key, el);
     onCleanup(() => {
       if (zoneRefs.get(key) === el) zoneRefs.delete(key);
@@ -129,6 +132,7 @@ export const VfxHost = (props: VfxHostProps) => {
     motionSurface,
     cardRefs,
     zoneRefs,
+    cardVfxRegistry,
     bindCardRef,
     bindZoneRef,
   };
@@ -136,7 +140,7 @@ export const VfxHost = (props: VfxHostProps) => {
   return (
     <VfxCtx.Provider value={value}>
       <div
-        ref={(element) => {
+        ref={element => {
           boardEl = element;
           setBoard(element);
         }}
@@ -145,7 +149,7 @@ export const VfxHost = (props: VfxHostProps) => {
       >
         {props.children}
         <div
-          ref={(element) => {
+          ref={element => {
             overlayEl = element;
             setOverlay(element);
           }}

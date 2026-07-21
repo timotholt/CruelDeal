@@ -8,6 +8,7 @@ import type {
 } from '../runtime/projection';
 import { createPlayMotionSurface } from './playMotionSurface';
 import { createPlayPresentationHost } from './playPresentationHost';
+import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import {
   createPlayPresentationSink,
   type PlayPresentationBrowserPort,
@@ -20,26 +21,27 @@ const result = {
   totalPower: { P0: 10, P1: 8 },
 };
 
-const state = (overrides: Partial<SeatVisibleMatchState> = {}): SeatVisibleMatchState => ({
-  turn: 1,
-  phase: 'AWAITING_INTENT',
-  priority: 'P0',
-  energy: { P0: 1, P1: 1 },
-  maxEnergy: { P0: 1, P1: 1 },
-  nextTurnEnergyBonus: { P0: 0, P1: 0 },
-  deckCounts: { P0: 8, P1: 8 },
-  locationDeckCount: 9,
-  hands: { P0: [], P1: [] },
-  cards: [],
-  lanes: [],
-  stagedCards: [],
-  discard: { P0: [], P1: [] },
-  destroyed: { P0: [], P1: [] },
-  banished: { P0: [], P1: [] },
-  banishedCounts: { P0: 0, P1: 0 },
-  result: null,
-  ...overrides,
-} as SeatVisibleMatchState);
+const state = (overrides: Partial<SeatVisibleMatchState> = {}): SeatVisibleMatchState =>
+  ({
+    turn: 1,
+    phase: 'AWAITING_INTENT',
+    priority: 'P0',
+    energy: { P0: 1, P1: 1 },
+    maxEnergy: { P0: 1, P1: 1 },
+    nextTurnEnergyBonus: { P0: 0, P1: 0 },
+    deckCounts: { P0: 8, P1: 8 },
+    locationDeckCount: 9,
+    hands: { P0: [], P1: [] },
+    cards: [],
+    lanes: [],
+    stagedCards: [],
+    discard: { P0: [], P1: [] },
+    destroyed: { P0: [], P1: [] },
+    banished: { P0: [], P1: [] },
+    banishedCounts: { P0: 0, P1: 0 },
+    result: null,
+    ...overrides,
+  }) as SeatVisibleMatchState;
 
 const frame = (
   type: SeatAnimationEvent['type'],
@@ -77,6 +79,7 @@ const fixture = () => {
     remoteSeat: 'P1',
     motionSurface,
     cardStatReadModel: () => null,
+    cardVfxRegistry: createCardVfxRegistry(),
     handSlots: { reserve: vi.fn(), release: vi.fn() },
     playVfx,
     playSfx,
@@ -107,8 +110,12 @@ const fixture = () => {
     playSfx,
     showToast,
     dismissToast,
-    setMap: (element: HTMLElement | null) => { mapElement = element; },
-    setTile: (element: HTMLElement | null) => { tileElement = element; },
+    setMap: (element: HTMLElement | null) => {
+      mapElement = element;
+    },
+    setTile: (element: HTMLElement | null) => {
+      tileElement = element;
+    },
   };
 };
 
@@ -165,10 +172,7 @@ describe('browser play presentation sink', () => {
       name.textContent = 'REMOTE IDENTITY';
       card.append(name);
       card.classList.remove('facedown');
-      const animation = test.sink.afterFrame?.(
-        revealed,
-        new AbortController().signal,
-      );
+      const animation = test.sink.afterFrame?.(revealed, new AbortController().signal);
       const flyer = test.overlay.querySelector<HTMLElement>('.reveal-flyer');
       expect(flyer?.textContent).toContain('REMOTE IDENTITY');
       expect(card.style.visibility).toBe('hidden');
@@ -213,10 +217,7 @@ describe('browser play presentation sink', () => {
       hiddenTile.remove();
       test.root.prepend(revealedTile);
       test.setTile(revealedTile);
-      const animation = test.sink.afterFrame?.(
-        location,
-        new AbortController().signal,
-      );
+      const animation = test.sink.afterFrame?.(location, new AbortController().signal);
       await vi.advanceTimersByTimeAsync(350);
       expect(test.overlay.querySelector('.location')).toBeNull();
       expect(revealedTile.style.transform).toBe('rotateY(0deg)');
@@ -267,9 +268,8 @@ describe('browser play presentation sink', () => {
   it('fails closed when afterFrame is called without pre-adoption preparation', async () => {
     const test = fixture();
     const unprepared = frame('TURN_STARTED', { turn: 2 });
-    await expect(test.sink.afterFrame?.(
-      unprepared,
-      new AbortController().signal,
-    )).rejects.toThrow('was not prepared before adoption');
+    await expect(test.sink.afterFrame?.(unprepared, new AbortController().signal)).rejects.toThrow(
+      'was not prepared before adoption',
+    );
   });
 });

@@ -29,12 +29,11 @@ interface BoardCardProps {
 export const BoardCard = (props: BoardCardProps) => {
   const match = useMatchSession();
   const { ui, presentedState, isResolving, actions } = usePlayUi();
-  const { bindCardRef } = useVfx();
+  const { bindCardRef, cardVfxRegistry } = useVfx();
   const viewerSeat = (): Seat => props.viewerSeat ?? match.localSeat;
 
   const stagedCardIds = (): readonly string[] =>
-    props.stagedCardIds
-    ?? presentedState().stagedCards;
+    props.stagedCardIds ?? presentedState().stagedCards;
   const interactive = (): boolean => props.interactive ?? true;
   const inspectable = (): boolean => props.inspectable ?? interactive();
 
@@ -111,7 +110,7 @@ export const BoardCard = (props: BoardCardProps) => {
       }}
       onClick={onClick}
     >
-      <CardFace card={props.card} variant="play" />
+      <CardFace card={props.card} variant="play" vfxRegistry={cardVfxRegistry} />
     </div>
   );
 };

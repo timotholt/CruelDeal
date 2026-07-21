@@ -12,8 +12,11 @@
  */
 
 import { createEffect, createSignal, onCleanup, For } from 'solid-js';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
-import type { CardTransientVfx } from '@/services/vfx/card-effects/types';
+import type {
+  CardTransientVfx,
+  CardVfxRegistry,
+  CardVfxRenderModel,
+} from '@/services/vfx/card-effects/types';
 import type { JSX } from 'solid-js';
 
 const CHANNEL_Z: Record<string, number> = {
@@ -28,28 +31,31 @@ const CHANNEL_Z: Record<string, number> = {
 
 interface CardVfxStackProps {
   cardId: string;
+  registry: CardVfxRegistry;
   children: JSX.Element;
 }
 
 export function CardVfxStack(props: CardVfxStackProps) {
-  const [layers, setLayers] = createSignal(
-    cardVfxRegistry.getLayers(''),
-  );
+  const [layers, setLayers] = createSignal<CardVfxRenderModel>({
+    transient: [],
+    persistent: [],
+  });
 
   createEffect(() => {
+    const registry = props.registry;
     const cardId = props.cardId;
-    setLayers(cardVfxRegistry.getLayers(cardId));
-    const unsubscribe = cardVfxRegistry.subscribe(cardId, () => {
-      setLayers(cardVfxRegistry.getLayers(cardId));
+    setLayers(registry.getLayers(cardId));
+    const unsubscribe = registry.subscribe(cardId, () => {
+      setLayers(registry.getLayers(cardId));
     });
     onCleanup(() => {
       unsubscribe();
-      cardVfxRegistry.clearCard(cardId, 'card-unmounted');
+      registry.clearCard(cardId, 'card-unmounted');
     });
   });
 
   function handleAnimationEnd(record: CardTransientVfx) {
-    cardVfxRegistry.complete(record.id);
+    props.registry.complete(record.id);
   }
 
   function applyVars(el: HTMLElement, vars: Record<string, string>, zIndex: number) {
@@ -63,19 +69,23 @@ export function CardVfxStack(props: CardVfxStackProps) {
     <>
       {props.children}
       <For each={layers().transient}>
-        {(rec) => (
+        {rec => (
           <div
             class={`card-vfx-overlay card-vfx-overlay--${rec.channel} ${rec.className}`}
-            ref={(el) => { if (el) applyVars(el, rec.vars, CHANNEL_Z[rec.channel] ?? 5); }}
+            ref={el => {
+              if (el) applyVars(el, rec.vars, CHANNEL_Z[rec.channel] ?? 5);
+            }}
             onAnimationEnd={() => handleAnimationEnd(rec)}
           />
         )}
       </For>
       <For each={layers().persistent}>
-        {(grp) => (
+        {grp => (
           <div
             class={`card-vfx-overlay card-vfx-overlay--persistent card-fx-${grp.visualKind} ${grp.phase === 'exiting' ? 'card-vfx-overlay--exiting' : ''}`}
-            ref={(el) => { if (el) applyVars(el, grp.vars, CHANNEL_Z['persistent-fx'] ?? 6); }}
+            ref={el => {
+              if (el) applyVars(el, grp.vars, CHANNEL_Z['persistent-fx'] ?? 6);
+            }}
           />
         )}
       </For>

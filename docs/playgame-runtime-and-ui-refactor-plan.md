@@ -2,9 +2,8 @@
 
 ## Status
 
-Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is
-active; shared card rendering, board sizing, and declarative lane maps are
-complete, and instance-scoped VFX is next.
+Phases 1.5, 2, 3a, 3b, 4, and 5 are implemented and exit-proven. Phase 6 is
+next: tap-first mobile interaction with pointer drag retained as an enhancement.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -19,8 +18,9 @@ Final Phase 1.5 evidence is recorded in
 `docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. Final Phase 3a
 evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. Final Phase
 3b evidence is recorded in `docs/agent-checkpoints/phase3b-exit.md`. Final
-Phase 4 evidence is recorded in `docs/agent-checkpoints/phase4-exit.md`. The
-next implementation phase is Phase 5: component and layout refactors.
+Phase 4 evidence is recorded in `docs/agent-checkpoints/phase4-exit.md`. Final
+Phase 5 evidence is recorded in `docs/agent-checkpoints/phase5-exit.md`. The
+next implementation phase is Phase 6: mobile interaction rewrite.
 
 ## Cost Model
 
@@ -894,7 +894,7 @@ Extract cohesive units without changing the visual design:
   drag-to-lane handoff, location flip/map fade synchronization, and lane
   topology motion retain their pre-Phase-4 timing and visible behavior.
 
-## Phase 5: Component and Layout Refactors
+## Phase 5: Component and Layout Refactors — COMPLETE
 
 ### Objective
 
@@ -929,7 +929,7 @@ Extract cohesive units without changing the visual design:
 - **[BUILD LAST]** Render/position lane maps declaratively and remove imperative DOM/measurement code.
 - **[BUILD LAST]** Remove unused random shuffle behavior.
 
-### VFX Host
+### VFX Host — COMPLETE
 
 - **[BUILD LAST]** Make card-effect registries instance-scoped so hosts cannot clear each other.
 - **[BUILD LAST]** Move/inject playgame-specific zone-anchor types at the presentation host.
@@ -1130,7 +1130,7 @@ npm run lint
 13. **[BUILD LAST — COMPLETE]** Phase 5 shared card rendering.
 14. **[BUILD LAST — COMPLETE]** Phase 5 board sizing.
 15. **[BUILD LAST — COMPLETE]** Phase 5 declarative lane maps.
-16. **[BUILD LAST]** Phase 5 instance-scoped VFX.
+16. **[BUILD LAST — COMPLETE]** Phase 5 instance-scoped VFX.
 17. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
 18. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
 

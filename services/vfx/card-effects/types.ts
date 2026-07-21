@@ -127,4 +127,5 @@ export interface CardVfxRegistry {
   getLayers(cardId: string): CardVfxRenderModel;
   subscribe(cardId: string, listener: () => void): () => void;
   tick(nowMs: number): void;
+  dispose(): void;
 }

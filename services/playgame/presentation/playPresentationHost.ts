@@ -1,7 +1,7 @@
 import type { Manifest } from '../engine/manifest/types';
 import type { Seat } from '../engine/types/ids';
 import type { CardStatReader, ResolvedCard } from '../view';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
 import type { ZoneAnchorKey } from './cardTransfers';
 import type { VfxCue } from './choreography';
 import type { PlayMotionSurface } from './playMotionSurface';
@@ -25,6 +25,7 @@ export interface PlayPresentationHost {
   readonly motionSurface: PlayMotionSurface;
   readonly cardStatReadModel: CardStatReader;
   readonly handSlots: PresentationHandSlots;
+  readonly cardVfxRegistry: CardVfxRegistry;
   cardIds(): readonly string[];
   cardElement(cardId: string): HTMLElement | null;
   zoneElement(key: ZoneAnchorKey): HTMLElement | null;
@@ -39,16 +40,17 @@ export interface CreatePlayPresentationHostOptions {
   readonly motionSurface: PlayMotionSurface;
   readonly cardStatReadModel: CardStatReader;
   readonly handSlots: PresentationHandSlots;
+  readonly cardVfxRegistry: CardVfxRegistry;
   readonly playSfx?: (name: string) => void;
   readonly playVfx?: (cue: VfxCue) => void;
 }
 
 /** Default card-bound VFX adapter used by the browser host. */
-export const playCardVfxCue = (cue: VfxCue): void => {
+export const playCardVfxCue = (registry: CardVfxRegistry, cue: VfxCue): void => {
   switch (cue.kind) {
     case 'power-flash': {
       const isBuff = cue.delta > 0;
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_POWER_CHANGED',
         channel: 'power-pulse',
@@ -66,7 +68,7 @@ export const playCardVfxCue = (cue: VfxCue): void => {
     }
 
     case 'destroy-burst':
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_DESTROYED',
         channel: 'impact-shake',
@@ -77,7 +79,7 @@ export const playCardVfxCue = (cue: VfxCue): void => {
         priority: 20,
         dedupeKey: `destroy-shake:${cue.cardId}`,
       });
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_DESTROYED',
         channel: 'surface-fx',
@@ -91,7 +93,7 @@ export const playCardVfxCue = (cue: VfxCue): void => {
       return;
 
     case 'glitch-flash':
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_TRANSFORMED',
         channel: 'impact-shake',
@@ -102,7 +104,7 @@ export const playCardVfxCue = (cue: VfxCue): void => {
         priority: 15,
         dedupeKey: `glitch-shake:${cue.cardId}`,
       });
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_TRANSFORMED',
         channel: 'surface-fx',
@@ -117,7 +119,7 @@ export const playCardVfxCue = (cue: VfxCue): void => {
 
     case 'move-trail': {
       const causeClass = cue.effectKind.toLowerCase().replaceAll('_', '-');
-      cardVfxRegistry.createTransient({
+      registry.createTransient({
         cardId: cue.cardId,
         eventType: 'CARD_MOVED',
         channel: 'world-motion',
@@ -148,9 +150,10 @@ export const createPlayPresentationHost = (
   motionSurface: options.motionSurface,
   cardStatReadModel: options.cardStatReadModel,
   handSlots: options.handSlots,
+  cardVfxRegistry: options.cardVfxRegistry,
   cardIds: () => [...options.motionSurface.cardRefs.keys()],
   cardElement: cardId => options.motionSurface.cardRefs.get(cardId) ?? null,
   zoneElement: key => options.motionSurface.zoneRefs.get(key) ?? null,
   ...(options.playSfx ? { playSfx: options.playSfx } : {}),
-  playVfx: options.playVfx ?? playCardVfxCue,
+  playVfx: options.playVfx ?? (cue => playCardVfxCue(options.cardVfxRegistry, cue)),
 });

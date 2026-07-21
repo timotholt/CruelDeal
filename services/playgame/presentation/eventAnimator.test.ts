@@ -12,16 +12,10 @@ import {
   projectMatchStateForSeat,
   type SeatTransactionFrame,
 } from '../runtime/projection';
-import {
-  animatePreparedEvent,
-  fallbackRectForZone,
-  prepareEventAnimation,
-} from './eventAnimator';
-import {
-  createPlayPresentationHost,
-  type PlayPresentationHost,
-} from './playPresentationHost';
+import { animatePreparedEvent, fallbackRectForZone, prepareEventAnimation } from './eventAnimator';
+import { createPlayPresentationHost, type PlayPresentationHost } from './playPresentationHost';
 import { createPlayMotionSurface } from './playMotionSurface';
+import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
 const drawCause = {
   sourceId: 'system:event-animator-test' as CardId,
@@ -41,17 +35,19 @@ const projectFrame = (frame: EventTransition): SeatTransactionFrame => ({
 
 const presentationHost = (
   motionSurface: ReturnType<typeof createPlayMotionSurface>,
-): PlayPresentationHost => createPlayPresentationHost({
-  manifest: BOOTSTRAP_MANIFEST,
-  localSeat: 'P0',
-  remoteSeat: 'P1',
-  motionSurface,
-  cardStatReadModel: () => null,
-  handSlots: {
-    reserve: vi.fn(),
-    release: vi.fn(),
-  },
-});
+): PlayPresentationHost =>
+  createPlayPresentationHost({
+    manifest: BOOTSTRAP_MANIFEST,
+    localSeat: 'P0',
+    remoteSeat: 'P1',
+    motionSurface,
+    cardStatReadModel: () => null,
+    cardVfxRegistry: createCardVfxRegistry(),
+    handSlots: {
+      reserve: vi.fn(),
+      release: vi.fn(),
+    },
+  });
 
 const projectedMoveFrame = (): SeatTransactionFrame => {
   let before = createInitialMatchState(
@@ -61,21 +57,29 @@ const projectedMoveFrame = (): SeatTransactionFrame => {
     orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
   );
   const cardId = before.deck.P0[0];
-  before = apply(before, {
-    type: 'CARD_DRAWN',
-    owner: 'P0',
-    cardId,
-    cause: drawCause,
-  }, BOOTSTRAP_MANIFEST);
-  before = apply(before, {
-    type: 'CARD_STAGED',
-    intentId: 'stage-cancellable-move',
-    owner: 'P0',
-    cardId,
-    lane: 0 as LaneId,
-    energyPaid: 1,
-    cause: drawCause,
-  }, BOOTSTRAP_MANIFEST);
+  before = apply(
+    before,
+    {
+      type: 'CARD_DRAWN',
+      owner: 'P0',
+      cardId,
+      cause: drawCause,
+    },
+    BOOTSTRAP_MANIFEST,
+  );
+  before = apply(
+    before,
+    {
+      type: 'CARD_STAGED',
+      intentId: 'stage-cancellable-move',
+      owner: 'P0',
+      cardId,
+      lane: 0 as LaneId,
+      energyPaid: 1,
+      cause: drawCause,
+    },
+    BOOTSTRAP_MANIFEST,
+  );
   const event = {
     type: 'CARD_MOVED' as const,
     cardId,
@@ -130,25 +134,33 @@ describe('event animator transfer origins', () => {
         orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
       );
       const cardId = before.deck.P0[0];
-      before = apply(before, {
-        type: 'CARD_DRAWN',
-        owner: 'P0',
-        cardId,
-        cause: drawCause,
-      }, BOOTSTRAP_MANIFEST);
-      before = apply(before, {
-        type: 'CARD_STAGED',
-        intentId: 'stage',
-        owner: 'P0',
-        cardId,
-        lane: 0 as LaneId,
-        energyPaid: 1,
-        cause: {
-          sourceId: 'system:moved-transfer-test' as CardId,
-          effectKind: 'SYSTEM',
-          reason: 'TEST_STAGE',
+      before = apply(
+        before,
+        {
+          type: 'CARD_DRAWN',
+          owner: 'P0',
+          cardId,
+          cause: drawCause,
         },
-      }, BOOTSTRAP_MANIFEST);
+        BOOTSTRAP_MANIFEST,
+      );
+      before = apply(
+        before,
+        {
+          type: 'CARD_STAGED',
+          intentId: 'stage',
+          owner: 'P0',
+          cardId,
+          lane: 0 as LaneId,
+          energyPaid: 1,
+          cause: {
+            sourceId: 'system:moved-transfer-test' as CardId,
+            effectKind: 'SYSTEM',
+            reason: 'TEST_STAGE',
+          },
+        },
+        BOOTSTRAP_MANIFEST,
+      );
       const event = {
         type: 'CARD_MOVED' as const,
         cardId,
@@ -191,9 +203,8 @@ describe('event animator transfer origins', () => {
       let adopted = false;
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
       boardEl.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
-      cardEl.getBoundingClientRect = () => adopted
-        ? new DOMRect(430, 300, 70, 100)
-        : new DOMRect(90, 300, 70, 100);
+      cardEl.getBoundingClientRect = () =>
+        adopted ? new DOMRect(430, 300, 70, 100) : new DOMRect(90, 300, 70, 100);
       boardWrap.append(boardEl, toastArea, cardEl, overlay);
       document.body.append(boardWrap);
 
@@ -210,7 +221,7 @@ describe('event animator transfer origins', () => {
       adopted = true;
       calls.push('adopt');
       const animation = animatePreparedEvent(prepared, new AbortController().signal, {
-        onTransferAnimation: (transfer) => {
+        onTransferAnimation: transfer => {
           calls.push(`transfer:${transfer.reason}:${transfer.from.kind}->${transfer.to.kind}`);
         },
       });
@@ -218,17 +229,16 @@ describe('event animator transfer origins', () => {
       expect(cardEl.style.translate).toBe('');
       expect(transferSession.dataset.cardMotionSession).toBeTruthy();
       expect(transferSession.style.transform).toBe('');
-      expect((transferSession.querySelector('.card-motion-resting-shell') as HTMLElement).style.transform)
-        .toBe('rotate(1.7deg)');
+      expect(
+        (transferSession.querySelector('.card-motion-resting-shell') as HTMLElement).style
+          .transform,
+      ).toBe('rotate(1.7deg)');
       await vi.advanceTimersByTimeAsync(20);
       expect(document.querySelectorAll('.transfer-flyer')).toHaveLength(1);
       await vi.runAllTimersAsync();
       await animation;
 
-      expect(calls).toEqual([
-        'adopt',
-        'transfer:CARD_MOVED:LANE->LANE',
-      ]);
+      expect(calls).toEqual(['adopt', 'transfer:CARD_MOVED:LANE->LANE']);
       expect(cardEl.style.visibility).toBe('');
       expect(document.querySelector('.transfer-flyer')).toBeNull();
       expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
@@ -246,12 +256,16 @@ describe('event animator transfer origins', () => {
       orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
     );
     const cardId = before.deck.P0[0];
-    before = apply(before, {
-      type: 'CARD_DRAWN',
-      owner: 'P0',
-      cardId,
-      cause: drawCause,
-    }, BOOTSTRAP_MANIFEST);
+    before = apply(
+      before,
+      {
+        type: 'CARD_DRAWN',
+        owner: 'P0',
+        cardId,
+        cause: drawCause,
+      },
+      BOOTSTRAP_MANIFEST,
+    );
     const event = {
       type: 'CARD_STAGED' as const,
       intentId: 'private-stage-deduplication',
@@ -298,10 +312,7 @@ describe('event animator transfer origins', () => {
       zoneRefs: new Map(),
     });
 
-    const prepared = prepareEventAnimation(
-      presentationHost(motionSurface),
-      projectedFrame,
-    );
+    const prepared = prepareEventAnimation(presentationHost(motionSurface), projectedFrame);
 
     expect(prepared.transfers).toEqual([]);
     expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
@@ -318,26 +329,46 @@ describe('event animator transfer origins', () => {
         orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
       );
       const cardId = before.deck.P0[0];
-      before = apply(before, {
-        type: 'CARD_DRAWN',
-        owner: 'P0',
-        cardId,
-        cause: drawCause,
-      }, BOOTSTRAP_MANIFEST);
-      before = apply(before, {
-        type: 'CARD_STAGED',
-        intentId: 'stage-leon',
-        owner: 'P0',
-        cardId,
-        lane: 0 as LaneId,
-        energyPaid: 1,
-        cause: {
-          sourceId: 'system:leon-return-test' as CardId,
-          effectKind: 'SYSTEM',
-          reason: 'TEST_STAGE',
+      before = apply(
+        before,
+        {
+          type: 'CARD_DRAWN',
+          owner: 'P0',
+          cardId,
+          cause: drawCause,
         },
-      }, BOOTSTRAP_MANIFEST);
-      before = apply(before, { type: 'CARD_REVEALED', cardId, cause: { sourceId: cardId, effectKind: 'SYSTEM', reason: 'TEST_REVEAL' } }, BOOTSTRAP_MANIFEST);
+        BOOTSTRAP_MANIFEST,
+      );
+      before = apply(
+        before,
+        {
+          type: 'CARD_STAGED',
+          intentId: 'stage-leon',
+          owner: 'P0',
+          cardId,
+          lane: 0 as LaneId,
+          energyPaid: 1,
+          cause: {
+            sourceId: 'system:leon-return-test' as CardId,
+            effectKind: 'SYSTEM',
+            reason: 'TEST_STAGE',
+          },
+        },
+        BOOTSTRAP_MANIFEST,
+      );
+      before = apply(
+        before,
+        {
+          type: 'CARD_REVEALED',
+          cardId,
+          cause: {
+            sourceId: cardId,
+            effectKind: 'SYSTEM',
+            reason: 'TEST_REVEAL',
+          },
+        },
+        BOOTSTRAP_MANIFEST,
+      );
       const event = {
         type: 'CARD_ZONE_CHANGED',
         cardId,
@@ -400,10 +431,7 @@ describe('event animator transfer origins', () => {
       handWrapper.append(destination);
       boardEl.append(handWrapper);
       cardRefs.set(token, handWrapper);
-      const animation = animatePreparedEvent(
-        prepared,
-        new AbortController().signal,
-      );
+      const animation = animatePreparedEvent(prepared, new AbortController().signal);
 
       const surrogate = overlay.querySelector('.transfer-flyer') as HTMLElement;
       const surrogateVisual = surrogate.querySelector('.card-motion-visual') as HTMLElement;
@@ -432,12 +460,16 @@ describe('event animator transfer origins', () => {
         orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
       );
       const cardId = before.deck.P1[0];
-      before = apply(before, {
-        type: 'CARD_DRAWN',
-        owner: 'P1',
-        cardId,
-        cause: drawCause,
-      }, BOOTSTRAP_MANIFEST);
+      before = apply(
+        before,
+        {
+          type: 'CARD_DRAWN',
+          owner: 'P1',
+          cardId,
+          cause: drawCause,
+        },
+        BOOTSTRAP_MANIFEST,
+      );
       const event = {
         type: 'CARD_STAGED' as const,
         intentId: 'remote-stage',
@@ -497,10 +529,7 @@ describe('event animator transfer origins', () => {
       const prepared = prepareEventAnimation(host, projectedFrame);
       boardEl.append(destination);
       cardRefs.set(token, destination);
-      const animation = animatePreparedEvent(
-        prepared,
-        new AbortController().signal,
-      );
+      const animation = animatePreparedEvent(prepared, new AbortController().signal);
       const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
       expect(surrogate).not.toBeNull();
       expect(surrogate.querySelector('.card-motion-synthetic-back')).not.toBeNull();
@@ -545,10 +574,7 @@ describe('event animator transfer origins', () => {
         cardRefs: new Map([[token, card]]),
         zoneRefs: new Map(),
       });
-      const prepared = prepareEventAnimation(
-        presentationHost(motionSurface),
-        frame,
-      );
+      const prepared = prepareEventAnimation(presentationHost(motionSurface), frame);
       expect(motionSurface.cardMotion.activeSessionCount).toBe(1);
       expect(motionSurface.cardMotion.activeLeaseCount).toBe(1);
       expect(overlay.querySelector('[data-card-motion-session]')).not.toBeNull();
@@ -610,15 +636,9 @@ describe('event animator transfer origins', () => {
         cardRefs: new Map(),
         zoneRefs: new Map(),
       });
-      const prepared = prepareEventAnimation(
-        presentationHost(motionSurface),
-        frame,
-      );
+      const prepared = prepareEventAnimation(presentationHost(motionSurface), frame);
 
-      const animation = animatePreparedEvent(
-        prepared,
-        new AbortController().signal,
-      );
+      const animation = animatePreparedEvent(prepared, new AbortController().signal);
       await vi.runAllTimersAsync();
       await expect(animation).resolves.toBeUndefined();
 

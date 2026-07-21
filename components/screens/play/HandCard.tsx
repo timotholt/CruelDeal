@@ -24,7 +24,7 @@ interface HandCardProps {
 }
 
 export const HandCard = (props: HandCardProps) => {
-  const { bindCardRef } = useVfx();
+  const { bindCardRef, cardVfxRegistry } = useVfx();
   const { actions } = usePlayUi();
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
@@ -64,7 +64,7 @@ export const HandCard = (props: HandCardProps) => {
           cursor: isInteractive() ? 'pointer' : 'default',
         }}
       >
-        <CardFace card={props.card} variant="play" />
+        <CardFace card={props.card} variant="play" vfxRegistry={cardVfxRegistry} />
       </div>
     </div>
   );

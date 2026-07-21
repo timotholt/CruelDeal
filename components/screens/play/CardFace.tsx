@@ -2,12 +2,18 @@ import { Show, createEffect, createMemo, type JSX } from 'solid-js';
 
 import { CardVfxStack } from '@/components/card/CardVfxStack';
 import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
-import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
 
-interface CardFaceProps {
-  readonly card: ResolvedCard;
-  readonly variant: 'play' | 'pile';
-}
+type CardFaceProps =
+  | {
+      readonly card: ResolvedCard;
+      readonly variant: 'play';
+      readonly vfxRegistry: CardVfxRegistry;
+    }
+  | {
+      readonly card: ResolvedCard;
+      readonly variant: 'pile';
+    };
 
 interface CardFaceModel {
   readonly id: string;
@@ -42,30 +48,34 @@ export const CardFace = (props: CardFaceProps): JSX.Element => {
 
   createEffect(() => {
     if (props.variant !== 'play') return;
+    const registry = props.vfxRegistry;
     const card = model();
     const sources = card.textDisabled
-      ? [{
-          id: `${card.id}-glitch`,
-          sourceId: card.id,
-          kind: 'glitch' as const,
-          intensity: 1,
-          priority: 5,
-        }]
+      ? [
+          {
+            id: `${card.id}-glitch`,
+            sourceId: card.id,
+            kind: 'glitch' as const,
+            intensity: 1,
+            priority: 5,
+          },
+        ]
       : [];
-    cardVfxRegistry.reconcilePersistent(card.id, sources);
+    registry.reconcilePersistent(card.id, sources);
   });
 
   const playFace = () => {
+    if (props.variant !== 'play') return null;
     const card = model();
     return (
-      <CardVfxStack cardId={card.id}>
+      <CardVfxStack cardId={card.id} registry={props.vfxRegistry}>
         <div class={'cost ' + card.costTone}>{card.cost}</div>
-        {card.showPower
-          ? <div class={'power ' + card.powerTone}>{card.power}</div>
-          : null}
-        {card.portraitPath
-          ? <img class="portrait" src={card.portraitPath} alt="" aria-hidden="true" />
-          : <div class="bar" style={{ background: card.art }} />}
+        {card.showPower ? <div class={'power ' + card.powerTone}>{card.power}</div> : null}
+        {card.portraitPath ? (
+          <img class="portrait" src={card.portraitPath} alt="" aria-hidden="true" />
+        ) : (
+          <div class="bar" style={{ background: card.art }} />
+        )}
         <div class="name">{card.name}</div>
         <div class="type">{card.type}</div>
         {card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
@@ -79,9 +89,7 @@ export const CardFace = (props: CardFaceProps): JSX.Element => {
       <div class="pile-card" data-card-type={card.type}>
         <div class="pile-card__badges">
           <span class="pile-card__cost">{card.cost}</span>
-          {card.showPower
-            ? <span class="pile-card__power">{card.power}</span>
-            : null}
+          {card.showPower ? <span class="pile-card__power">{card.power}</span> : null}
         </div>
         <div class="pile-card__name">{card.name}</div>
         <div class="pile-card__type">{card.type}</div>

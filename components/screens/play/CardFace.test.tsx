@@ -2,6 +2,8 @@ import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import type { ResolvedCard } from '@/services/playgame/view';
+import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
 import { CardFace } from './CardFace';
 
 const card = (overrides: Partial<ResolvedCard> = {}): ResolvedCard => ({
@@ -27,23 +29,35 @@ const card = (overrides: Partial<ResolvedCard> = {}): ResolvedCard => ({
 
 let container: HTMLDivElement | undefined;
 let dispose: (() => void) | undefined;
+let registry: CardVfxRegistry | undefined;
 
 afterEach(() => {
   dispose?.();
+  registry?.dispose();
   container?.remove();
   dispose = undefined;
+  registry = undefined;
   container = undefined;
 });
 
 describe('canonical card face', () => {
   it('renders the play face without adding a geometry wrapper', () => {
     container = document.createElement('div');
+    const cardVfxRegistry = createCardVfxRegistry();
+    registry = cardVfxRegistry;
     document.body.appendChild(container);
-    dispose = render(() => (
-      <div class="card">
-        <CardFace card={card({ textDisabled: true })} variant="play" />
-      </div>
-    ), container);
+    dispose = render(
+      () => (
+        <div class="card">
+          <CardFace
+            card={card({ textDisabled: true })}
+            variant="play"
+            vfxRegistry={cardVfxRegistry}
+          />
+        </div>
+      ),
+      container,
+    );
 
     const surface = container.querySelector('.card');
     expect(surface?.querySelector(':scope > [data-card-face]')).toBeNull();
@@ -57,14 +71,26 @@ describe('canonical card face', () => {
 
   it('applies the same spell stat rule to play and pile faces', () => {
     container = document.createElement('div');
+    const cardVfxRegistry = createCardVfxRegistry();
+    registry = cardVfxRegistry;
     document.body.appendChild(container);
-    const spell = card({ id: 'spell-1', type: 'spell', power: 99, basePower: 99 });
-    dispose = render(() => (
-      <>
-        <div class="card" data-testid="play"><CardFace card={spell} variant="play" /></div>
-        <CardFace card={spell} variant="pile" />
-      </>
-    ), container);
+    const spell = card({
+      id: 'spell-1',
+      type: 'spell',
+      power: 99,
+      basePower: 99,
+    });
+    dispose = render(
+      () => (
+        <>
+          <div class="card" data-testid="play">
+            <CardFace card={spell} variant="play" vfxRegistry={cardVfxRegistry} />
+          </div>
+          <CardFace card={spell} variant="pile" />
+        </>
+      ),
+      container,
+    );
 
     expect(container.querySelector('[data-testid="play"] > .cost')?.textContent).toBe('3');
     expect(container.querySelector('[data-testid="play"] > .power')).toBeNull();
