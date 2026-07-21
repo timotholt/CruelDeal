@@ -1,0 +1,216 @@
+@scope (.playgame-root) {
+  @keyframes vfxHalo {
+    0%   { opacity: 0.9; transform: scale(1); }
+    100% { opacity: 0;   transform: scale(1.15); }
+  }
+
+  .vfx-burst .fx-layer {
+    animation: vfx-burst-anim 0.5s var(--vfx-delay, 0ms) cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+  }
+  @keyframes vfx-burst-anim {
+    0% { transform: scale(0); opacity: 0; box-shadow: inset 0 0 0px var(--vfx-color, white); }
+    50% { opacity: 1; box-shadow: inset 0 0 20px var(--vfx-color, white); }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+
+  .vfx-pulse .stat-layer {
+    animation: vfx-pulse-anim 0.4s var(--vfx-delay, 0ms) cubic-bezier(0.18, 0.89, 0.32, 1.28) both;
+  }
+  @keyframes vfx-pulse-anim {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.3); }
+  }
+
+  /* Status Particles (Micro) */
+  .vfx-particle {
+    position: absolute; width: 4px; height: 4px; background: white;
+    border-radius: 50%; pointer-events: none; opacity: 0;
+    animation: vfx-particle-anim var(--vfx-duration, 0.5s) var(--vfx-delay, 0ms) ease-out both;
+  }
+  @keyframes vfx-particle-anim {
+    0% { transform: translate(0,0) scale(1); opacity: 1; }
+    100% { transform: translate(var(--vfx-dx, 20px), var(--vfx-dy, -20px)) scale(0); opacity: 0; }
+  }
+
+  .vfx-focus {
+    animation: vfx-focus-anim 1s var(--vfx-delay, 0ms) ease-out both;
+  }
+  @keyframes vfx-focus-anim {
+    0% { filter: blur(10px) brightness(0); opacity: 0; }
+    100% { filter: blur(0px) brightness(1.2); opacity: 1; }
+  }
+
+  .vfx-blur {
+    animation: vfx-blur-anim 1.2s var(--vfx-delay, 0ms) ease-in-out both;
+  }
+  @keyframes vfx-blur-anim {
+    0% { filter: blur(0px) brightness(1.2); opacity: 1; }
+    100% { filter: blur(1px) brightness(0.5); opacity: 1; }
+  }
+
+  .vfx-hide {
+    animation: vfx-hide-anim var(--vfx-duration, 1ms) var(--vfx-delay, 0ms) both;
+  }
+  @keyframes vfx-hide-anim {
+    0%, 100% { opacity: 0; visibility: hidden; }
+  }
+
+  /* Timeline primitives — applied directly to card elements by Timeline.play() */
+  @keyframes vfx-pop-anim {
+    0%   { scale: var(--vfx-scale-start, 0); opacity: 0; }
+    60%  { scale: 1.08; opacity: 1; }
+    100% { scale: 1; opacity: 1; }
+  }
+  @keyframes vfx-flash-anim {
+    0%, 100% { filter: none; }
+    50%      { filter: brightness(1.8) drop-shadow(0 0 12px var(--vfx-color, #fff)); }
+  }
+  @keyframes vfx-shake-anim {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 2px); }
+    40% { transform: translate(3px, -2px); }
+    60% { transform: translate(-2px, 3px); }
+    80% { transform: translate(2px, -3px); }
+  }
+  @keyframes vfx-flip-anim {
+    0%   { transform: rotateY(180deg); }
+    100% { transform: rotateY(0deg); }
+  }
+
+  /* ── Card VFX Overlay Stack ─────────────────────────────────────────────
+     Absolute-positioned overlays rendered by CardVfxStack.
+     CardVfxStack renders as a transparent Fragment; overlay divs are
+     direct children of the position:relative .card container.
+     CSS vars (--card-fx-*) are set inline per record by the component.
+  */
+
+  .card-vfx-overlay {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    /* Shared CSS variable defaults */
+    --card-fx-intensity: 1;
+    --card-fx-count: 1;
+    --card-fx-primary: #ffffff;
+    --card-fx-secondary: transparent;
+    --card-fx-accent: transparent;
+    --card-fx-speed: 1;
+    --card-fx-opacity: 1;
+    --card-fx-seed: 0;
+    --card-fx-color: #ffffff;
+  }
+
+  /* power-pulse channel: one-shot power-changed flash */
+  @keyframes card-vfx-power-flash-anim {
+    0%   { opacity: 0; box-shadow: none; }
+    30%  { opacity: 1; }
+    60%  { opacity: 0.8; }
+    100% { opacity: 0; box-shadow: none; }
+  }
+
+  .card-vfx-power-flash--buff {
+    --card-fx-color: #6dff9d;
+    animation: card-vfx-power-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #6dff9d, 0 0 12px #6dff9d80;
+  }
+
+  .card-vfx-power-flash--debuff {
+    --card-fx-color: #ff5d8f;
+    animation: card-vfx-power-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #ff5d8f, 0 0 12px #ff5d8f80;
+  }
+
+  /* impact-shake channel: shake animation */
+  @keyframes card-vfx-shake-anim {
+    0%, 100% { transform: translate(0, 0); }
+    20% { transform: translate(-3px, 2px); }
+    40% { transform: translate(3px, -2px); }
+    60% { transform: translate(-2px, 3px); }
+    80% { transform: translate(2px, -3px); }
+  }
+
+  /* surface-fx flash: generic overlay flash */
+  @keyframes card-vfx-flash-anim {
+    0%, 100% { opacity: 0; }
+    30% { opacity: 1; }
+    70% { opacity: 0.7; }
+  }
+
+  /* destroy-burst: shake + crimson flash */
+  .card-vfx-destroy-shake {
+    animation: card-vfx-shake-anim 260ms ease-out both;
+    /* shake applies to the overlay but also bleeds through filter on parent via stacking context — acceptable for first slice */
+  }
+
+  .card-vfx-destroy-flash {
+    animation: card-vfx-flash-anim 260ms ease-out both;
+    box-shadow: inset 0 0 0 2px #ff5d8f, 0 0 16px #ff5d8fa0;
+    background: rgba(255, 93, 143, 0.15);
+  }
+
+  /* glitch-flash: shake + cyan flash */
+  .card-vfx-glitch-shake {
+    animation: card-vfx-shake-anim 240ms ease-out both;
+  }
+
+  .card-vfx-glitch-flash {
+    animation: card-vfx-flash-anim 240ms ease-out both;
+    box-shadow: inset 0 0 0 2px #70e1f5, 0 0 14px #70e1f580;
+    background: rgba(112, 225, 245, 0.12);
+  }
+
+  /* move trail: the palette identifies the semantic event cause. Location
+     relocations (Skyrail-class effects) use cyan; card/system moves use the
+     default violet. The structural flight remains the base transfer. */
+  @keyframes card-vfx-move-trail-anim {
+    0%   { opacity: 0.95; transform: scale(0.86); }
+    45%  { opacity: 0.75; }
+    100% { opacity: 0; transform: scale(1.16); }
+  }
+
+  .card-vfx-move-trail {
+    animation: card-vfx-move-trail-anim 420ms ease-out both;
+    border: 2px solid var(--card-fx-color);
+    box-shadow: inset 0 0 12px color-mix(in srgb, var(--card-fx-color) 55%, transparent),
+      0 0 18px color-mix(in srgb, var(--card-fx-color) 75%, transparent);
+  }
+
+  .card-vfx-move-trail--location {
+    background: linear-gradient(115deg, transparent 20%, rgba(88, 199, 255, 0.28), transparent 80%);
+  }
+
+  /* persistent glitch overlay (textDisabled) */
+  @keyframes card-vfx-glitch-persistent-anim {
+    0%, 90%, 100% { opacity: 0.5; transform: translate(0, 0); }
+    92%  { opacity: 0.8; transform: translate(-2px, 0); }
+    94%  { opacity: 0.6; transform: translate(2px, 0); }
+    96%  { opacity: 0.9; transform: translate(-1px, 1px); }
+    98%  { opacity: 0.5; transform: translate(0, 0); }
+  }
+
+  .card-fx-glitch {
+    animation: card-vfx-glitch-persistent-anim 3s ease-in-out infinite;
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 34, 85, 0.4),
+      inset 2px 0 0 rgba(0, 255, 204, 0.3),
+      inset -2px 0 0 rgba(34, 0, 255, 0.3);
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(255, 34, 85, 0.04) 2px,
+      rgba(255, 34, 85, 0.04) 4px
+    );
+  }
+
+  /* persistent overlay exit */
+  .card-vfx-overlay--exiting {
+    animation: card-vfx-persistent-exit-anim 400ms ease-out forwards;
+  }
+
+  @keyframes card-vfx-persistent-exit-anim {
+    from { opacity: 1; }
+    to   { opacity: 0; }
+  }
+}

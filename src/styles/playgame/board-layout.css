@@ -1,0 +1,231 @@
+@scope (.playgame-root) {
+  /* board-wrap: covers the active 9:16 app frame. AppViewport owns browser
+     letterboxing; the play board now sizes against that center frame. */
+  .board-wrap {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    overflow: hidden;
+    z-index: 1;
+    container-name: play-frame;
+    container-type: size;
+  }
+  /* Subtle grid texture — clipped to the board column only */
+  .board-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: radial-gradient(ellipse at 50% 47%, #000 0%, #000 50%, transparent 82%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .play-vfx-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 400;
+    overflow: hidden;
+    pointer-events: none;
+    contain: layout paint;
+  }
+  /* AppViewport is the sole 9:16 sizing authority. /play fills that frame. */
+  .board {
+    position: relative;
+    width: var(--board-w);
+    height: var(--board-h);
+    max-height: 100%;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 8px var(--board-pad-x) 0;
+    overflow: hidden;
+    z-index: 1;
+    background:
+      radial-gradient(80% 40% at 50% -5%, rgba(95, 128, 144, 0.30) 0%, transparent 100%),
+      radial-gradient(60% 35% at 110% 100%, rgba(96, 52, 64, 0.28) 0%, transparent 100%),
+      radial-gradient(60% 38% at -10% 100%, rgba(33, 92, 78, 0.26) 0%, transparent 100%),
+      var(--bg-0);
+    visibility: hidden;
+  }
+  .board.play-frame {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: 5fr 74fr 21fr;
+    --play-control-size: 30px;
+    --message-center-y: 43.5%;
+  }
+  .board.ready {
+    visibility: visible;
+  }
+  .opponent-header,
+  .board-stage,
+  .player-footer {
+    min-width: 0;
+    min-height: 0;
+  }
+  .board-game-area {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    justify-content: center;
+  }
+  .play-frame > .board-game-area {
+    display: block;
+    position: relative;
+    min-height: 0;
+    width: 100%;
+    overflow: visible;
+  }
+  :scope.debug-on .board-game-area { background: rgba(0,255,0,0.15); }
+  .lane-track {
+    position: absolute;
+    inset: var(--playfield-gutter-y) 0;
+    min-width: 0;
+    min-height: 0;
+  }
+  /*
+   * Lanes never resize. Only their horizontal target changes:
+   * 1 lane = 50%; 2 = 25%/75%; 3 = 1/6, 1/2, 5/6.
+   */
+  .lane-column {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--lane-center) - (var(--lane-w) / 2));
+    width: var(--lane-w);
+    height: 100%;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) var(--location-h) minmax(0, 1fr);
+    row-gap: var(--location-gap);
+    align-items: center;
+    justify-items: center;
+    min-width: 0;
+    min-height: 0;
+    isolation: isolate;
+  }
+  .lane-map {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background-position: center;
+    background-size: cover;
+    opacity: 0;
+    pointer-events: none;
+    overflow: hidden;
+    transition: opacity 180ms ease;
+    z-index: 0;
+  }
+  .lane-map::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.28);
+  }
+  .lane-map[data-revealed="true"] {
+    opacity: 1;
+  }
+  .lane-column > :not(.lane-map) {
+    position: relative;
+    z-index: 1;
+  }
+  .lane-column > .lane-slots {
+    align-self: center;
+  }
+  .lane-column > .location {
+    width: 100%;
+    height: var(--location-h);
+  }
+  .player-footer {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+    width: 100%;
+    overflow: visible;
+  }
+  .hand { min-width: 0; min-height: 0; }
+  .lane-slots {
+    /* 2×2 landing grid — mandatory layout, mirrors Marvel Snap.
+       2 columns × 2 rows, each cell sized to hold one 5:7 card. */
+    display: grid;
+    grid-template-columns: repeat(2, var(--card-w));
+    grid-template-rows: repeat(2, var(--card-h));
+    gap: var(--slot-gap);
+    justify-items: center;
+    align-items: center;
+    /* Total size is driven by the card dimensions — no flex stretching. */
+    width: calc(2 * var(--card-w) + var(--slot-gap) + 2 * var(--lane-pad-x));
+    height: var(--lane-play-h);
+    margin: 0 auto;
+    background: transparent;
+    border: 0;
+    border-radius: 8px;
+    padding: var(--lane-pad-top) var(--lane-pad-x) var(--lane-pad-bottom);
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    box-shadow: none;
+    overflow: visible;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+  }
+  .lane-slots::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255,255,255,0.18);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 0 18px rgba(255,255,255,0.06);
+    opacity: 0;
+    transform: scale(0.985);
+    transition: opacity 180ms ease, transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+    pointer-events: none;
+  }
+  .board.dragging-card .lane-column > .lane-slots.bot {
+    background:
+      linear-gradient(180deg, var(--lane-bg-2), var(--lane-bg)),
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,0.08), transparent 72%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 16px 36px rgba(0,0,0,0.18);
+  }
+  .board .lane-slots {
+    background: transparent;
+    box-shadow: none;
+  }
+  .board .location {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
+      rgba(18, 22, 28, 0.4);
+  }
+  /* Slot: exactly one card-sized cell in the 2×2 grid.
+     Width and height are explicit so the 5:7 ratio is always honoured. */
+  .slot {
+    width: var(--card-w);
+    height: var(--card-h);
+    border: 0;
+    border-radius: 6px;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+    overflow: visible;
+  }
+  .board.dragging-card .lane-column > .lane-slots.bot .slot:empty {
+    background: rgba(255,255,255,0.045);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.045);
+  }
+  .board.dragging-card .lane-column > .lane-slots.bot.drop-target .slot.next-drop {
+    box-shadow: inset 0 0 0 1px rgba(255,207,91,0.58), 0 0 10px rgba(255,207,91,0.14);
+  }
+}

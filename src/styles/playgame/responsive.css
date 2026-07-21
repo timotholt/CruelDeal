@@ -1,0 +1,43 @@
+@scope (.playgame-root) {
+  /* Presentation events own playfield visibility. Setup can therefore build
+     canonical lane history without exposing its intermediate topology. */
+  .board > .board-game-area {
+    transition: opacity 2000ms ease;
+  }
+  :scope.playfield-hidden .board > .board-game-area {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane-column {
+      transition-duration: 1ms !important;
+    }
+  }
+
+  /* --------------------------------------------------------------------
+     RESPONSIVE OVERRIDES
+     Because every dimension derives from --board-w, we only need to
+     adjust that one variable (and a few tight-space tweaks). No need
+     to retune card sizes, lane sizes, paddings, etc. at each breakpoint.
+     -------------------------------------------------------------------- */
+  /* Portrait phones — board already fills width via the min() formula. */
+  @media (max-width: 500px) {
+    .turn-orb { width: 48px; height: 48px; }
+    .turn-orb__value { font-size: 20px; }
+    .hidden-hand__backs { width: 32px; }
+    .hidden-hand__back { width: 16px; height: 22px; }
+    .retreat-btn { font-size: 12px; padding: 4px 6px; }
+    .end-turn   { font-size: 12px; padding: 4px 6px; }
+    .energy-button .energy-badge { padding: 6px 10px; }
+  }
+
+  /* Very narrow phones (iPhone SE, etc.) */
+  @media (max-width: 380px) {
+    :scope {
+      --lane-gap: 4px;
+      --slot-gap: 3px;
+      --lane-pad-x: 3px;
+    }
+  }
+}

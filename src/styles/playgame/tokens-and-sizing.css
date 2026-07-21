@@ -1,0 +1,104 @@
+  .playgame-root {
+    --bg-0: #07090d;
+    --bg-1: #10151c;
+    --bg-2: #18222d;
+    --panel: rgba(12, 16, 22, 0.84);
+    --line: rgba(146, 164, 190, 0.2);
+    --line-strong: rgba(195, 215, 242, 0.34);
+    --text: #f2f4ee;
+    --muted: #8d9aa8;
+    --accent: #ffcf5b;
+    --accent-2: #42d6b1;
+    --warn: #ff8a5a;
+    --danger: #ff4d6d;
+    --p1: #4aa8ff;
+    --p2: #ff6f61;
+    --card-bg: linear-gradient(160deg, #26303b 0%, #111820 55%, #090d12 100%);
+    --card-edge: rgba(220, 232, 245, 0.2);
+    --enemy-card-bg: linear-gradient(160deg, #3a2025 0%, #1a1014 58%, #0b080a 100%);
+    --lane-bg: rgba(255,255,255,0.035);
+    --lane-bg-2: rgba(255,255,255,0.065);
+    --font-display: 'Unica One', 'Bebas Neue', Impact, sans-serif;
+    --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    position: relative;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    /* ----------------------------------------------------------------
+       BOARD SIZING — 9:16 portrait column, Marvel Snap style.
+
+       The board is a fixed-aspect-ratio column centred in the viewport.
+       On portrait phones it fills the full width. On wide/landscape
+       screens (desktop, tablet landscape) it is letterboxed so it never
+       exceeds the 9:16 ratio — keeping all card sizes proportional.
+
+       AppViewport owns the fixed 9:16 frame. The local play root consumes
+       that host through container units and is the sole owner of playgame
+       geometry variables.
+       ---------------------------------------------------------------- */
+    --board-w: 100cqw;
+    --board-h: 100cqh;
+
+    /* Gap between location strip and the lane-slot rows above/below it. */
+    --location-gap: 12px;
+    --playfield-gutter-y: 12px;
+
+    /* Side breathing room inside the board. */
+    --board-pad-x: 8px;
+
+    /* Gaps between the 3 lanes and between the 2 cards in a lane. */
+    --lane-gap: 6px;
+    --slot-gap: 4px;
+
+    /* Inner padding inside each lane frame. */
+    --lane-pad-x: 5px;
+    --lane-pad-top: 5px;
+    --lane-pad-bottom: 5px;
+
+    /* Available width for the 3 lanes combined. */
+    --lanes-total-w: calc(var(--board-w) - 2 * var(--board-pad-x) - 2 * var(--lane-gap));
+
+    /* One lane's width. */
+    --lane-w: calc(var(--lanes-total-w) / 3);
+
+    /* Space inside a lane for 2 cards side-by-side (after padding + slot gap). */
+    --lane-inner-w: calc(var(--lane-w) - 2 * var(--lane-pad-x) - var(--slot-gap));
+
+    /* ----------------------------------------------------------------
+       CARD DIMENSIONS — MANDATORY 5:7 (width:height = 5:7) everywhere.
+       --card-w  = half the inner lane width  (2 cards sit side-by-side)
+       --card-h  = card-w × 7/5 = card-w × 1.4   ← never change this
+       This ratio must never be overridden anywhere in the stylesheet.
+       ---------------------------------------------------------------- */
+    --card-w: calc(var(--lane-inner-w) / 2);
+    --card-h: calc(var(--card-w) * 1.4);
+
+    /* Location strip height — significantly taller for longer text. */
+    --location-h: calc(var(--card-w) * 1.5);
+
+    /* One lane's 2×2 play area total height. */
+    --lane-play-h: calc(2 * var(--card-h) + var(--slot-gap) + var(--lane-pad-top) + var(--lane-pad-bottom));
+
+    /* Hand cards — same 5:7 ratio, slightly larger than lane cards. */
+    --hand-card-w: calc(var(--card-w) * 1.18);
+    --hand-card-h: calc(var(--hand-card-w) * 1.4);
+  }
+  .playgame-root,
+  .playgame-root * {
+    box-sizing: border-box;
+  }
+
+  .playgame-root.playgame-portal-root {
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    z-index: 0;
+    pointer-events: none;
+    background: transparent;
+  }
+
+  .playgame-root.playgame-portal-root > * {
+    pointer-events: auto;
+  }

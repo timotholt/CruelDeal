@@ -1,0 +1,389 @@
+@scope (.playgame-root) {
+  /* ----------------------------------------------------------------
+     CARD INTERNALS — all sizing relative to --card-w so everything
+     scales proportionally as the board shrinks or grows.
+
+     Reference card size at design time: --card-w ≈ 58px (desktop).
+     Fractions below are tuned to that baseline.
+     ---------------------------------------------------------------- */
+
+  /* Derived typographic / badge scale tokens — computed once from --card-w. */
+  :scope {
+    --card-font-name:  calc(var(--card-w) * 0.20);   /* ~11.6px at 58px */
+    --card-font-type:  calc(var(--card-w) * 0.13);   /* ~7.5px  */
+    --card-font-badge: calc(var(--card-w) * 0.175);  /* ~10px   */
+    --card-badge-size: calc(var(--card-w) * 0.33);   /* ~19px   */
+    --card-badge-off:  calc(var(--card-w) * -0.08);  /* -8% bleed (middle ground to prevent overlap) */
+    --card-pad:        calc(var(--card-w) * 0.075);  /* ~4.4px  */
+    --card-bar-h:      calc(var(--card-w) * 0.062);  /* ~3.6px  */
+    --card-radius:     calc(var(--card-w) * 0.10);   /* ~5.8px  */
+
+    /* Hand cards use the same tokens scaled by 1.18 */
+    --hcard-font-name:  calc(var(--hand-card-w) * 0.20);
+    --hcard-font-type:  calc(var(--hand-card-w) * 0.13);
+    --hcard-font-badge: calc(var(--hand-card-w) * 0.175);
+    --hcard-badge-size: calc(var(--hand-card-w) * 0.33);
+    --hcard-badge-off:  calc(var(--hand-card-w) * -0.08);
+    --hcard-pad:        calc(var(--hand-card-w) * 0.075);
+    --hcard-bar-h:      calc(var(--hand-card-w) * 0.062);
+    --hcard-radius:     calc(var(--hand-card-w) * 0.10);
+  }
+
+  /* ── Cards ─────────────────────────────────────────────────────────
+     card.js renders: .card > .cost, .power, .bar, .name, .type
+     All sizing tokens come from --hcard-* (hand) or --card-* (lane).
+     DO NOT add wrapper elements here — the renderer doesn't output them.
+     ----------------------------------------------------------------- */
+  .card {
+    position: relative;
+    width: var(--hand-card-w); height: var(--hand-card-h);
+    aspect-ratio: 5 / 7;
+    background: var(--card-bg);
+    border: 1px solid var(--card-edge);
+    border-radius: var(--hcard-radius);
+    display: grid;
+    grid-template-rows: var(--hcard-badge-size) 1fr var(--hcard-badge-size);
+    padding: var(--hcard-pad);
+    color: var(--text);
+    font-family: var(--font-body);
+    cursor: pointer;
+    user-select: none;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+    overflow: visible;
+  }
+  .card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(166, 109, 255, 0.6);
+    box-shadow: 0 14px 30px rgba(166,109,255,0.25), 0 6px 14px rgba(0,0,0,0.4);
+  }
+  .inspector-clone.card:hover,
+  .inspector-clone .card:hover {
+    border-color: var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .inspector-clone .card:hover {
+    transform: scale(var(--hand-scale, 1));
+  }
+  .card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent), 0 14px 30px rgba(166,109,255,0.4);
+  }
+  .card.target-valid {
+    outline: 2px dashed var(--accent-2);
+    outline-offset: 4px;
+  }
+  .card.enemy { border-color: rgba(255, 111, 97, 0.3); background: var(--enemy-card-bg); }
+
+  /* Cost badge (top-left circle) */
+  .card .cost {
+    position: absolute;
+    top: var(--hcard-badge-off); left: var(--hcard-badge-off);
+    width: var(--hcard-badge-size); height: var(--hcard-badge-size);
+    border-radius: 50%;
+    background: #60a5fa;
+    color: #061024; font-weight: 700; font-size: var(--hcard-font-badge);
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #061024;
+  }
+  .card .cost.buffed { background: #2dd4a7; color: #052e22; }
+  .card .cost.debuffed { background: #ff6080; color: #3a0616; }
+
+  /* Power badge (top-right pill) */
+  .card .power {
+    position: absolute;
+    top: var(--hcard-badge-off); right: var(--hcard-badge-off);
+    min-width: var(--hcard-badge-size); height: var(--hcard-badge-size);
+    border-radius: calc(var(--hcard-badge-size) * 0.3);
+    background: #f0d060; color: #2a1a00; font-weight: 800; font-size: var(--hcard-font-badge);
+    display: flex; align-items: center; justify-content: center;
+    padding: 0 calc(var(--hcard-badge-size) * 0.22);
+    border: 2px solid #061024;
+    font-family: var(--font-mono);
+  }
+  .card .power.buffed  { background: #2dd4a7; color: #052e22; }
+  .card .power.debuffed { background: #ff6080; color: #3a0616; }
+
+  .card .name {
+    font-family: var(--font-display); font-size: var(--hcard-font-name);
+    letter-spacing: 0.06em; text-align: center; line-height: 1.1;
+    align-self: center; overflow: hidden;
+  }
+  .card .bar {
+    height: var(--hcard-bar-h); border-radius: 2px; margin: 2px 0;
+  }
+  .card .type {
+    font-family: var(--font-mono); font-size: clamp(5px, var(--hcard-font-type), 0.72rem);
+    color: var(--muted); text-align: center;
+    letter-spacing: 0; text-transform: uppercase;
+    align-self: end; justify-self: stretch; width: 100%; min-width: 0; overflow: hidden;
+    white-space: nowrap;
+  }
+  .card.text-disabled {
+    border-color: rgba(255, 96, 128, 0.55);
+  }
+  .card .text-disabled-mark {
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    bottom: 18%;
+    height: 2px;
+    background: rgba(255, 96, 128, 0.95);
+    box-shadow: 0 0 8px rgba(255, 96, 128, 0.55);
+    transform: rotate(-7deg);
+    pointer-events: none;
+  }
+
+  /* Facedown cards */
+  .card.facedown {
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
+    border-color: var(--card-edge);
+  }
+  .card.facedown .name, .card.facedown .type,
+  .card.facedown .cost, .card.facedown .power, .card.facedown .bar,
+  .card.facedown .portrait {
+    visibility: hidden;
+  }
+
+  /* Lane cards — smaller tokens, same structure. The explicit class travels
+     with zoom-inspector clones after they leave the .lane-slots subtree. */
+  .card.lane-card,
+  .lane-slots .card {
+    width: var(--card-w); height: var(--card-h);
+    padding: var(--card-pad);
+    border-radius: var(--card-radius);
+    grid-template-rows: var(--card-badge-size) 1fr var(--card-badge-size);
+  }
+  .card.lane-card:not(.facedown),
+  .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
+  .card.lane-card.facedown,
+  .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
+  .card.lane-card .name,
+  .lane-slots .card .name { font-size: var(--card-font-name); }
+  .card.lane-card .type,
+  .lane-slots .card .type { font-size: clamp(5px, var(--card-font-type), 0.54rem); }
+  .card.lane-card .bar,
+  .lane-slots .card .bar  { height: var(--card-bar-h); }
+  .card.lane-card .cost,
+  .lane-slots .card .cost {
+    top: var(--card-badge-off); left: var(--card-badge-off);
+    width: var(--card-badge-size); height: var(--card-badge-size);
+    font-size: var(--card-font-badge);
+  }
+  .card.lane-card .power,
+  .lane-slots .card .power {
+    top: var(--card-badge-off); right: var(--card-badge-off);
+    min-width: var(--card-badge-size); height: var(--card-badge-size);
+    font-size: var(--card-font-badge);
+    padding: 0 calc(var(--card-badge-size) * 0.22);
+    border-radius: calc(var(--card-badge-size) * 0.3);
+  }
+
+  /* Spell silhouette: the card keeps the exact same layout/animation box as
+     every other card. Only its painted surface is clipped into a circular
+     head and narrower stem, so refs, slots, drag rects, and motion transforms
+     continue to use the canonical 5:7 geometry. */
+  .card[data-card-type="spell"] {
+    clip-path: polygon(
+      50% 0%, 75% 4%, 93% 16%, 100% 32%, 95% 44%,
+      90% 50%, 90% 100%, 10% 100%, 10% 50%, 5% 44%,
+      0% 32%, 7% 16%, 25% 4%
+    );
+    border-radius: 0;
+  }
+  .card[data-card-type="spell"] .cost {
+    top: 4%;
+    left: 8%;
+  }
+
+  /* ── Location cards ─────────────────────────────────────────────── */
+  .location {
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
+      linear-gradient(145deg, rgba(81, 66, 48, 0.72), rgba(18, 22, 28, 0.92));
+    border: 1px solid rgba(255, 207, 91, 0.44);
+    border-radius: calc(var(--card-w) * 0.10);
+    padding: calc(var(--card-w) * 0.10) calc(var(--card-w) * 0.18);
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
+    position: relative;
+    box-shadow: 0 16px 34px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
+    min-width: 0;
+    overflow: visible;
+    cursor: pointer;
+  }
+  .lane-score {
+    position: absolute;
+    width:  calc(var(--card-w) * 0.40);
+    height: calc(var(--card-w) * 0.40);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: calc(var(--card-w) * 0.08);
+    font-family: var(--font-mono);
+    font-weight: 700;
+    font-size: calc(var(--card-w) * 0.20);
+    border: 1px solid rgba(255,255,255,0.15);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    z-index: 2;
+  }
+  .lane-score.enemy-score {
+    top: calc(var(--card-w) * -0.20);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #7f382f;
+    color: #ffe8e4;
+  }
+  .lane-score.player-score {
+    bottom: calc(var(--card-w) * -0.20);
+    left: 50%;
+    transform: translateX(-50%);
+    background: #2b5f91;
+    color: #e5f3ff;
+  }
+  .location .loc-name {
+    font-family: var(--font-display); font-size: calc(var(--card-w) * 0.20);
+    letter-spacing: 0.10em; text-align: center; color: var(--text); line-height: 1;
+    max-width: 100%; overflow: hidden;
+  }
+  .location .loc-desc {
+    font-size: calc(var(--card-w) * 0.125); color: var(--muted); text-align: center;
+    line-height: 1.3; font-family: var(--font-mono);
+    max-width: 100%; overflow: hidden;
+  }
+  /* Face-down location tile — shows a "???" placeholder before reveal */
+  .location--hidden {
+    background:
+      repeating-linear-gradient(45deg, #1a1f3a 0 6px, #12172a 6px 12px);
+    border-color: rgba(146,164,190,0.15);
+  }
+  .location--hidden .loc-name {
+    color: var(--muted);
+    letter-spacing: 0.2em;
+  }
+
+  /* Hand */
+  .hand {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 0 8px;
+    position: relative;
+    min-height: calc(var(--hand-card-h) + 10px);
+    --hand-scale: 1;
+    --hand-gap: 6px;
+    --hand-slot-reserve-ms: 240ms;
+    --hand-scale-ms: 180ms;
+    gap: var(--hand-gap);
+    flex-wrap: nowrap;
+    overflow: visible;
+  }
+  .hand .hand-card-motion {
+    flex: 0 0 var(--hand-card-w);
+    width: var(--hand-card-w);
+    height: var(--hand-card-h);
+    margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
+    will-change: translate, flex-basis, width, margin;
+    transition:
+      flex-basis var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
+      width var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
+      margin var(--hand-scale-ms) ease;
+  }
+  .hand .hand-card-motion--reserved {
+    animation: hand-slot-reserve var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1) both;
+  }
+  .hand .hand-card-motion > .card {
+    transform-origin: bottom center;
+    transform: scale(var(--hand-scale));
+    transition:
+      opacity 0.5s ease,
+      transform var(--hand-scale-ms) ease,
+      box-shadow 0.15s,
+      border-color 0.15s;
+  }
+  .hand .hand-card-motion:hover > .card {
+    transform: translateY(-10px) scale(calc(var(--hand-scale) * 1.05));
+    z-index: 5;
+  }
+  [data-drag-source][data-drag-enabled="true"] {
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .drag-source-active {
+    opacity: 0.18;
+  }
+  .card-motion-surrogate {
+    box-sizing: border-box;
+    transform: none;
+    transform-origin: center center;
+    pointer-events: none;
+  }
+  .card-motion-resting-shell,
+  .card-motion-visual {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    transform-origin: center center;
+    pointer-events: none;
+  }
+  .card-motion-visual.card {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+  .card-motion-visual.card:hover {
+    border-color: var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .pointer-drag-ghost {
+    pointer-events: none !important;
+    cursor: grabbing;
+    box-sizing: border-box;
+  }
+  .pointer-drag-ghost:hover {
+    box-shadow: 0 18px 42px rgba(0,0,0,0.55), 0 0 22px rgba(255,207,91,0.2);
+  }
+
+  @keyframes hand-slot-reserve {
+    from {
+      flex-basis: 0;
+      width: 0;
+      margin-inline: 0;
+    }
+    to {
+      flex-basis: var(--hand-card-w);
+      width: var(--hand-card-w);
+      margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
+    }
+  }
+
+  /* Flying card used during play animation */
+  .flying-card {
+    position: absolute;
+    z-index: 180;
+    pointer-events: none;
+    transform-style: preserve-3d;
+    perspective: 1200px;
+    aspect-ratio: 5 / 7;
+    will-change: transform, left, top, width, height;
+  }
+  .flying-card .face {
+    position: absolute; inset: 0;
+    backface-visibility: hidden;
+    border-radius: 8px;
+    transition: transform 0s;
+  }
+  .flying-card .face.back {
+    transform: rotateY(180deg);
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
+    border: 1px solid var(--card-edge);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .flying-card .face.back::after {
+    content: ''; position: absolute; inset: 20% 15%;
+    background: radial-gradient(ellipse, rgba(166,109,255,0.6), transparent 70%);
+  }
+
+}

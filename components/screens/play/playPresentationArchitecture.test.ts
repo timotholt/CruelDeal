@@ -1,8 +1,24 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
-const source = (relativePath: string): string =>
-  readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+const source = (relativePath: string): string => {
+  const contents = readFileSync(new URL(relativePath, import.meta.url), 'utf8');
+  if (relativePath !== '../../../src/styles/playgame.css') return contents;
+
+  return [
+    contents,
+    'tokens-and-sizing.css',
+    'board-layout.css',
+    'overlays-and-replay.css',
+    'cards.css',
+    'hud-and-controls.css',
+    'vfx.css',
+    'responsive.css',
+  ].map((part, index) => index === 0
+    ? part
+    : source(`../../../src/styles/playgame/${part}`))
+    .join('\n');
+};
 
 describe('Phase 1.21 presentation architecture fences', () => {
   it('adopts immutable match snapshots by identity instead of deep-cloning them into a store', () => {
