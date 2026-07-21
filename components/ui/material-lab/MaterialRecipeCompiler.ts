@@ -28,7 +28,7 @@ const resolveOverlay = (recipe: MaterialRecipe, state: MaterialRecipeState): Mat
 export const materialRecipeToResolvedSurface = (
   recipe: MaterialRecipe,
   state: MaterialRecipeState,
-): SurfaceOptions => {
+): SurfaceOptions & { disabled?: boolean } => {
   const overlay = resolveOverlay(recipe, state);
   const surface = overlay?.surface;
   const glow = overlay?.glow;

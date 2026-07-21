@@ -1,4 +1,4 @@
-import type { Manifest } from '../engine/manifest/types';
+import type { MatchContentCatalog } from '../client/contentCatalog';
 import type { Seat } from '../engine/types/ids';
 import type { CardStatReader, ResolvedCard } from '../view';
 import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
@@ -19,7 +19,7 @@ export interface PresentationHandSlots {
  * only PresentationDirector is allowed to advance committed visible state.
  */
 export interface PlayPresentationHost {
-  readonly manifest: Manifest;
+  readonly content: MatchContentCatalog;
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly motionSurface: PlayMotionSurface;
@@ -34,7 +34,7 @@ export interface PlayPresentationHost {
 }
 
 export interface CreatePlayPresentationHostOptions {
-  readonly manifest: Manifest;
+  readonly content: MatchContentCatalog;
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly motionSurface: PlayMotionSurface;
@@ -144,7 +144,7 @@ export const playCardVfxCue = (registry: CardVfxRegistry, cue: VfxCue): void => 
 export const createPlayPresentationHost = (
   options: CreatePlayPresentationHostOptions,
 ): PlayPresentationHost => ({
-  manifest: options.manifest,
+  content: options.content,
   localSeat: options.localSeat,
   remoteSeat: options.remoteSeat,
   motionSurface: options.motionSurface,

@@ -1,0 +1,42 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "components/authoring/**/*.ts",
+    "components/authoring/**/*.tsx",
+    "components/debug/**/*.ts",
+    "components/debug/**/*.tsx",
+    "components/screens/CanonicalCardProofScreen.tsx",
+    "components/screens/CardFrameLabScreen.tsx",
+    "components/screens/GameTextTestScreen.tsx",
+    "components/screens/GameUiSkinProofScreen.tsx",
+    "components/screens/LoginMaterialPreviewScreen.tsx",
+    "components/screens/MainMaterialPreviewScreen.tsx",
+    "components/screens/MinimalSurfaceProofScreen.tsx",
+    "components/screens/TensorPlayScreen.tsx",
+    "components/screens/UiMaterialLabScreen.tsx",
+    "components/screens/UiNodePreviewScreen.tsx",
+    "components/screens/main-material/**/*.ts",
+    "components/screens/main-material/**/*.tsx",
+    "components/screens/minimal-surface/**/*.ts",
+    "components/ui/editor-output/**/*.ts",
+    "components/ui/editor-output/**/*.tsx",
+    "components/ui/material-lab/**/*.ts",
+    "components/ui/material-lab/**/*.tsx",
+    "components/ui/material-node/**/*.ts",
+    "components/ui/material-node/**/*.tsx",
+    "components/ui/semantic-artifacts/**/*.ts",
+    "components/ui/semantic-authoring/**/*.ts",
+    "components/ui/semantic-authoring/**/*.tsx",
+    "components/ui/semantic-compiler/**/*.ts",
+    "components/ui/semantic-compiler/**/*.tsx",
+    "components/ui/shiny/**/*.ts",
+    "components/ui/shiny/**/*.tsx",
+    "services/assets/workbench.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**",
+    "deprecated/**"
+  ]
+}

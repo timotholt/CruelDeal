@@ -1,6 +1,5 @@
 
 import { PurchaseResponse, ProgressionRewardType } from '../types';
-import { PendingMove } from './planning';
 import { sanitizeLog, safeExecute } from './api/apiUtils';
 
 // Specialized Domain Services
@@ -9,7 +8,6 @@ import { storeService } from './api/storeService';
 import { seasonService } from './api/seasonService';
 import { progressionService } from './api/progressionService';
 import { cmsService } from './api/cmsService';
-import { matchService } from './api/matchService';
 import { statsService } from './api/statsService';
 import { rankingService } from './api/rankingService';
 import { archiveService } from './api/archiveService';
@@ -41,14 +39,6 @@ export const api = {
             safeExecute(() => profileService.saveDeck(userId, deckId, cardIds)),
         renameDeck: (userId: string, deckId: number, name: string) =>
             safeExecute(() => profileService.renameDeck(userId, deckId, name)),
-    },
-
-    match: {
-        // Now fully authoritative
-        start: (userId: string) => 
-            safeExecute(() => matchService.startMatch(userId)),
-        submit: (userId: string, playerMoves: PendingMove[]) => 
-            safeExecute(() => matchService.submitTurn(userId, playerMoves)),
     },
 
     cms: {

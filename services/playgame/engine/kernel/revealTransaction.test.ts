@@ -44,6 +44,28 @@ function cardDef(
   };
 }
 
+function spellDef(
+  defId: string,
+  abilities: CardDef['abilities'] = {},
+): CardDef {
+  return {
+    defId,
+    version: 1,
+    name: defId,
+    acquisitionPool: 'tbd',
+    traits: [],
+    cardType: 'spell',
+    cost: 1,
+    abilities,
+    cosmetic: {
+      displayName: defId,
+      flavorText: '',
+      rulesText: '',
+      art: { portrait: { path: '' } },
+    },
+  };
+}
+
 function locationDef(
   defId: string,
   abilities: LocationCardDef['abilities'],
@@ -401,17 +423,13 @@ describe('C4D reveal transaction golden traces', () => {
         delta: { kind: 'LIT', n: 2 },
       }],
     });
-    const { basePower: _basePower, ...spellBase } = cardDef('spell', {
+    const spell = spellDef('spell', {
         onReveal: [{
           kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS',
           owner: 'SELF_OWNER',
           delta: { kind: 'LIT', n: 1 },
         }],
       });
-    const spell: CardDef = {
-      ...spellBase,
-      cardType: 'spell',
-    };
     const gameManifest = manifest([spell], 4, [playedHere]);
     const played: InternalCardRecord = {
       ...card('spell', 'spell', 'LANE', 0, false),

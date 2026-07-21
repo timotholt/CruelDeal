@@ -15,6 +15,7 @@ import {
 } from './PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
+import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import type { SeatTransactionTimeline } from '@/services/playgame/runtime/projection';
 
@@ -68,7 +69,7 @@ function mountSession(session: MatchSession): Harness {
   document.body.append(host);
   disposers.push(render(
     () => (
-      <PlayProviders session={session}>
+      <PlayProviders client={new LocalMatchSessionAdapter(session)}>
         <Probe />
       </PlayProviders>
     ),
@@ -268,7 +269,7 @@ describe('PlayUi committed-transaction interleavings', () => {
       const [uiMounted, setMounted] = createSignal(true);
       setUiMounted = setMounted;
       return (
-        <MatchSessionProvider session={session}>
+        <MatchSessionProvider client={new LocalMatchSessionAdapter(session)}>
           <MatchProbe />
           <Show when={uiMounted()}>
             <PlayUiProvider><UiProbe /></PlayUiProvider>

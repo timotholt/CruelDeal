@@ -20,6 +20,7 @@ import type {
   KernelReaction,
   KernelWork,
 } from './types';
+import type { DestructionLifecycleCommand } from './operations/lifecycle';
 
 export interface LifecyclePlacementSnapshot {
   readonly owner: Owner;

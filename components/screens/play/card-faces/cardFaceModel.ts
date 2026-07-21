@@ -1,10 +1,10 @@
 import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
-import type { CardDomain } from '@/services/playgame/engine/manifest/types';
+import type { ClientCardDomain } from '@/services/playgame/client/contentCatalog';
 
 export interface CardFaceModel {
   readonly id: string;
   readonly name: string;
-  readonly type: CardDomain | '';
+  readonly type: ClientCardDomain | '';
   readonly cost: number;
   readonly power: number;
   readonly portraitPath: string | null;

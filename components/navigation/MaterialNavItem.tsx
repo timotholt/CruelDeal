@@ -1,12 +1,14 @@
 import { JSX } from 'solid-js';
 import { GameTextV3 as GameText } from '../ui/GameTextV3';
 import {
-  MaterialButton,
   materialRecipeToInteractiveSurfaceProps,
   materialRecipeToSurfaceProps,
-  type MaterialRecipe,
-  type MaterialRecipeState,
-} from '../ui/material-lab';
+} from '../ui/material-lab/MaterialRecipeCompiler';
+import { MaterialButton } from '../ui/material-lab/MaterialPrimitives';
+import type {
+  MaterialRecipe,
+  MaterialRecipeState,
+} from '../ui/material-lab/MaterialRecipeTypes';
 
 interface MaterialNavItemProps {
   label: string;

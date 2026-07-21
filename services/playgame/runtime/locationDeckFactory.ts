@@ -27,8 +27,7 @@ export const defaultLocationDeckFactory: LocationDeckFactory = Object.freeze({
         (definition) => definition.rarity > 0
           && !globallyDisabled.has(definition.defId)
           && (!rulesetEnabled || rulesetEnabled.has(definition.defId)),
-      )
-      .sort((left, right) => left.poolOrder - right.poolOrder);
+      );
     const entries: readonly LocationCardDeckEntry[] = Object.freeze(
       eligible.map((definition) => Object.freeze({ defId: definition.defId })),
     );

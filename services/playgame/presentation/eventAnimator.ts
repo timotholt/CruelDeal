@@ -464,7 +464,7 @@ const reserveVisibleHandDestinations = (
     const resolved = resolveCard(
       transfer.cardId,
       afterState,
-      host.manifest,
+      host.content,
       host.cardStatReadModel,
     );
     if (resolved) reserved.push(resolved);

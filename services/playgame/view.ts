@@ -6,10 +6,13 @@
  * transitions must never enter this module.
  */
 
-import type { CardDomain, Manifest } from './engine/manifest/types';
+import {
+  getClientCardContent,
+  getClientLocationContent,
+  type ClientCardDomain,
+  type MatchContentCatalog,
+} from './client/contentCatalog';
 import type { LaneId, Seat } from './engine/types/ids';
-import { getCardTemplate } from './engine/projections/cardTemplate';
-import { getLocationTemplate } from './engine/projections/locationTemplate';
 import type {
   SeatCardStatReadModel,
 } from './runtime/seatReadModels';
@@ -42,7 +45,7 @@ export interface ResolvedCard {
   art: string;
   portraitPath: string | null;
   /** Empty only while the authority withholds an unrevealed card's identity. */
-  type: CardDomain | '';
+  type: ClientCardDomain | '';
   text: string;
   textDisabled: boolean;
   owner: Seat;
@@ -112,7 +115,7 @@ function visibleCard(
 export function resolveCard(
   token: SeatCardToken,
   state: SeatVisibleMatchState,
-  manifest: Manifest,
+  content: MatchContentCatalog,
   readStats?: CardStatReader,
 ): ResolvedCard | null {
   const card = visibleCard(state, token);
@@ -141,7 +144,7 @@ export function resolveCard(
       stats: null,
     };
   }
-  const template = getCardTemplate(manifest, card.defId);
+  const template = getClientCardContent(content, card.defId);
   if (!template) return null;
   const power = card.power ?? template.basePower ?? 0;
   const basePower = template.basePower ?? 0;
@@ -169,38 +172,38 @@ export function resolveCard(
 function resolveTokens(
   tokens: readonly SeatCardToken[],
   state: SeatVisibleMatchState,
-  manifest: Manifest,
+  content: MatchContentCatalog,
   readStats?: CardStatReader,
 ): ResolvedCard[] {
   return tokens
-    .map(token => resolveCard(token, state, manifest, readStats))
+    .map(token => resolveCard(token, state, content, readStats))
     .filter((card): card is ResolvedCard => card !== null);
 }
 
 export function getHandForSeat(
   state: SeatVisibleMatchState,
   seat: Seat,
-  manifest: Manifest,
+  content: MatchContentCatalog,
   readStats?: CardStatReader,
 ): ResolvedCard[] {
-  return resolveTokens(state.hands[seat], state, manifest, readStats);
+  return resolveTokens(state.hands[seat], state, content, readStats);
 }
 
 export function getLaneCardsForSeat(
   state: SeatVisibleMatchState,
   laneId: LaneId,
   seat: Seat,
-  manifest: Manifest,
+  content: MatchContentCatalog,
   readStats?: CardStatReader,
 ): ResolvedCard[] {
   const lane = state.lanes.find(candidate => candidate.id === laneId);
-  return resolveTokens(lane?.cards[seat] ?? [], state, manifest, readStats);
+  return resolveTokens(lane?.cards[seat] ?? [], state, content, readStats);
 }
 
 export function getLocation(
   state: SeatVisibleMatchState,
   laneId: LaneId,
-  manifest: Manifest,
+  content: MatchContentCatalog,
 ): ResolvedLocation {
   const location = state.lanes.find(candidate => candidate.id === laneId)
     ?.location;
@@ -214,7 +217,7 @@ export function getLocation(
       revealed: false,
     };
   }
-  const template = getLocationTemplate(manifest, location.defId);
+  const template = getClientLocationContent(content, location.defId);
   if (!template) {
     return {
       defId: '',
@@ -239,7 +242,7 @@ export function getCardsInZoneForSeat(
   state: SeatVisibleMatchState,
   seat: Seat,
   zone: VisiblePileZone,
-  manifest: Manifest,
+  content: MatchContentCatalog,
   readStats?: CardStatReader,
 ): ResolvedCard[] {
   const tokens = zone === 'DISCARD'
@@ -247,5 +250,5 @@ export function getCardsInZoneForSeat(
     : zone === 'DESTROYED'
       ? state.destroyed[seat]
       : state.banished[seat];
-  return resolveTokens(tokens, state, manifest, readStats).reverse();
+  return resolveTokens(tokens, state, content, readStats).reverse();
 }

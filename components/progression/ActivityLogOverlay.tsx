@@ -43,7 +43,7 @@ export const ActivityLogOverlay = () => {
     });
 
     createEffect(() => {
-        if (uiContext.isActivityLogOpen) {
+        if (uiContext.isActivityLogOpen()) {
             const timer = setTimeout(() => {
                 setIsExiting(false);
                 setFlippedItemId(null);
@@ -69,7 +69,7 @@ export const ActivityLogOverlay = () => {
     };
 
     return (
-        <Show when={uiContext.isActivityLogOpen}>
+        <Show when={uiContext.isActivityLogOpen()}>
             <Portal>
                 <div 
                     class={`fixed inset-0 z-[250] flex flex-col items-center justify-start bg-slate-950 overflow-hidden transition-all duration-700 ${isExiting() ? 'opacity-0 scale-110 pointer-events-none' : 'opacity-100 scale-100'}`}
@@ -86,7 +86,7 @@ export const ActivityLogOverlay = () => {
 
                         <div class="flex-1 flex flex-col min-h-0 relative z-10 overflow-hidden">
                             <ActivityLogSection 
-                                logs={userContext.activityLog} 
+                                logs={userContext.activityLog()}
                                 flippedItemId={flippedItemId()}
                                 closingItemId={closingItemId()}
                                 onFlipItem={handleFlipItem}

@@ -19,7 +19,7 @@ export const EFFECT_GLOWS: Record<string, string> = {
 
 export const getCardVisualState = (card: CardInstance | CardDefinition) => {
     if (!card) return {
-        def: { name: 'Unknown', imageUrl: '', rarity: 'Common', tags: [], id: '', basePower: 0, baseCost: 0, description: '' } as CardDefinition,
+        def: { name: 'Unknown', imageUrl: '', rarity: 'Common', tags: [], id: '', basePower: 0, baseCost: 0, baseText: '', effect: '' } as CardDefinition,
         currentPower: 0,
         currentCost: 0,
         powerColor: 'text-white',

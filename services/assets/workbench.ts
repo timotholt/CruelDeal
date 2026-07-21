@@ -100,7 +100,7 @@ export const buildWorkbenchAssets = (): WorkbenchAsset[] => {
         defId: card.defId,
         cardType: card.cardType,
         cost: card.cost,
-        power: card.basePower,
+        power: card.cardType === 'spell' ? null : card.basePower,
         frame: card.cosmetic.frame ?? 'common',
         rulesText: card.cosmetic.rulesText,
         flavorText: card.cosmetic.flavorText,

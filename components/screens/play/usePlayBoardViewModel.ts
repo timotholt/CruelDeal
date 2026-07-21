@@ -1,5 +1,5 @@
 import { createMemo, type Accessor } from 'solid-js';
-import type { Manifest } from '@/services/playgame/engine/manifest/types';
+import type { MatchContentCatalog } from '@/services/playgame/client/contentCatalog';
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
 import type {
@@ -30,7 +30,7 @@ interface SelectedPile {
 }
 
 interface PlayBoardViewModelOptions {
-  readonly manifest: Manifest;
+  readonly content: MatchContentCatalog;
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly engineState: Accessor<SeatVisibleMatchState>;
@@ -129,7 +129,7 @@ export function usePlayBoardViewModel(
   const hand = createMemo<ResolvedCard[]>(() => getHandForSeat(
     presentedState(),
     options.localSeat,
-    options.manifest,
+    options.content,
     statReader(),
   ));
   const reservedHandIds = createMemo<Set<string>>(() => (
@@ -144,20 +144,20 @@ export function usePlayBoardViewModel(
     presentedState(),
     lane,
     options.localSeat,
-    options.manifest,
+    options.content,
     statReader(),
   );
   const topLane = (lane: LaneId): ResolvedCard[] => getLaneCardsForSeat(
     presentedState(),
     lane,
     options.remoteSeat,
-    options.manifest,
+    options.content,
     statReader(),
   );
   const laneLocation = (lane: LaneId): ResolvedLocation => getLocation(
     presentedState(),
     lane,
-    options.manifest,
+    options.content,
   );
   const laneState = (lane: LaneId) => presentedState().lanes.find(
     candidate => candidate.id === lane,
@@ -176,7 +176,7 @@ export function usePlayBoardViewModel(
       presentedState(),
       lane,
       owner,
-      options.manifest,
+      options.content,
     ).map(card => ({
       label: card.name,
       basePower: card.basePower,
@@ -216,7 +216,7 @@ export function usePlayBoardViewModel(
       presentedState(),
       seat,
       zone,
-      options.manifest,
+      options.content,
       statReader(),
     )
   );

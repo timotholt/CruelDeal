@@ -15,6 +15,7 @@ import {
 } from './PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
+import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import type {
   SeatCardToken,
@@ -73,7 +74,7 @@ function mountSession(session: MatchSession): Harness {
   document.body.append(host);
   disposers.push(render(
     () => (
-      <PlayProviders session={session}>
+      <PlayProviders client={new LocalMatchSessionAdapter(session)}>
         <Probe />
       </PlayProviders>
     ),
@@ -257,7 +258,7 @@ describe('split play providers', () => {
     document.body.append(host);
     disposers.push(render(
       () => (
-        <PlayProviders session={debugSession('provider-reactivity')}>
+        <PlayProviders client={new LocalMatchSessionAdapter(debugSession('provider-reactivity'))}>
           <Probe />
         </PlayProviders>
       ),

@@ -57,6 +57,20 @@ export const SlantedButton = (props: SlantedButtonProps) => {
 
     const config = () => sizeConfigs[size()];
 
+    const invokeClick = (event: MouseEvent) => {
+        const handler = props.onClick;
+        if (!handler) return;
+        const typedEvent = event as MouseEvent & {
+            currentTarget: HTMLButtonElement;
+            target: Element;
+        };
+        if (typeof handler === 'function') {
+            handler(typedEvent);
+            return;
+        }
+        handler[0](handler[1], typedEvent);
+    };
+
     // --- HOLD HANDLERS ---
     const startHold = (e: PointerEvent) => {
         const dur = holdDuration();
@@ -80,7 +94,7 @@ export const SlantedButton = (props: SlantedButtonProps) => {
                 timerId = null;
                 
                 if (props.onHoldComplete) props.onHoldComplete(e);
-                else props.onClick?.(e as any);
+                else invokeClick(e as unknown as MouseEvent);
                 
                 setIsHolding(false);
                 props.onHoldChange?.(false);
@@ -99,7 +113,7 @@ export const SlantedButton = (props: SlantedButtonProps) => {
 
     const handleButtonClick = (e: MouseEvent) => {
         if (holdDuration() > 0 && hasTriggeredHold) return;
-        props.onClick?.(e as any);
+        invokeClick(e);
     };
 
     onCleanup(() => { if (timerId !== null) clearInterval(timerId); });

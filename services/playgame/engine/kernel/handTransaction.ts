@@ -20,6 +20,7 @@ import type {
   KernelReaction,
   KernelWork,
 } from './types';
+import type { HandCommand } from './operations/hand';
 
 export interface HandPlacementSnapshot {
   readonly owner: Owner;

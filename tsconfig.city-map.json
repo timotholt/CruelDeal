@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "components/screens/CityMapScreen.tsx",
+    "components/screens/play/city-map/**/*.ts",
+    "components/screens/play/city-map/**/*.tsx",
+    "components/screens/TensorPlayScreen.tsx",
+    "services/playgame/city-map/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**",
+    "**/tensor-broken/**",
+    "**/tensor-working/**",
+    "deprecated/**"
+  ]
+}

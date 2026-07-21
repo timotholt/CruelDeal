@@ -1,6 +1,6 @@
 import { JSX } from 'solid-js';
 import { MaterialNavItem } from './MaterialNavItem';
-import { navTabMaterialRecipe } from '../ui/material-lab';
+import { navTabMaterialRecipe } from '../ui/material-lab/materialPresets';
 
 interface NavItemProps {
   label: string;

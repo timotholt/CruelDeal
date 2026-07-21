@@ -1,5 +1,5 @@
 
-import { ActivityLogEntry, GameState } from '../../types';
+import { ActivityLogEntry } from '../../types';
 import { ITEM_SOURCES } from '../../config/sources';
 
 const STORAGE_KEY = 'galactic_snap_mock_db_v3';
@@ -9,7 +9,6 @@ interface DbState {
     activityLog: ActivityLogEntry[];
     currentSeasonIndex: number;
     userProfile?: any; 
-    authoritativeMatchState?: GameState;
     processedTxnIds: string[]; // Idempotency Registry
 }
 
@@ -60,11 +59,6 @@ export const progressionStore = {
 export const seasonStore = {
     get currentSeasonIndex() { return state.currentSeasonIndex; },
     set currentSeasonIndex(val) { state.currentSeasonIndex = val; save(); }
-};
-
-export const matchStore = {
-    get authoritativeMatchState() { return state.authoritativeMatchState; },
-    set authoritativeMatchState(val) { state.authoritativeMatchState = val; save(); }
 };
 
 export const transactionStore = {

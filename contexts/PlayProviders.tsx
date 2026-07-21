@@ -1,13 +1,13 @@
 import type { JSX } from 'solid-js';
-import type { MatchSession } from '@/services/playgame/runtime/matchSession';
+import type { MatchClient } from '@/services/playgame/client/matchClient';
 import { MatchSessionProvider } from './MatchSessionContext';
 import { PlayUiProvider } from './PlayUiContext';
 
 export const PlayProviders = (props: {
   readonly children: JSX.Element;
-  readonly session: MatchSession;
+  readonly client: MatchClient;
 }) => (
-  <MatchSessionProvider session={props.session}>
+  <MatchSessionProvider client={props.client}>
     <PlayUiProvider>{props.children}</PlayUiProvider>
   </MatchSessionProvider>
 );

@@ -367,7 +367,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const interaction = source('./useCardInteraction.ts');
 
     expect(board).toContain('setupCardInteraction({');
-    expect(board).toContain('laneCapacity: manifest.constants.laneCapacity');
+    expect(board).toContain('laneCapacity: content.constants.laneCapacity');
     expect(interaction).toContain("boardEl.addEventListener('pointerdown'");
     expect(interaction).toContain("boardEl.addEventListener('click'");
     expect(interaction).not.toContain("boardEl.addEventListener('keydown'");

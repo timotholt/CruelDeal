@@ -8,14 +8,13 @@ import {
   type Accessor,
   type JSX,
 } from 'solid-js';
-import type { Manifest } from '@/services/playgame/engine/manifest/types';
+import type { MatchContentCatalog } from '@/services/playgame/client/contentCatalog';
+import type { MatchClient } from '@/services/playgame/client/matchClient';
 import { otherSeat, type LaneId, type Seat } from '@/services/playgame/engine/types/ids';
-import type { MatchSession } from '@/services/playgame/runtime/matchSession';
 import type {
   FramePresentationTiming,
   MatchPerformanceProfile,
 } from '@/services/playgame/runtime/performanceTelemetry';
-import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import type {
   SeatCardStatReadModel,
   SeatLanePowerReadModel,
@@ -31,7 +30,7 @@ import type {
 
 export interface MatchSessionContextValue {
   readonly bootstrap: SeatBootstrap;
-  readonly manifest: Manifest;
+  readonly content: MatchContentCatalog;
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly snapshot: Accessor<SeatMatchSnapshot>;
@@ -69,12 +68,11 @@ const MatchSessionCtx = createContext<MatchSessionContextValue>();
 
 export const MatchSessionProvider = (props: {
   readonly children: JSX.Element;
-  readonly session: MatchSession;
+  readonly client: MatchClient;
 }) => {
-  const session = untrack(() => props.session);
-  const adapter = new LocalMatchSessionAdapter(session);
-  const initialization = adapter.initialization();
-  const localSeat = adapter.bootstrap.viewerSeat;
+  const client = untrack(() => props.client);
+  const initialization = client.initialization();
+  const localSeat = client.bootstrap.viewerSeat;
   const remoteSeat = otherSeat(localSeat);
   const [snapshot, setSnapshot] = createSignal(initialization.setup, {
     equals: false,
@@ -90,11 +88,11 @@ export const MatchSessionProvider = (props: {
 
   const refreshSnapshot = (): void => {
     if (providerDisposed) return;
-    setSnapshot(adapter.snapshot());
+    setSnapshot(client.snapshot());
     setReplayRevision(revision => revision + 1);
   };
 
-  const unsubscribeAdapter = adapter.subscribeCommittedTransactions(timeline =>
+  const unsubscribeClient = client.subscribeCommittedTransactions(timeline =>
     untrack(() => {
       if (providerDisposed) return;
       batch(() => {
@@ -138,31 +136,31 @@ export const MatchSessionProvider = (props: {
   };
 
   const value: MatchSessionContextValue = {
-    bootstrap: adapter.bootstrap,
-    manifest: adapter.manifest,
+    bootstrap: client.bootstrap,
+    content: client.content,
     localSeat,
     remoteSeat,
     snapshot,
     openingTimeline: initialization.opening,
     subscribeCommittedTransactions,
-    debug: debugEnabled
+    debug: debugEnabled && client.debug
       ? {
           replay: () => {
             void replayRevision();
-            return adapter.replay();
+            return client.debug!.replay();
           },
           performanceProfile: () => {
             void performanceRevision();
-            return adapter.performanceProfile();
+            return client.debug!.performanceProfile();
           },
         }
       : null,
     actions: {
-      stageCardInLane: (token, lane) => accepted(adapter.stageCard(token, lane)),
-      undoPending: () => accepted(adapter.undoLastStagedCard()),
-      undoPendingCard: token => accepted(adapter.unstageCard(token)),
+      stageCardInLane: (token, lane) => accepted(client.stageCard(token, lane)),
+      undoPending: () => accepted(client.undoLastStagedCard()),
+      undoPendingCard: token => accepted(client.unstageCard(token)),
       endTurn: async (onWaitingForSeat) => {
-        const result = await adapter.endTurn();
+        const result = await client.endTurn();
         if (providerDisposed || result.status !== 'accepted') {
           refreshSnapshot();
           return false;
@@ -175,12 +173,12 @@ export const MatchSessionProvider = (props: {
       },
       refreshSnapshot,
       presentationStateForFrame:
-        frame => adapter.presentationStateForFrame(frame),
-      cardStatReadModel: token => adapter.cardStatReadModel(token),
+        frame => client.presentationStateForFrame(frame),
+      cardStatReadModel: token => client.cardStatReadModel(token),
       lanePowerReadModel: (lane, owner) =>
-        adapter.lanePowerReadModel(lane, owner),
+        client.lanePowerReadModel(lane, owner),
       recordFramePresentationTiming: (timing) => {
-        adapter.recordFramePresentationTiming(timing);
+        client.debug?.recordFramePresentationTiming(timing);
         setPerformanceRevision(revision => revision + 1);
       },
     },
@@ -191,23 +189,17 @@ export const MatchSessionProvider = (props: {
     debugEnabled
     && typeof window !== 'undefined'
   ) {
-    void import('@/services/playgame/debug/installSnapDebug').then(
-      ({ installSnapDebug }) => {
-        if (!providerDisposed) {
-          uninstallDebug = installSnapDebug(
-            session.runtime,
-            session.manifest,
-            session.exportReplay,
-          );
-        }
-      },
-    );
+    void client.debug?.installBrowserDebug?.().then((uninstall) => {
+      if (providerDisposed) uninstall();
+      else uninstallDebug = uninstall;
+    });
   }
   onCleanup(() => {
     providerDisposed = true;
     transactionSubscribers.clear();
-    unsubscribeAdapter();
+    unsubscribeClient();
     uninstallDebug();
+    client.dispose();
   });
 
   return (

@@ -21,6 +21,7 @@ import type {
   KernelReaction,
   KernelWork,
 } from './types';
+import type { PlacementCommand } from './operations/placement';
 
 export interface PlacementSnapshot {
   readonly owner: Owner;

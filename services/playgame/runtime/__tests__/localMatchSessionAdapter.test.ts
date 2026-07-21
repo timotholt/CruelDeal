@@ -216,7 +216,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
       replayStage!.state,
       lane as LaneId,
       opponent,
-      adapter.manifest,
+      adapter.content,
     ).map(card => card.id)).toContain(token);
   });
 

@@ -78,7 +78,7 @@ describe('Phase 2 provider boundary architecture', () => {
     expect(uiContext).toContain('createSignal<OpenPile | null>');
     expect(inspector).not.toContain('createSignal');
     expect(matchContext).toContain('readonly debug:');
-    expect(matchContext).toContain('debug: debugEnabled');
+    expect(matchContext).toContain('debug: debugEnabled && client.debug');
     expect(playBoard).not.toContain('createSignal');
   });
 
@@ -91,6 +91,7 @@ describe('Phase 2 provider boundary architecture', () => {
       /\bCommittedTransactionTimeline\b/,
       /\bMatchState\b/,
       /\bCardId\b/,
+      /\bManifest\b/,
     ];
     const violations = boundaryFiles.flatMap(file => {
       const source = readFileSync(file, 'utf8');
@@ -103,8 +104,6 @@ describe('Phase 2 provider boundary architecture', () => {
 
   it('keeps engine policy and the trusted adapter out of presentation consumers', () => {
     const allowedTrustedFiles = new Set([
-      'contexts/MatchSessionContext.tsx',
-      'contexts/PlayProviders.tsx',
       'components/screens/CityMapScreen.tsx',
       'components/screens/ClassicPlayScreen.tsx',
     ]);
@@ -125,5 +124,23 @@ describe('Phase 2 provider boundary architecture', () => {
       }
     }
     expect(violations).toEqual([]);
+  });
+
+  it('constructs local authority only at screen composition edges', () => {
+    for (const path of [
+      'contexts/MatchSessionContext.tsx',
+      'contexts/PlayProviders.tsx',
+    ]) {
+      const source = readFileSync(resolve(repositoryRoot, path), 'utf8');
+      expect(source).not.toMatch(/LocalMatchSessionAdapter|runtime\/matchSession/);
+      expect(source).toContain('MatchClient');
+    }
+
+    const provider = readFileSync(resolve(
+      repositoryRoot,
+      'contexts/MatchSessionContext.tsx',
+    ), 'utf8');
+    expect(provider).toContain('readonly client: MatchClient');
+    expect(provider).toContain('client.subscribeCommittedTransactions');
   });
 });

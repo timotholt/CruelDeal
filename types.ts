@@ -1,7 +1,7 @@
 
-import { SfxKey } from './utils/assets';
+import type { SfxKey } from './utils/assets';
 
-export { SfxKey };
+export type { SfxKey };
 
 // --- Elite API Types ---
 export interface ApiResponse<T> {

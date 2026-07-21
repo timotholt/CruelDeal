@@ -7,6 +7,7 @@ import type {
   AssetCandidateRecord,
   AssetKind,
   AssetProvider,
+  CandidateStatus,
   WorkbenchState,
 } from '../../services/assets/workbench';
 

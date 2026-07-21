@@ -77,7 +77,7 @@ export function stepGameplayRng(state: GameplayRngState): GameplayRngStep {
         stepped.state.b,
         stepped.state.c,
         stepped.state.d,
-      ]),
+      ] as const),
       draws: state.draws + 1,
     }),
   };

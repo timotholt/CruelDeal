@@ -1,5 +1,5 @@
 
-import { createSignal, onCleanup, onMount } from 'solid-js';
+import { createSignal, onCleanup, onMount, type JSX } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { CardGem, type HexBadgeGeometry, type HexBadgeVariant } from './CardGem';
 
@@ -61,7 +61,7 @@ export const CardBadge = (props: CardBadgeProps) => {
     const offsetX = () => (props.offsetX ?? -18) * placementScale();
     const offsetY = () => (props.offsetY ?? 21) * placementScale();
 
-    const style = () => {
+    const style = (): JSX.CSSProperties => {
         const cardRect = rect();
         const size = badgeSize();
         if (!cardRect || size <= 0) {
@@ -92,7 +92,6 @@ export const CardBadge = (props: CardBadgeProps) => {
         <Portal mount={document.body}>
             <CardGem
                 value={props.value()}
-                foregroundColor="currentColor"
                 size={badgeSize()}
                 variant={variant()}
                 geometry={props.geometry ?? 'narrow'}

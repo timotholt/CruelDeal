@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
+import { projectMatchContentCatalog } from '../client/contentCatalog';
 import type {
   SeatAnimationEvent,
   SeatTransactionFrame,
@@ -74,7 +75,7 @@ const fixture = () => {
   const playVfx = vi.fn();
   const playSfx = vi.fn();
   const host = createPlayPresentationHost({
-    manifest: BOOTSTRAP_MANIFEST,
+    content: projectMatchContentCatalog(BOOTSTRAP_MANIFEST),
     localSeat: 'P0',
     remoteSeat: 'P1',
     motionSurface,

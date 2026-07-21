@@ -20,6 +20,7 @@ import {
 } from './kernel';
 import type { PowerChangedEvent } from './operations/power';
 import type {
+  ChangeStoredPowerCommand,
   CommittedTransition,
   KernelReaction,
   KernelWork,

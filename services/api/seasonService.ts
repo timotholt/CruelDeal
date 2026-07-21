@@ -1,5 +1,5 @@
 
-import { SeasonPassData, SeasonPassReward, SeasonRewardType } from '../../types';
+import { CardDefinition, SeasonPassData, SeasonPassReward, SeasonRewardType } from '../../types';
 import { SEASONS } from './mockData';
 import { seasonStore, getPersistedProfile } from './mockDb';
 import { CARDS } from '../../constants';
@@ -22,7 +22,7 @@ export const seasonService = {
             const level = i + 1;
             let type: SeasonRewardType;
             let amount: string | number;
-            let specificCardDef = undefined;
+            let specificCardDef: CardDefinition | undefined;
             
             if (level === 50) { 
                 type = 'card'; amount = 'SEASON EXCLUSIVE'; 

@@ -54,7 +54,7 @@ export const DeckEditorHeader = (props: DeckEditorHeaderProps) => {
                             </h2>
                         }>
                             <input 
-                                autoFocus
+                                autofocus
                                 class="bg-black/40 border-b border-indigo-500 text-xl font-black italic text-white tracking-tighter uppercase w-full outline-none px-1"
                                 value={deckName()}
                                 onInput={handleNameChange}

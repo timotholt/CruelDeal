@@ -4,6 +4,7 @@ import { apply } from '../engine/apply';
 import { createInitialMatchState } from '../engine/cli/initState';
 import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
+import { projectMatchContentCatalog } from '../client/contentCatalog';
 import type { MatchEvent } from '../engine/types/events';
 import type { EventTransition } from '../engine/transactionTimeline';
 import type { CardId, LaneId } from '../engine/types/ids';
@@ -37,7 +38,7 @@ const presentationHost = (
   motionSurface: ReturnType<typeof createPlayMotionSurface>,
 ): PlayPresentationHost =>
   createPlayPresentationHost({
-    manifest: BOOTSTRAP_MANIFEST,
+    content: projectMatchContentCatalog(BOOTSTRAP_MANIFEST),
     localSeat: 'P0',
     remoteSeat: 'P1',
     motionSurface,

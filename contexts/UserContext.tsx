@@ -42,6 +42,10 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType>();
 
+const apiErrorMessage = (error: ApiResponse<unknown>['error'], fallback: string): string => (
+    error?.message ?? fallback
+);
+
 export const UserProvider = (props: { children: JSX.Element; initialUser: UserProfile | (() => UserProfile) }) => {
     const queryClient = useQueryClient();
     const getInitialUser = () => typeof props.initialUser === 'function' ? (props.initialUser as any)() : props.initialUser;
@@ -69,7 +73,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         queryKey: ['store', user.id],
         queryFn: async () => {
             const res = await api.store.offers.list(user.id);
-            if (!res.success) throw new Error(res.error || 'Failed to fetch store');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to fetch store'));
             return res.data;
         },
         enabled: !!user.id && user.id.length >= 2,
@@ -79,7 +83,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         queryKey: ['season', user.id],
         queryFn: async () => {
             const res = await api.season.get(user.id);
-            if (!res.success) throw new Error(res.error || 'Failed to fetch season');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to fetch season'));
             return res.data;
         },
         enabled: !!user.id && user.id.length >= 2,
@@ -89,7 +93,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         queryKey: ['progression', user.id],
         queryFn: async () => {
             const res = await api.progression.get(user.id);
-            if (!res.success) throw new Error(res.error || 'Failed to fetch progression');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to fetch progression'));
             return res.data;
         },
         enabled: !!user.id && user.id.length >= 2,
@@ -99,7 +103,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
         queryKey: ['activityLog'],
         queryFn: async () => {
             const res = await api.progression.logs();
-            if (!res.success) throw new Error(res.error || 'Failed to fetch logs');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to fetch logs'));
             return res.data || [];
         },
         enabled: !!user.id && user.id.length >= 2,
@@ -112,7 +116,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
     const saveDeckMutation = createMutation(() => ({
         mutationFn: async ({ deckId, cardIds }: { deckId: number, cardIds: string[] }) => {
             const res = await api.profile.saveDeck(user.id, deckId, cardIds);
-            if (!res.success) throw new Error(res.error || 'Failed to save deck');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to save deck'));
             return res.data;
         },
         onSuccess: (updatedProfile) => {
@@ -123,7 +127,7 @@ export const UserProvider = (props: { children: JSX.Element; initialUser: UserPr
     const renameDeckMutation = createMutation(() => ({
         mutationFn: async ({ deckId, name }: { deckId: number, name: string }) => {
             const res = await api.profile.renameDeck(user.id, deckId, name);
-            if (!res.success) throw new Error(res.error || 'Failed to rename deck');
+            if (!res.success) throw new Error(apiErrorMessage(res.error, 'Failed to rename deck'));
             return res.data;
         },
         onSuccess: (updatedProfile) => {

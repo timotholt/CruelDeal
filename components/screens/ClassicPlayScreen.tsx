@@ -9,7 +9,9 @@ import { createSignal, lazy, Show, untrack, type Component } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
 import { PlayProviders } from '@/contexts/PlayProviders';
 import { PlayBoard } from './play/PlayBoard';
+import type { MatchClient } from '@/services/playgame/client/matchClient';
 import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
+import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import { MatchSession, MatchSessionSetupError } from '@/services/playgame/runtime/matchSession';
 import type { PlayInteractionSettings } from './play/playInteractionSettings';
 
@@ -33,12 +35,14 @@ const DevelopmentDeckPicker: Component<DebugDeckPickerProps> = import.meta.env.D
   : () => null;
 
 export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
-  const [session, setSession] = createSignal<MatchSession | null>(null);
+  const [client, setClient] = createSignal<MatchClient | null>(null);
   const [setupError, setSetupError] = createSignal<string | null>(null);
 
   const handleDeckConfirmed = (candidate: MatchBootstrap) => {
     try {
-      setSession(MatchSession.fromBootstrap(candidate));
+      setClient(new LocalMatchSessionAdapter(
+        MatchSession.fromBootstrap(candidate),
+      ));
       setSetupError(null);
     } catch (error) {
       setSetupError(error instanceof MatchSessionSetupError
@@ -60,7 +64,7 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
 
   return (
     <div class="playgame-root playfield-hidden">
-      <Show when={session() === null}>
+      <Show when={client() === null}>
         <Show
           when={debugSetupEnabled()}
           fallback={(
@@ -83,10 +87,10 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
         {(message) => <pre class="fixed bottom-4 left-4 right-4 z-[10000] whitespace-pre-wrap bg-red-950 p-4 text-red-100">{message()}</pre>}
       </Show>
 
-      <Show when={session() ?? false} keyed>
-        {(matchSession) => (
+      <Show when={client() ?? false} keyed>
+        {(matchClient) => (
           <VfxHost class="board-wrap" id="boardWrap">
-            <PlayProviders session={matchSession}>
+            <PlayProviders client={matchClient}>
               <PlayBoard
                 onExit={props.onExit}
                 interactionSettings={props.interactionSettings}

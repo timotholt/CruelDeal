@@ -13,6 +13,7 @@ import {
 import {
   captureStoredPowerSemantics,
 } from './powerTransaction';
+import type { PowerSemantics } from './powerTransaction';
 import type { TransformCardCommand } from './types';
 
 export interface CardTransformSemantics {

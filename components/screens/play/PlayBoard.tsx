@@ -52,7 +52,7 @@ interface PlayBoardProps {
 export const PlayBoard = (props: PlayBoardProps) => {
   const match = useMatchSession();
   const playUi = usePlayUi();
-  const { manifest, localSeat, remoteSeat, bootstrap, openingTimeline } = match;
+  const { content, localSeat, remoteSeat, bootstrap, openingTimeline } = match;
   const {
     presentedState: engineState,
     ui,
@@ -85,7 +85,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   const lanePresentationRefs = useLanePresentationRefs();
   const replayTimeline = createMemo(() => match.debug?.replay() ?? null);
   const view = usePlayBoardViewModel({
-    manifest,
+    content,
     localSeat,
     remoteSeat,
     engineState,
@@ -225,7 +225,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       localHand: interactiveHand,
       cardRefs,
       motionSurface: motion,
-      laneCapacity: manifest.constants.laneCapacity,
+      laneCapacity: content.constants.laneCapacity,
       tapToPlayEnabled: () => (
         props.interactionSettings?.tapToPlay
         ?? DEFAULT_PLAY_INTERACTION_SETTINGS.tapToPlay
@@ -248,7 +248,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     onCleanup(() => cardInteraction.dispose());
 
     const host = createPlayPresentationHost({
-      manifest,
+      content,
       localSeat,
       remoteSeat,
       motionSurface: motion,
@@ -298,7 +298,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
 
   const togglePlayerMenu = (seat: 'P0' | 'P1'): void => {
     if (!boardInteractive()) return;
-    setOpenMenuSeat(current => (current === seat ? null : seat));
+    setOpenMenuSeat(openMenuSeat() === seat ? null : seat);
   };
 
   const handleOpenPile = (owner: 'P0' | 'P1', zone: VisiblePileZone): void => {

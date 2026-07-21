@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": [
+    "scripts/**/*.ts",
+    "scripts/**/*.tsx",
+    "vite.config.ts",
+    "vite.asset-foundry.config.ts"
+  ],
+  "exclude": [
+    "deprecated/**"
+  ]
+}

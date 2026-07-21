@@ -11,6 +11,17 @@ import {
   getCardPowerModifiers,
   getLanePowerBreakdown,
 } from '../engine/projections/power';
+import {
+  projectMatchContentCatalog,
+  type MatchContentCatalog,
+} from '../client/contentCatalog';
+import type {
+  MatchClient,
+  MatchClientDebug,
+  SeatCommandReceipt,
+  SeatCommandResult,
+  SeatMatchInitialization,
+} from '../client/matchClient';
 import type { Manifest } from '../engine/manifest/types';
 import type {
   CardId,
@@ -24,9 +35,7 @@ import { storedPowerDelta } from '../engine/powerLedger';
 import type {
   CommittedTransactionTimeline,
   IntentEnvelope,
-  IntentIllegalityCode,
   IntentReceipt,
-  MatchRevision,
   RuntimeIntent,
 } from './contracts';
 import type { MatchSession } from './matchSession';
@@ -54,65 +63,46 @@ import type {
   SeatLanePowerReadModel,
 } from './seatReadModels';
 
-export interface SeatMatchInitialization {
-  readonly setup: SeatMatchSnapshot;
-  readonly opening: SeatTransactionTimeline;
-}
-
-export type SeatTransactionSubscriber = (
-  timeline: SeatTransactionTimeline,
-) => void;
-
-interface SeatCommandIdentity {
-  readonly matchId: string;
-  readonly seat: Seat;
-  readonly intentId: string;
-}
-
-export type SeatCommandReceipt =
-  | (SeatCommandIdentity & {
-      readonly status: 'accepted';
-      readonly revision: MatchRevision;
-      readonly commit: 'PRIVATE' | 'COMMITTED';
-    })
-  | (SeatCommandIdentity & {
-      readonly status: 'illegal';
-      readonly currentRevision: MatchRevision;
-      readonly code: IntentIllegalityCode;
-      readonly message?: string;
-    })
-  | (SeatCommandIdentity & {
-      readonly status: 'stale';
-      readonly expectedRevision: MatchRevision;
-      readonly currentRevision: MatchRevision;
-    });
-
-export type SeatCommandResult =
-  | SeatCommandReceipt
-  | (SeatCommandIdentity & {
-      readonly status: 'duplicate';
-      readonly original: SeatCommandReceipt;
-    });
-
 /**
  * Trusted local bridge between canonical MatchSession authority and the
  * player-facing provider contract. Canonical state and IDs never appear in
  * this object's public result types.
  */
-export class LocalMatchSessionAdapter {
+export class LocalMatchSessionAdapter implements MatchClient {
   readonly bootstrap: SeatBootstrap;
-  readonly manifest: Manifest;
+  readonly content: MatchContentCatalog;
+  readonly debug: MatchClientDebug;
 
   readonly #session: MatchSession;
+  readonly #manifest: Manifest;
   readonly #viewerSeat: Seat;
   readonly #initialization: SeatMatchInitialization;
+  readonly #subscriptions = new Set<() => void>();
   #intentCounter = 0;
+  #disposed = false;
 
   constructor(session: MatchSession) {
     this.#session = session;
+    this.#manifest = session.manifest;
     this.#viewerSeat = session.bootstrap.viewerSeat;
     this.bootstrap = projectBootstrapForSeat(session.bootstrap);
-    this.manifest = session.manifest;
+    this.content = projectMatchContentCatalog(session.manifest);
+    this.debug = Object.freeze({
+      replay: () => this.replay(),
+      performanceProfile: () => this.performanceProfile(),
+      recordFramePresentationTiming: timing => {
+        this.recordFramePresentationTiming(timing);
+      },
+      installBrowserDebug: async () => {
+        const { installSnapDebug } = await import('../debug/installSnapDebug');
+        if (this.#disposed) return () => undefined;
+        return installSnapDebug(
+          this.#session.runtime,
+          this.#manifest,
+          this.#session.exportReplay,
+        );
+      },
+    });
 
     const initialization = session.runtime.initialization();
     this.#initialization = Object.freeze({
@@ -138,16 +128,26 @@ export class LocalMatchSessionAdapter {
       this.#session.runtime.revision(),
       this.#session.runtime.projectWorkingState(),
       this.#viewerSeat,
-      this.manifest,
+      this.#manifest,
     );
   }
 
   subscribeCommittedTransactions(
-    subscriber: SeatTransactionSubscriber,
+    subscriber: (timeline: SeatTransactionTimeline) => void,
   ): () => void {
-    return this.#session.runtime.subscribeCommittedTransactions(
+    if (this.#disposed) return () => undefined;
+    const unsubscribeRuntime = this.#session.runtime.subscribeCommittedTransactions(
       timeline => subscriber(this.#projectTimeline(timeline)),
     );
+    let active = true;
+    const unsubscribe = () => {
+      if (!active) return;
+      active = false;
+      this.#subscriptions.delete(unsubscribe);
+      unsubscribeRuntime();
+    };
+    this.#subscriptions.add(unsubscribe);
+    return unsubscribe;
   }
 
   stageCard(
@@ -180,7 +180,7 @@ export class LocalMatchSessionAdapter {
     const cardId = [...state.stagedPlays]
       .reverse()
       .find(staged =>
-        getCardRuntime(state, staged.cardId, this.manifest)?.owner
+        getCardRuntime(state, staged.cardId, this.#manifest)?.owner
           === this.#viewerSeat,
       )?.cardId ?? null;
     if (cardId === null) {
@@ -203,7 +203,7 @@ export class LocalMatchSessionAdapter {
   replay(): SeatReplayTimeline {
     const rendered = renderRuntimeReplay(
       this.#session.exportReplay(),
-      this.manifest,
+      this.#manifest,
     );
     const steps = rendered.steps.map((step, index) => {
       const before = index === 0
@@ -232,7 +232,7 @@ export class LocalMatchSessionAdapter {
         state: projectMatchStateForSeat(
           step.state,
           this.#viewerSeat,
-          this.manifest,
+          this.#manifest,
         ),
       };
     });
@@ -242,7 +242,7 @@ export class LocalMatchSessionAdapter {
         ?? projectMatchStateForSeat(
           rendered.finalState,
           this.#viewerSeat,
-          this.manifest,
+          this.#manifest,
         ),
     };
   }
@@ -275,9 +275,9 @@ export class LocalMatchSessionAdapter {
       token,
     );
     if (cardId === null) return null;
-    const card = getCardRuntime(state, cardId, this.manifest);
+    const card = getCardRuntime(state, cardId, this.#manifest);
     const template = card
-      ? getCardTemplate(this.manifest, card.defId)
+      ? getCardTemplate(this.#manifest, card.defId)
       : null;
     if (!card || !template) return null;
 
@@ -304,7 +304,7 @@ export class LocalMatchSessionAdapter {
     const livePowerModifiers = getCardPowerModifiers(
       state,
       cardId,
-      this.manifest,
+      this.#manifest,
     ).map(entry => ({
       sourceLabel: this.#sourceLabel(state, entry.sourceId),
       delta: entry.delta,
@@ -312,7 +312,7 @@ export class LocalMatchSessionAdapter {
     const liveCostModifiers = getCardCostModifiers(
       state,
       cardId,
-      this.manifest,
+      this.#manifest,
     ).map(entry => ({
       sourceLabel: this.#sourceLabel(state, entry.sourceId),
       delta: entry.delta,
@@ -348,7 +348,7 @@ export class LocalMatchSessionAdapter {
       state,
       lane,
       owner,
-      this.manifest,
+      this.#manifest,
     );
     return {
       lane,
@@ -381,7 +381,7 @@ export class LocalMatchSessionAdapter {
     return projectTransactionTimelineForSeat(
       timeline,
       this.#viewerSeat,
-      this.manifest,
+      this.#manifest,
       state => this.#session.runtime.projectWorkingState(state),
     );
   }
@@ -397,7 +397,7 @@ export class LocalMatchSessionAdapter {
       token,
     );
     if (cardId === null) return null;
-    const card = getCardRuntime(state, cardId, this.manifest);
+    const card = getCardRuntime(state, cardId, this.#manifest);
     if (!card || card.owner !== this.#viewerSeat) return null;
     if (expected === 'HAND') return card.zone === 'HAND' ? cardId : null;
     return state.stagedPlays.some(staged => staged.cardId === cardId)
@@ -412,24 +412,27 @@ export class LocalMatchSessionAdapter {
     const card = getCardRuntime(
       state,
       sourceId as CardId,
-      this.manifest,
+      this.#manifest,
     );
     if (card) {
-      return getCardTemplate(this.manifest, card.defId)?.name ?? card.defId;
+      return getCardTemplate(this.#manifest, card.defId)?.name ?? card.defId;
     }
     const location = getLocationRuntime(
       state,
       sourceId as LocationCardInstanceId,
-      this.manifest,
+      this.#manifest,
     );
     if (location) {
-      return getLocationTemplate(this.manifest, location.defId)?.name
+      return getLocationTemplate(this.#manifest, location.defId)?.name
         ?? location.defId;
     }
     return sourceId;
   }
 
   async #submit(intent: RuntimeIntent): Promise<SeatCommandResult> {
+    if (this.#disposed) {
+      return this.#illegal(intent.type, 'The match client is disposed.');
+    }
     const envelope: IntentEnvelope = {
       matchId: this.bootstrap.matchId,
       seat: this.#viewerSeat,
@@ -502,5 +505,12 @@ export class LocalMatchSessionAdapter {
       code: 'RULES_INVALID' as const,
       message,
     };
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    for (const unsubscribe of [...this.#subscriptions]) unsubscribe();
+    this.#subscriptions.clear();
   }
 }

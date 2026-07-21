@@ -2,6 +2,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
+import { projectMatchContentCatalog } from '@/services/playgame/client/contentCatalog';
 import type { SeatVisibleMatchState } from '@/services/playgame/runtime/projection';
 import type { UiState } from '@/services/playgame/view';
 import { usePlayBoardViewModel } from './usePlayBoardViewModel';
@@ -48,7 +49,7 @@ describe('PlayBoard view model', () => {
       }));
       const [resolving, setResolving] = createSignal(false);
       const view = usePlayBoardViewModel({
-        manifest: BOOTSTRAP_MANIFEST,
+        content: projectMatchContentCatalog(BOOTSTRAP_MANIFEST),
         localSeat: 'P0',
         remoteSeat: 'P1',
         engineState,

@@ -1,0 +1,22 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "node",
+      "vitest/globals"
+    ]
+  },
+  "include": [
+    "components/**/*.test.ts",
+    "components/**/*.test.tsx",
+    "services/playgame/**/*.test.ts",
+    "services/playgame/**/*.test.tsx",
+    "utils/**/*.test.ts",
+    "protocol/**/*.ts"
+  ],
+  "exclude": [
+    "services/playgame/city-map/**",
+    "**/deprecated/**",
+    "deprecated/**"
+  ]
+}

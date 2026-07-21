@@ -1,0 +1,25 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ]
+  },
+  "include": [
+    "services/playgame/client/**/*.ts",
+    "services/playgame/engine/**/*.ts",
+    "services/playgame/protocol/**/*.ts",
+    "services/playgame/runtime/**/*.ts",
+    "services/playgame/view.ts",
+    "protocol/**/*.ts"
+  ],
+  "exclude": [
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/__tests__/**",
+    "**/deprecated/**",
+    "deprecated/**"
+  ]
+}

@@ -1,5 +1,5 @@
 
-import { StoreData, PurchaseResponse, ActivityLogEntry } from '../../types';
+import { StoreData, PurchaseResponse, ActivityLogEntry, UserProfile } from '../../types';
 import { MOCK_STORE_OFFERS } from './mockData';
 import { ITEM_SOURCES } from '../../config/sources';
 import { simulateNetwork, verifySession, ApiError, lockedMutation } from './apiUtils';

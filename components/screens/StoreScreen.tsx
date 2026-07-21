@@ -27,7 +27,7 @@ export const StoreScreen = () => {
     };
 
     createEffect(() => {
-        const target = ui.storeScrollTarget;
+        const target = ui.storeScrollTarget();
         if (target) {
             const t = setTimeout(() => {
                 handleJumpToSection(target);

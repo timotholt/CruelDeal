@@ -12,6 +12,7 @@ import { useMatchSession } from '@/contexts/MatchSessionContext';
 import { usePlayUi } from '@/contexts/PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
+import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { getHandForSeat } from '@/services/playgame/view';
 import { EnergyBadge } from './play/EnergyBadge';
@@ -31,12 +32,12 @@ function makeMatchSeed() {
 const CityGameBoard = (props: CityMapScreenProps) => {
   const match = useMatchSession();
   const playUi = usePlayUi();
-  const { manifest, localSeat, remoteSeat, bootstrap } = match;
+  const { content, localSeat, remoteSeat, bootstrap } = match;
   const state = playUi.presentedState;
   const localHand = createMemo(() => getHandForSeat(
     state(),
     localSeat,
-    manifest,
+    content,
     match.actions.cardStatReadModel,
   ));
   const remoteHandSize = createMemo(() => state().hands[remoteSeat].length);
@@ -122,12 +123,12 @@ const CityGameBoard = (props: CityMapScreenProps) => {
 
 export const CityMapScreen = (props: CityMapScreenProps) => {
   const candidate = buildDebugMatchBootstrap(DEBUG_DECKS[0], DEBUG_DECKS[1], makeMatchSeed());
-  const session = MatchSession.fromBootstrap(candidate);
+  const client = new LocalMatchSessionAdapter(MatchSession.fromBootstrap(candidate));
 
   return (
     <div class="playgame-root city-play-root">
       <VfxHost class="board-wrap" id="boardWrap">
-        <PlayProviders session={session}>
+        <PlayProviders client={client}>
           <CityGameBoard onExit={props.onExit} />
         </PlayProviders>
       </VfxHost>

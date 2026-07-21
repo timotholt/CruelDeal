@@ -1,5 +1,5 @@
 import { Switch, Match, createMemo, Show } from 'solid-js';
-import { OfferItem, OfferItemCurrency, OfferItemCard } from '../../types';
+import type { OfferItem } from '../../types';
 import { CARDS } from '../../constants';
 import { Card } from '../Card';
 import { GameTextV3 as GameText } from '../ui/GameTextV3';
@@ -9,6 +9,9 @@ import { CreditIcon, GoldIcon } from '../ui/CurrencyIcons';
 interface OfferItemViewProps {
     item: OfferItem;
 }
+
+type OfferItemCurrency = Extract<OfferItem, { type: 'currency' }>;
+type OfferItemCard = Extract<OfferItem, { type: 'card' }>;
 
 export const OfferItemView = (props: OfferItemViewProps) => {
     const ui = useUI();

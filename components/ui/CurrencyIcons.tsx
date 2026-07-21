@@ -104,8 +104,8 @@ export const TokenIcon = (props: CurrencyIconProps) => {
       >
         <defs>
           <linearGradient id="tokenGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#ef4444" />
-            <stop offset="100%" stopColor="#7f1d1d" />
+            <stop offset="0%" stop-color="#ef4444" />
+            <stop offset="100%" stop-color="#7f1d1d" />
           </linearGradient>
         </defs>
         <path 
@@ -168,8 +168,8 @@ export const OmegaBoxIcon = (props: CurrencyIconProps) => {
       <svg class={`w-full h-full drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
           <defs>
               <linearGradient id="omegaBoxGradIcon" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#c7d2fe" />
-                  <stop offset="100%" stopColor="#6366f1" />
+                  <stop offset="0%" stop-color="#c7d2fe" />
+                  <stop offset="100%" stop-color="#6366f1" />
               </linearGradient>
           </defs>
           <path 

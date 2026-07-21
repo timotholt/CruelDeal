@@ -68,8 +68,8 @@ export const CollectionGrid = (props: CollectionGridProps) => {
     const ROW_HEIGHT = 100; // px estimated
 
     const virtualizer = createVirtualizer({
-        count: rowCount,
-        getScrollElement: () => parentRef,
+        get count() { return rowCount(); },
+        getScrollElement: () => parentRef ?? null,
         estimateSize: () => ROW_HEIGHT,
         overscan: 5,
     });

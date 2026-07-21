@@ -5,7 +5,9 @@ import { HomeCommandBar } from '../navigation/HomeCommandBar';
 import { DeckCommandBar } from '../navigation/DeckCommandBar';
 import { NavItem } from '../navigation/NavItem';
 import { t } from '../../services/localization';
-import { MaterialPanel, navBarContainerRecipe } from './material-lab';
+import { MaterialPanel } from './material-lab/MaterialPrimitives';
+import { materialRecipeToStaticSurfaceProps } from './material-lab/MaterialRecipeCompiler';
+import { navBarContainerRecipe } from './material-lab/materialPresets';
 
 interface NavigationBarProps {
     activeScreen: ScreenKey;
@@ -35,7 +37,7 @@ export const NavigationBar = (props: NavigationBarProps) => {
             </div>
 
             <MaterialPanel
-                recipe={navBarContainerRecipe}
+                {...materialRecipeToStaticSurfaceProps(navBarContainerRecipe)}
                 padded={false}
                 class="pointer-events-auto relative z-[60] overflow-visible"
             >
@@ -84,4 +86,3 @@ export const NavigationBar = (props: NavigationBarProps) => {
         </div>
     );
 };
-
