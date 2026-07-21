@@ -82,7 +82,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(opening).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
     expect(opening).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
     expect(playBoard).not.toContain('fadeInLocationTile');
-    expect(css).toContain('.playgame-root.playfield-hidden .board > .board-game-area');
+    expect(css).toContain(':scope.playfield-hidden .board > .board-game-area');
     expect(css).toContain('transition: opacity 2000ms ease');
   });
 

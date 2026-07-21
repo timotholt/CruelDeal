@@ -60,32 +60,37 @@ export const PlayOverlays = (props: PlayOverlaysProps) => (
     </Show>
 
     <Portal>
-      <Show when={props.inspectorTarget} keyed>
-        {(target) => (
-          <ZoomInspector
-            target={target}
-            onClose={props.onCloseInspector}
-          />
-        )}
-      </Show>
+      <div class="playgame-root playgame-portal-root">
+        <Show when={props.inspectorTarget} keyed>
+          {(target) => (
+            <ZoomInspector
+              target={target}
+              onClose={props.onCloseInspector}
+            />
+          )}
+        </Show>
+      </div>
     </Portal>
 
     <Portal>
-      <Show when={props.openPile}>
-        {(pile) => (
-          <PileViewer
-            ownerName={props.seatNames[pile().owner]}
-            zone={pile().zone}
-            cards={props.selectedPileCards}
-            onClose={props.onClosePile}
-          />
-        )}
-      </Show>
+      <div class="playgame-root playgame-portal-root">
+        <Show when={props.openPile}>
+          {(pile) => (
+            <PileViewer
+              ownerName={props.seatNames[pile().owner]}
+              zone={pile().zone}
+              cards={props.selectedPileCards}
+              onClose={props.onClosePile}
+            />
+          )}
+        </Show>
+      </div>
     </Portal>
 
     <Portal>
-      <Show when={props.endGamePromptVisible}>
-        <ModalBackdrop onClose={props.onCloseEndGamePrompt} blurAmount="lg" showCloseHint={false}>
+      <div class="playgame-root playgame-portal-root">
+        <Show when={props.endGamePromptVisible}>
+          <ModalBackdrop onClose={props.onCloseEndGamePrompt} blurAmount="lg" showCloseHint={false}>
           <div
             class="w-full max-w-md rounded-2xl border border-white/12 bg-slate-950/95 p-6 text-white shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
             onClick={(event) => event.stopPropagation()}
@@ -121,8 +126,9 @@ export const PlayOverlays = (props: PlayOverlaysProps) => (
               </button>
             </div>
           </div>
-        </ModalBackdrop>
-      </Show>
+          </ModalBackdrop>
+        </Show>
+      </div>
     </Portal>
   </>
 );

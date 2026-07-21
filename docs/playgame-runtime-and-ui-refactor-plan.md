@@ -3,8 +3,9 @@
 ## Status
 
 Phases 1.5, 2, 3a, 3b, 4, 5, and 6 are implemented and exit-proven. Phase 7 is
-in progress: deterministic development-only match setup is complete; scoped
-CSS and the remaining content/tooling cleanup are next.
+in progress: deterministic development-only match setup and CSS isolation are
+complete; stylesheet responsibility splitting and the remaining content/tooling
+cleanup are next.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -24,7 +25,8 @@ Phase 5 evidence is recorded in `docs/agent-checkpoints/phase5-exit.md`. Final
 Phase 6 evidence is recorded in `docs/agent-checkpoints/phase6-exit.md`. The
 Phase 7 debug/setup evidence is recorded in
 `docs/agent-checkpoints/phase7-debug-setup.md`. The next Phase 7 slice is
-playgame CSS isolation and responsibility splitting.
+CSS responsibility splitting, following the isolation evidence in
+`docs/agent-checkpoints/phase7-css-isolation.md`.
 
 ## Cost Model
 

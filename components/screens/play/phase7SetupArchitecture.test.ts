@@ -28,3 +28,28 @@ describe('Phase 7 match setup architecture', () => {
     expect(picker).toContain('buildDebugMatchBootstrap(p, o, normalizeDebugMatchSeed(seed()))');
   });
 });
+
+describe('Phase 7 CSS isolation architecture', () => {
+  it('scopes generic playgame rules and preserves scoped portal rendering', () => {
+    const css = source('../../../src/styles/playgame.css');
+    const overlays = source('./PlayOverlays.tsx');
+    const replay = source('./ReplayDrawer.tsx');
+
+    expect(css).toContain('@scope (.playgame-root)');
+    expect(css).toContain('.playgame-root.playgame-portal-root');
+    expect(css).toContain(':scope.playfield-hidden');
+    expect(overlays.match(/playgame-root playgame-portal-root/g)).toHaveLength(3);
+    expect(replay).toContain('playgame-root playgame-portal-root');
+  });
+
+  it('does not restore stale global selectors or duplicate keyframes', () => {
+    const css = source('../../../src/styles/playgame.css');
+
+    expect(css).not.toMatch(/^\s*:root\s*\{/m);
+    expect(css).not.toMatch(/^\s*\*\s*\{/m);
+    expect(css).not.toContain('.inspect-overlay');
+    expect(css).not.toContain('.dev-panel-toggle');
+    expect(css.match(/@keyframes vfxHalo/g)).toHaveLength(1);
+    expect(css).not.toContain('@keyframes fadeIn');
+  });
+});

@@ -1,4 +1,4 @@
-  :root {
+  .playgame-root {
     --bg-0: #07090d;
     --bg-1: #10151c;
     --bg-2: #18222d;
@@ -21,9 +21,6 @@
     --font-display: 'Unica One', 'Bebas Neue', Impact, sans-serif;
     --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
-  }
-
-  .playgame-root {
     position: relative;
     width: 100%;
     height: 100%;
@@ -87,154 +84,26 @@
     --hand-card-w: calc(var(--card-w) * 1.18);
     --hand-card-h: calc(var(--hand-card-w) * 1.4);
   }
-  * { box-sizing: border-box; }
-  .hint {
-    font-family: var(--font-mono); font-size: 10px; color: var(--muted);
-    line-height: 1.7; padding: 8px 0;
+  .playgame-root,
+  .playgame-root * {
+    box-sizing: border-box;
   }
-  .inspect-overlay {
-    position: absolute;
+
+  .playgame-root.playgame-portal-root {
+    position: fixed;
     inset: 0;
-    z-index: 500;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 28px;
-    background: rgba(0,0,0,0.62);
-    backdrop-filter: blur(5px);
-  }
-  .inspect-overlay.open { display: flex; }
-  .inspect-panel {
-    border: 1px solid rgba(255,255,255,0.22);
-    border-radius: 10px;
-    background: linear-gradient(160deg, #28313b 0%, #121920 58%, #080c10 100%);
-    box-shadow: 0 28px 90px rgba(0,0,0,0.62), inset 0 1px 0 rgba(255,255,255,0.12);
-    color: var(--text);
-  }
-  .inspect-card {
-    width: min(52vh, 430px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 18px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .inspect-location {
-    width: min(72vw, 560px);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 18px;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    box-shadow: none;
-  }
-  .inspect-art {
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    min-height: 0;
-  }
-  .inspect-card .inspect-art {
-    flex: 0 0 390px;
-    overflow: visible;
-    width: 100%;
-  }
-  .inspect-card-render {
-    width: var(--hand-card-w);
-    height: var(--hand-card-h);
-    transform: scale(3.05);
-    transform-origin: center;
-    cursor: default;
+    width: auto;
+    height: auto;
+    z-index: 0;
     pointer-events: none;
-    transition: none;
+    background: transparent;
   }
-  .inspect-card-render:hover {
-    transform: scale(3.05);
-    border-color: var(--card-edge);
-    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
+
+  .playgame-root.playgame-portal-root > * {
+    pointer-events: auto;
   }
-  .inspect-location-render {
-    width: var(--lane-w);
-    height: var(--location-h);
-    min-width: var(--lane-w);
-    transform: scale(2.35);
-    transform-origin: center;
-  }
-  .inspect-location .inspect-art {
-    height: 210px;
-    width: 100%;
-    overflow: visible;
-  }
-  .inspect-kicker {
-    font-family: var(--font-mono);
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--accent);
-  }
-  .inspect-title {
-    margin-top: 10px;
-    font-family: var(--font-display);
-    font-size: 36px;
-    letter-spacing: 0.08em;
-    line-height: 1;
-  }
-  .inspect-subtitle {
-    margin-top: 10px;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    line-height: 1.45;
-    color: var(--muted);
-  }
-  .inspect-body {
-    padding-top: 0;
-  }
-  .inspect-card .inspect-body,
-  .inspect-location .inspect-body {
-    border-top: none;
-  }
-  .inspect-rules {
-    font-family: var(--font-body);
-    font-size: 18px;
-    line-height: 1.35;
-    text-align: center;
-    color: var(--text);
-  }
-  .inspect-section h3 {
-    margin: 0 0 6px;
-    font-family: var(--font-mono);
-    font-size: 9px;
-    letter-spacing: 0.16em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .inspect-row {
-    display: flex;
-    justify-content: space-between;
-    gap: 16px;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    line-height: 1.65;
-    color: var(--muted);
-  }
-  .inspect-row b { color: var(--text); font-weight: 600; text-align: right; }
-  .var-select {
-    display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
-  }
-  .var-select button {
-    font-family: var(--font-mono); font-size: 9px; padding: 3px 7px;
-    background: transparent; border: 1px solid var(--line); color: var(--muted);
-    border-radius: 3px; cursor: pointer;
-  }
-  .var-select button.active { background: var(--accent); color: #111; border-color: var(--accent); }
+
+@scope (.playgame-root) {
 
   /* board-wrap: covers the active 9:16 app frame. AppViewport owns browser
      letterboxing; the play board now sizes against that center frame. */
@@ -326,7 +195,7 @@
     width: 100%;
     overflow: visible;
   }
-  .playgame-root.debug-on .board-game-area { background: rgba(0,255,0,0.15); }
+  :scope.debug-on .board-game-area { background: rgba(0,255,0,0.15); }
   .lane-track {
     position: absolute;
     inset: var(--playfield-gutter-y) 0;
@@ -729,7 +598,7 @@
      ---------------------------------------------------------------- */
 
   /* Derived typographic / badge scale tokens — computed once from --card-w. */
-  :root {
+  :scope {
     --card-font-name:  calc(var(--card-w) * 0.20);   /* ~11.6px at 58px */
     --card-font-type:  calc(var(--card-w) * 0.13);   /* ~7.5px  */
     --card-font-badge: calc(var(--card-w) * 0.175);  /* ~10px   */
@@ -1116,7 +985,7 @@
     flex: 0 0 auto;
     gap: 8px;
   }
-  .playgame-root.debug-on .hud-top { background: rgba(255,0,0,0.3); }
+  :scope.debug-on .hud-top { background: rgba(255,0,0,0.3); }
   .hud-top__side {
     display: flex;
     align-items: center;
@@ -1719,11 +1588,6 @@
     letter-spacing: 0.1em;
   }
 
-  @keyframes vfxHalo {
-    0% { opacity: 0.9; transform: scale(1); }
-    100% { opacity: 0; transform: scale(1.15); }
-  }
-
   /* Toast */
   .toast-area {
     position: absolute; top: var(--message-center-y, 50%); left: 50%;
@@ -2095,7 +1959,7 @@
   .board > .board-game-area {
     transition: opacity 2000ms ease;
   }
-  .playgame-root.playfield-hidden .board > .board-game-area {
+  :scope.playfield-hidden .board > .board-game-area {
     opacity: 0;
     pointer-events: none;
   }
@@ -2114,12 +1978,6 @@
      -------------------------------------------------------------------- */
   /* Portrait phones — board already fills width via the min() formula. */
   @media (max-width: 500px) {
-    .app { grid-template-columns: 1fr; }
-    .panel { width: min(280px, 82vw); }
-    .dev-panel-toggle {
-      left: 6px; top: 6px; width: 28px; height: 28px;
-      font-size: 14px; opacity: 0.72;
-    }
     .turn-orb { width: 48px; height: 48px; }
     .turn-orb__value { font-size: 20px; }
     .hidden-hand__backs { width: 32px; }
@@ -2131,20 +1989,11 @@
 
   /* Very narrow phones (iPhone SE, etc.) */
   @media (max-width: 380px) {
-    .playgame-root {
+    :scope {
       --lane-gap: 4px;
       --slot-gap: 3px;
       --lane-pad-x: 3px;
     }
   }
 
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
-  }
+}

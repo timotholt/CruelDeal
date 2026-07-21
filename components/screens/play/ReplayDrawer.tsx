@@ -107,6 +107,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
 
   return (
     <Portal mount={document.body}>
+      <div class="playgame-root playgame-portal-root">
       <div
         ref={(element) => { drawerEl = element; }}
         class={'replay-drawer' + (props.open ? ' open' : '')}
@@ -276,6 +277,7 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
             </div>
           </div>
         </Show>
+      </div>
       </div>
     </Portal>
   );
