@@ -17,9 +17,15 @@ import { Portal } from 'solid-js/web';
 import { DEBUG_DECKS, type DebugDeck } from './debugDecks';
 import type { MatchBootstrap } from '../runtime/contracts';
 import { buildDebugMatchBootstrap } from './buildDebugBootstrap';
+import {
+  DEFAULT_DEBUG_MATCH_SEED,
+  normalizeDebugMatchSeed,
+  pickDebugOpponent,
+} from './debugMatchSetup';
 
 interface Props {
   onConfirm: (bootstrap: MatchBootstrap) => void;
+  initialSeed?: string;
 }
 
 type Step = 'player' | 'opp';
@@ -28,11 +34,14 @@ export const DebugDeckPicker = (props: Props) => {
   const [step, setStep] = createSignal<Step>('player');
   const [playerDeck, setPlayerDeck] = createSignal<DebugDeck | null>(null);
   const [oppDeck, setOppDeck] = createSignal<DebugDeck | null>(null);
+  const [seed, setSeed] = createSignal(normalizeDebugMatchSeed(props.initialSeed));
+  const [randomDraw, setRandomDraw] = createSignal(0);
 
   const handleSelect = (deck: DebugDeck) => {
     if (step() === 'player') {
       setPlayerDeck(deck);
       setOppDeck(null);
+      setRandomDraw(0);
       setStep('opp');
     } else {
       if (deck.id === playerDeck()?.id) return; // can't pick same deck as opponent
@@ -41,16 +50,18 @@ export const DebugDeckPicker = (props: Props) => {
   };
 
   const pickRandomOpp = () => {
-    const others = DEBUG_DECKS.filter(d => d.id !== playerDeck()?.id);
-    const pick = others[Math.floor(Math.random() * others.length)];
-    setOppDeck(pick);
+    const player = playerDeck();
+    if (!player) return;
+    const draw = randomDraw();
+    setOppDeck(pickDebugOpponent(DEBUG_DECKS, player.id, seed(), draw));
+    setRandomDraw(draw + 1);
   };
 
   const confirm = () => {
     const p = playerDeck();
     const o = oppDeck();
     if (!p || !o) return;
-    props.onConfirm(buildDebugMatchBootstrap(p, o, `debug-${Date.now().toString(36)}`));
+    props.onConfirm(buildDebugMatchBootstrap(p, o, normalizeDebugMatchSeed(seed())));
   };
 
   const goBack = () => {
@@ -86,6 +97,20 @@ export const DebugDeckPicker = (props: Props) => {
               </button>
             </div>
           </Show>
+          <label class="mt-3 grid gap-1 text-left text-[0.55rem] font-bold uppercase tracking-widest text-white/35">
+            Match seed
+            <input
+              class="w-64 rounded border border-white/15 bg-black/40 px-2 py-1.5 font-mono text-xs normal-case tracking-normal text-white/75 outline-none focus:border-white/40"
+              value={seed()}
+              placeholder={DEFAULT_DEBUG_MATCH_SEED}
+              spellcheck={false}
+              onInput={(event) => {
+                setSeed(event.currentTarget.value);
+                setRandomDraw(0);
+                setOppDeck(null);
+              }}
+            />
+          </label>
         </div>
 
         {/* ── Deck grid ───────────────────────────────────────────────── */}

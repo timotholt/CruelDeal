@@ -109,19 +109,18 @@ const indexRoute = createRoute({
 const playRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/play",
-    component: () => <ClassicPlayScreen onExit={() => router.navigate({ to: '/' })} />,
+    component: () => (
+        <ClassicPlayScreen
+            allowDebugSetup={import.meta.env.DEV}
+            onExit={() => router.navigate({ to: '/' })}
+        />
+    ),
 });
 
 const cityMapRoute = createRoute({
     getParentRoute: () => rootRoute,
     path: "/citymap",
     component: () => <CityMapScreen onExit={() => router.history.back()} />,
-});
-
-const legacyPlayAliasRoute = createRoute({
-    getParentRoute: () => rootRoute,
-    path: "/play/legacy",
-    component: () => <ClassicPlayScreen onExit={() => router.navigate({ to: '/' })} />,
 });
 
 const deckRoute = createRoute({
@@ -271,7 +270,6 @@ const routeTree = rootRoute.addChildren([
     indexRoute,
     playRoute,
     cityMapRoute,
-    legacyPlayAliasRoute,
     deckRoute,
     seasonRoute,
     storeRoute,

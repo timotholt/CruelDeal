@@ -5,17 +5,30 @@
  * to `/citymap` while it evolves into an authoring tool.
  */
 
-import { createSignal, Show } from 'solid-js';
+import { createSignal, lazy, Show, untrack, type Component } from 'solid-js';
 import { VfxHost } from '../game/VfxHost';
 import { PlayProviders } from '@/contexts/PlayProviders';
 import { PlayBoard } from './play/PlayBoard';
-import { DebugDeckPicker } from '@/services/playgame/debug/DebugDeckPicker';
 import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
 import { MatchSession, MatchSessionSetupError } from '@/services/playgame/runtime/matchSession';
 
 interface ClassicPlayScreenProps {
   onExit?: () => void;
+  bootstrap?: MatchBootstrap;
+  allowDebugSetup?: boolean;
 }
+
+interface DebugDeckPickerProps {
+  onConfirm: (bootstrap: MatchBootstrap) => void;
+  initialSeed?: string;
+}
+
+const DevelopmentDeckPicker: Component<DebugDeckPickerProps> = import.meta.env.DEV
+  ? lazy(async () => {
+      const module = await import('@/services/playgame/debug/DebugDeckPicker');
+      return { default: module.DebugDeckPicker };
+    })
+  : () => null;
 
 export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
   const [session, setSession] = createSignal<MatchSession | null>(null);
@@ -32,10 +45,36 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
     }
   };
 
+  const initialBootstrap = untrack(() => props.bootstrap);
+  if (initialBootstrap) handleDeckConfirmed(initialBootstrap);
+
+  const debugSetupEnabled = () =>
+    import.meta.env.DEV && props.allowDebugSetup === true;
+
+  const initialDebugSeed = () => {
+    if (!debugSetupEnabled()) return undefined;
+    return new URLSearchParams(window.location.search).get('seed') ?? undefined;
+  };
+
   return (
     <div class="playgame-root playfield-hidden">
       <Show when={session() === null}>
-        <DebugDeckPicker onConfirm={handleDeckConfirmed} />
+        <Show
+          when={debugSetupEnabled()}
+          fallback={(
+            <div class="grid h-full place-items-center p-8 text-center text-white/65">
+              <div>
+                <h1 class="text-lg font-black uppercase tracking-widest text-white">Match setup required</h1>
+                <p class="mt-2 text-sm">Production play requires a validated match bootstrap.</p>
+              </div>
+            </div>
+          )}
+        >
+          <DevelopmentDeckPicker
+            onConfirm={handleDeckConfirmed}
+            initialSeed={initialDebugSeed()}
+          />
+        </Show>
       </Show>
 
       <Show when={setupError()}>
