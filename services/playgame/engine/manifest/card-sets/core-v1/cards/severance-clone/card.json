@@ -1,6 +1,8 @@
 {
   "defId": "severance-clone",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Severance Clone",
   "basePower": 1,
   "cost": 2,

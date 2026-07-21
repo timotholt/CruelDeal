@@ -1,6 +1,8 @@
 {
   "defId": "riff-raff",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Riff Raff",
   "basePower": 2,
   "cost": 1,

@@ -1,6 +1,8 @@
 {
   "defId": "delayed-payload",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Delayed Payload",
   "basePower": 7,
   "cost": 5,
@@ -43,5 +45,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

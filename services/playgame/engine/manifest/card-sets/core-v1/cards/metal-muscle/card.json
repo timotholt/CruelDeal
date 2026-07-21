@@ -1,6 +1,8 @@
 {
   "defId": "metal-muscle",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Metal Muscle",
   "basePower": 4,
   "cost": 2,

@@ -28,6 +28,8 @@ import {
 function mkDef(defId: string, basePower: number, cost: number, hasOngoing = false): CardDef {
   return {
     defId, version: 1, name: defId, basePower, cost,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     abilities: hasOngoing ? {
       ongoing: [{

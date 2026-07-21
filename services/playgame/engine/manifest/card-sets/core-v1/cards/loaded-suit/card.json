@@ -1,6 +1,8 @@
 {
   "defId": "loaded-suit",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Loaded Suit",
   "basePower": 8,
   "cost": 5,

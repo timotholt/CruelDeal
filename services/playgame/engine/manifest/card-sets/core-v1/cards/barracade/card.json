@@ -1,6 +1,8 @@
 {
   "defId": "barracade",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Barracade",
   "basePower": 1,
   "cost": 1,

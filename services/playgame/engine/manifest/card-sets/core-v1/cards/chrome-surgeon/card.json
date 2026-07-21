@@ -1,6 +1,8 @@
 {
   "defId": "chrome-surgeon",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Chrome Surgeon",
   "basePower": 2,
   "cost": 2,

@@ -1,7 +1,7 @@
 {
   "status": "playable",
   "poolOrder": 2,
-  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and COST_RANGE 1.",
+  "implementationNote": "Implemented with CREATE_CARDS_IN_ZONE and COST_RANGE 1.",
   "defId": "chrome-depot",
   "version": 1,
   "name": "Chrome Depot",
@@ -9,7 +9,9 @@
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "COST_RANGE",
           "ownerDeck": "P0",
@@ -22,7 +24,9 @@
         }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "COST_RANGE",
           "ownerDeck": "P1",

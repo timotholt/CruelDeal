@@ -1,6 +1,8 @@
 {
   "defId": "grey-goo-bloom",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Grey Goo Bloom",
   "basePower": 6,
   "cost": 5,
@@ -53,5 +55,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

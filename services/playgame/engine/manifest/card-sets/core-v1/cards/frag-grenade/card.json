@@ -1,6 +1,8 @@
 {
   "defId": "frag-grenade",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Frag Grenade",
   "cost": 2,
   "abilities": {

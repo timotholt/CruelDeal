@@ -1,6 +1,8 @@
 {
   "defId": "scrap-rat",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Scrap Rat",
   "basePower": 1,
   "cost": 1,

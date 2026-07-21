@@ -1,6 +1,8 @@
 {
   "defId": "shotgun-shogun",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Shotgun Shogun",
   "basePower": 2,
   "cost": 1,

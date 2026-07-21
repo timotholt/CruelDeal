@@ -1,6 +1,8 @@
 {
   "defId": "backchannel-contact",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Backchannel Contact",
   "basePower": 3,
   "cost": 2,

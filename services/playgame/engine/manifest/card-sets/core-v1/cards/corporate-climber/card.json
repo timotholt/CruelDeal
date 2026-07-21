@@ -1,6 +1,8 @@
 {
   "defId": "corporate-climber",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Corporate Climber",
   "basePower": 3,
   "cost": 3,

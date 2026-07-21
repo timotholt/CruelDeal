@@ -1,6 +1,8 @@
 {
   "defId": "street-kid",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Street Kid",
   "basePower": 2,
   "cost": 1,

@@ -1,6 +1,8 @@
 {
   "defId": "rpg",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "RPG",
   "cost": 3,
   "abilities": {

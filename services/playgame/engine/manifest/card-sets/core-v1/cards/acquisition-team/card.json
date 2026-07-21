@@ -1,6 +1,8 @@
 {
   "defId": "acquisition-team",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Acquisition Team",
   "basePower": 5,
   "cost": 4,

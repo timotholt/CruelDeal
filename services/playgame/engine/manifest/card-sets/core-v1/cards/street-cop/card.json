@@ -1,6 +1,8 @@
 {
   "defId": "street-cop",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Street Cop",
   "basePower": 3,
   "cost": 1,

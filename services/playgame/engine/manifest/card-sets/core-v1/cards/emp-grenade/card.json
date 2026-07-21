@@ -1,6 +1,8 @@
 {
   "defId": "emp-grenade",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "EMP Grenade",
   "cost": 3,
   "abilities": {

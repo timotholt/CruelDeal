@@ -1,6 +1,8 @@
 {
   "defId": "executive-override",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Executive Override",
   "cost": 6,
   "abilities": {

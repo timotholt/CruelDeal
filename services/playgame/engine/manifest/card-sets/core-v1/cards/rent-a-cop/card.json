@@ -1,6 +1,8 @@
 {
   "defId": "rent-a-cop",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Rent-a-Cop",
   "basePower": 1,
   "cost": 1,

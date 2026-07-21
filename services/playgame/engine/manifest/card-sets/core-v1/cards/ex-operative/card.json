@@ -1,19 +1,25 @@
 {
   "defId": "ex-operative",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Ex-Operative",
   "basePower": 2,
   "cost": 2,
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": { "kind": "DEF_ID_LIST", "ids": ["frag-grenade", "riot-gear", "rpg", "sniper-rifle"] },
         "owner": "SELF_OWNER",
         "destination": { "kind": "HAND" }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": { "kind": "DEF_ID_LIST", "ids": ["frag-grenade", "riot-gear", "rpg", "sniper-rifle"] },
         "owner": "SELF_OWNER",
         "destination": { "kind": "HAND" }

@@ -1,6 +1,8 @@
 {
   "defId": "black-market-dealer",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Black Market Dealer",
   "basePower": 2,
   "cost": 2,

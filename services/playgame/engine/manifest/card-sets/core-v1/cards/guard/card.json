@@ -1,6 +1,8 @@
 {
   "defId": "guard",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Guard",
   "basePower": 2,
   "cost": 1,

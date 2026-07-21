@@ -1,6 +1,8 @@
 {
   "defId": "hired-gun",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Hired Gun",
   "basePower": 4,
   "cost": 1,

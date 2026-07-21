@@ -1,6 +1,8 @@
 {
   "defId": "firewall-daemon",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Firewall Daemon",
   "basePower": 4,
   "cost": 4,
@@ -44,5 +46,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

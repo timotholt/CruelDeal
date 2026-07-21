@@ -1,12 +1,16 @@
 {
   "defId": "junk-packet",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Junk Packet",
   "cost": 1,
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [

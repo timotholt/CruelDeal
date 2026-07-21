@@ -1,6 +1,8 @@
 {
   "defId": "citywide-mesh",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Citywide Mesh",
   "basePower": 3,
   "cost": 5,
@@ -33,5 +35,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

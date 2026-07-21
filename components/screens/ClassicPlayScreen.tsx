@@ -11,11 +11,13 @@ import { PlayProviders } from '@/contexts/PlayProviders';
 import { PlayBoard } from './play/PlayBoard';
 import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
 import { MatchSession, MatchSessionSetupError } from '@/services/playgame/runtime/matchSession';
+import type { PlayInteractionSettings } from './play/playInteractionSettings';
 
 interface ClassicPlayScreenProps {
   onExit?: () => void;
   bootstrap?: MatchBootstrap;
   allowDebugSetup?: boolean;
+  interactionSettings?: PlayInteractionSettings;
 }
 
 interface DebugDeckPickerProps {
@@ -85,7 +87,10 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
         {(matchSession) => (
           <VfxHost class="board-wrap" id="boardWrap">
             <PlayProviders session={matchSession}>
-              <PlayBoard onExit={props.onExit} />
+              <PlayBoard
+                onExit={props.onExit}
+                interactionSettings={props.interactionSettings}
+              />
             </PlayProviders>
           </VfxHost>
         )}

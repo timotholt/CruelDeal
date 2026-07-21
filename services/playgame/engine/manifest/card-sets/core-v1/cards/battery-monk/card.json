@@ -1,6 +1,8 @@
 {
   "defId": "battery-monk",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Battery Monk",
   "basePower": 2,
   "cost": 1,

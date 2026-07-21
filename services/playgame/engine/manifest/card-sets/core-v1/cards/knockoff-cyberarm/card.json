@@ -1,6 +1,8 @@
 {
   "defId": "knockoff-cyberarm",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Knockoff Cyberarm",
   "basePower": 5,
   "cost": 3,

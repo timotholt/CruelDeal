@@ -1,6 +1,8 @@
 {
   "defId": "gang-banger-token",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Gang Banger",
   "basePower": 1,
   "cost": 1,

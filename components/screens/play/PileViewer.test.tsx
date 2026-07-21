@@ -3,6 +3,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { PileViewer } from './PileViewer';
 
+class ResizeObserverStub {
+  observe() {}
+  disconnect() {}
+}
+
+(globalThis as { ResizeObserver?: typeof ResizeObserverStub }).ResizeObserver ??= ResizeObserverStub;
+
 const card = (type: 'character' | 'spell'): ResolvedCard => ({
   id: `${type}-1`,
   defId: `${type}-def`,

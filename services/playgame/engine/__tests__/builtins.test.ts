@@ -30,6 +30,8 @@ import {
 function mkDef(defId: string, basePower: number, cost: number): CardDef {
   return {
     defId, version: 1, name: defId, basePower, cost,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     abilities: {},
     cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
@@ -260,7 +262,8 @@ describe('CALL_BUILTIN: MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', () => {
     const self = mkCard('self', 'mover', 'P0', 'LANE', 0);
     const spell = mkCard('spell', 'spell', 'P1', 'LANE', 0, { revealed: true });
     const operative = mkCard('operative', 'operative', 'P1', 'LANE', 0);
-    const spellDef = { ...mkDef('spell', 0, 1), cardType: 'spell' as const };
+    const { basePower: _basePower, ...spellBase } = mkDef('spell', 0, 1);
+    const spellDef: CardDef = { ...spellBase, cardType: 'spell' };
     const manifest = buildManifest([
       mkDef('mover', 2, 2),
       spellDef,

@@ -1,6 +1,8 @@
 {
   "defId": "hive-riot",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Hive Riot",
   "cost": 6,
   "abilities": {

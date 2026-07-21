@@ -1,6 +1,8 @@
 {
   "defId": "grinder-crew",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Grinder Crew",
   "basePower": 3,
   "cost": 2,

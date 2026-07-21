@@ -1,6 +1,8 @@
 {
   "defId": "escape-route",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Escape Route",
   "basePower": 6,
   "cost": 5,
@@ -42,5 +44,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

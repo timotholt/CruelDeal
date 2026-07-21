@@ -1,7 +1,7 @@
 {
   "status": "playable",
   "poolOrder": 15,
-  "implementationNote": "Implemented with DISCARD plus CREATE_CARD_IN_ZONE.",
+  "implementationNote": "Implemented with DISCARD plus CREATE_CARDS_IN_ZONE.",
   "defId": "the-pineapple-club",
   "version": 1,
   "name": "The Pineapple Club",
@@ -37,7 +37,9 @@
         }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "ANY_RANDOM",
           "ownerFilter": "ANY_OWNER"
@@ -48,7 +50,9 @@
         }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "ANY_RANDOM",
           "ownerFilter": "ANY_OWNER"

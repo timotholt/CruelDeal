@@ -1,6 +1,8 @@
 {
   "defId": "null-saint",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Null Saint",
   "basePower": 8,
   "cost": 6,

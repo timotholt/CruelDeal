@@ -6,6 +6,13 @@ import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
 import { CardFace } from './CardFace';
 
+class ResizeObserverStub {
+  observe() {}
+  disconnect() {}
+}
+
+(globalThis as { ResizeObserver?: typeof ResizeObserverStub }).ResizeObserver ??= ResizeObserverStub;
+
 const card = (overrides: Partial<ResolvedCard> = {}): ResolvedCard => ({
   id: 'card-1',
   defId: 'card-def',
@@ -65,7 +72,8 @@ describe('canonical card face', () => {
     expect(surface?.querySelector(':scope > .power')?.classList).toContain('buffed');
     expect(surface?.querySelector(':scope > .bar')).not.toBeNull();
     expect(surface?.querySelector(':scope > .name')?.textContent).toBe('Operative');
-    expect(surface?.querySelector(':scope > .type')?.textContent).toBe('character');
+    expect(surface?.querySelector(':scope > .name')?.getAttribute('data-game-text-version')).toBe('3');
+    expect(surface?.querySelector(':scope > .type')).toBeNull();
     expect(surface?.querySelector(':scope > .text-disabled-mark')).not.toBeNull();
   });
 
@@ -92,9 +100,16 @@ describe('canonical card face', () => {
       container,
     );
 
-    expect(container.querySelector('[data-testid="play"] > .cost')?.textContent).toBe('3');
+    expect(container.querySelector('[data-testid="play"] > .spell-card-surface > .cost')?.textContent).toBe('3');
     expect(container.querySelector('[data-testid="play"] > .power')).toBeNull();
+    expect(container.querySelector('[data-testid="play"] > .spell-card__base')).not.toBeNull();
+    expect(container.querySelector('.spell-card-surface')).not.toBeNull();
+    expect(container.querySelector('.spell-card__name')?.getAttribute('data-game-text-version')).toBe('3');
+    expect(
+      container.querySelector('.spell-card__name [data-game-text="inner"]')?.getAttribute('style'),
+    ).toContain('font-size: 62.5cqw');
     expect(container.querySelector('.pile-card__cost')?.textContent).toBe('3');
     expect(container.querySelector('.pile-card__power')).toBeNull();
+    expect(container.querySelector('.pile-card__type')).toBeNull();
   });
 });

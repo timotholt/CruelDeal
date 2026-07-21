@@ -1,6 +1,8 @@
 {
   "defId": "white-hat-auditor",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "White-Hat Auditor",
   "basePower": 3,
   "cost": 3,

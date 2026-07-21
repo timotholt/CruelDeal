@@ -1,6 +1,8 @@
 {
   "defId": "talent-scout",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Talent Scout",
   "basePower": 5,
   "cost": 4,

@@ -30,7 +30,9 @@ const SOURCE_CARD_ID = 'topology-card' as CardId;
 const kernelRoot = dirname(fileURLToPath(import.meta.url));
 
 const CREATE_EFFECT: EffectExpr = {
-  kind: 'CREATE_CARD_IN_ZONE',
+  kind: 'CREATE_CARDS_IN_ZONE',
+  count: { kind: 'LIT', n: 1 },
+  replacement: 'WITH_REPLACEMENT',
   pool: { kind: 'DEF_ID_LIST', ids: ['spawn'] },
   owner: 'P0',
   destination: {
@@ -166,7 +168,7 @@ describe('C5A-4 location-domain atomicity regressions', () => {
             const authored = effect.kind === 'AUTHORED'
               ? effect.effect
               : effect;
-            if (authored.kind !== 'CREATE_CARD_IN_ZONE') {
+            if (authored.kind !== 'CREATE_CARDS_IN_ZONE') {
               return kernelStepSuccess({ work: [] });
             }
             const work: CanonicalRulesWork[] = [{

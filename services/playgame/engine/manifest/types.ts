@@ -23,7 +23,19 @@ export interface AssetRef {
 // ---- Card ------------------------------------------------------------------
 
 /** Stable gameplay taxonomy. This is separate from ability labels. */
-export type CardDomain = 'character' | 'device' | 'spell';
+export type CardDomain = 'character' | 'spell';
+
+/** Collection-progression bucket. `tbd` is explicit unassigned content. */
+export type CardAcquisitionPool =
+  | 'tbd'
+  | 's1'
+  | 's2'
+  | 's3'
+  | 'p1'
+  | 'p2'
+  | 'p3'
+  | 'p4'
+  | 'p5';
 
 export interface CardAbilities {
   onReveal?: EffectExpr[];
@@ -57,6 +69,9 @@ interface CardDefBase {
   defId: string;
   version: number;
   name: string;                         // display only; real display name is cosmetic
+  acquisitionPool: CardAcquisitionPool;
+  /** Stable gameplay group membership, e.g. `batman-gadget`. */
+  traits: readonly string[];
   cost: number;
   abilities: CardAbilities;
   cosmetic: CardCosmetic;

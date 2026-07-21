@@ -44,7 +44,7 @@ const EFFECT_KINDS = new Set([
   'MOVE',
   'DRAW',
   'DISCARD',
-  'CREATE_CARD_IN_ZONE',
+  'CREATE_CARDS_IN_ZONE',
   'DEPLOY_FROM_DECK',
   'MOVE_CARD_TO_ZONE',
   'RETURN_TO_LANE',
@@ -157,13 +157,13 @@ function inspectEffect(
       });
     }
   }
-  if (kind === 'CREATE_CARD_IN_ZONE' && effect.setCost && effect.adjustCost) {
+  if (kind === 'CREATE_CARDS_IN_ZONE' && effect.setCost && effect.adjustCost) {
     issues.push({
       entity,
       defId,
       code: 'CONFLICTING_CREATED_COST_MUTATION',
       path,
-      message: 'CREATE_CARD_IN_ZONE cannot setCost and adjustCost together',
+      message: 'CREATE_CARDS_IN_ZONE cannot setCost and adjustCost together',
     });
   }
 

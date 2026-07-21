@@ -1,6 +1,8 @@
 {
   "defId": "night-market-scout",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Night Market Scout",
   "basePower": 1,
   "cost": 1,

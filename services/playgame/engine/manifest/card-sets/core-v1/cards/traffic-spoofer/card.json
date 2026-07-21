@@ -1,6 +1,8 @@
 {
   "defId": "traffic-spoofer",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Traffic Spoofer",
   "cost": 4,
   "abilities": {

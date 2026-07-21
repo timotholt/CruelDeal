@@ -113,7 +113,7 @@ does not spend energy and does not count as a hand-origin play.
 ## Migrated Producers
 
 - authored `MOVE`;
-- authored `CREATE_CARD_IN_ZONE`;
+- authored `CREATE_CARDS_IN_ZONE`;
 - authored `MOVE_CARD_TO_ZONE`;
 - authored `RETURN_TO_LANE`;
 - four movement built-ins;

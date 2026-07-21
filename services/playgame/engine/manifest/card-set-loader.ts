@@ -19,6 +19,12 @@ const hasAbilityEntries = (card: CardDef): boolean => (
   Object.values(card.abilities).some((value) => Array.isArray(value) && value.length > 0)
 );
 
+const ACQUISITION_POOLS = new Set([
+  'tbd', 's1', 's2', 's3', 'p1', 'p2', 'p3', 'p4', 'p5',
+]);
+
+const TRAIT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
 export const validateCardModule = (module: CardModule): CardValidationIssue[] => {
   const { folder, card } = module;
   const cardId = card?.defId || folder || '<unknown>';
@@ -30,8 +36,22 @@ export const validateCardModule = (module: CardModule): CardValidationIssue[] =>
   if (folder !== card.defId) issues.push({ cardId, message: `folder "${folder}" must match defId "${card.defId}"` });
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(card.defId)) issues.push({ cardId, message: 'defId must be kebab-case' });
   if (!Number.isInteger(card.version) || card.version < 1) issues.push({ cardId, message: 'version must be an integer >= 1' });
-  if (!['character', 'device', 'spell'].includes(card.cardType)) {
-    issues.push({ cardId, message: 'cardType must be character, device, or spell' });
+  if (!ACQUISITION_POOLS.has(card.acquisitionPool)) {
+    issues.push({ cardId, message: 'acquisitionPool must be tbd, s1-s3, or p1-p5' });
+  }
+  if (!Array.isArray(card.traits)) {
+    issues.push({ cardId, message: 'traits must be an array' });
+  } else {
+    const traits = card.traits as readonly unknown[];
+    if (traits.some((trait) => typeof trait !== 'string' || !TRAIT_PATTERN.test(trait))) {
+      issues.push({ cardId, message: 'traits must contain only kebab-case strings' });
+    }
+    if (new Set(traits).size !== traits.length) {
+      issues.push({ cardId, message: 'traits must not contain duplicates' });
+    }
+  }
+  if (!['character', 'spell'].includes(card.cardType)) {
+    issues.push({ cardId, message: 'cardType must be character or spell' });
   }
   if (!Number.isInteger(card.cost) || card.cost < 0 || card.cost > 6) issues.push({ cardId, message: 'cost must be an integer in [0,6]' });
   if (card.cardType === 'spell') {
@@ -39,7 +59,7 @@ export const validateCardModule = (module: CardModule): CardValidationIssue[] =>
       issues.push({ cardId, message: 'spell cards must not define basePower' });
     }
   } else if (!Number.isInteger(card.basePower) || (card.basePower ?? -1) < 0) {
-    issues.push({ cardId, message: 'character and device basePower must be an integer >= 0' });
+    issues.push({ cardId, message: 'character basePower must be an integer >= 0' });
   }
   if (!card.abilities || typeof card.abilities !== 'object') issues.push({ cardId, message: 'abilities must be an object' });
   if (!card.cosmetic || typeof card.cosmetic !== 'object') issues.push({ cardId, message: 'cosmetic must be an object' });

@@ -1,6 +1,8 @@
 {
   "defId": "hostile-recruiter",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Hostile Recruiter",
   "basePower": 3,
   "cost": 3,

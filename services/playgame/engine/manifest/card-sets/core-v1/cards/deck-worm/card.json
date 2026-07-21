@@ -1,6 +1,8 @@
 {
   "defId": "deck-worm",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Deck Worm",
   "basePower": 2,
   "cost": 2,

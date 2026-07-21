@@ -10,7 +10,6 @@
   /* Derived typographic / badge scale tokens — computed once from --card-w. */
   :scope {
     --card-font-name:  calc(var(--card-w) * 0.20);   /* ~11.6px at 58px */
-    --card-font-type:  calc(var(--card-w) * 0.13);   /* ~7.5px  */
     --card-font-badge: calc(var(--card-w) * 0.175);  /* ~10px   */
     --card-badge-size: calc(var(--card-w) * 0.33);   /* ~19px   */
     --card-badge-off:  calc(var(--card-w) * -0.08);  /* -8% bleed (middle ground to prevent overlap) */
@@ -20,7 +19,6 @@
 
     /* Hand cards use the same tokens scaled by 1.18 */
     --hcard-font-name:  calc(var(--hand-card-w) * 0.20);
-    --hcard-font-type:  calc(var(--hand-card-w) * 0.13);
     --hcard-font-badge: calc(var(--hand-card-w) * 0.175);
     --hcard-badge-size: calc(var(--hand-card-w) * 0.33);
     --hcard-badge-off:  calc(var(--hand-card-w) * -0.08);
@@ -30,7 +28,7 @@
   }
 
   /* ── Cards ─────────────────────────────────────────────────────────
-     card.js renders: .card > .cost, .power, .bar, .name, .type
+     CardFace renders badges, optional art, and a fitted name.
      All sizing tokens come from --hcard-* (hand) or --card-* (lane).
      DO NOT add wrapper elements here — the renderer doesn't output them.
      ----------------------------------------------------------------- */
@@ -105,19 +103,15 @@
   .card .power.debuffed { background: #ff6080; color: #3a0616; }
 
   .card .name {
-    font-family: var(--font-display); font-size: var(--hcard-font-name);
-    letter-spacing: 0.06em; text-align: center; line-height: 1.1;
-    align-self: center; overflow: hidden;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    min-height: 0;
+    align-self: stretch;
+    overflow: hidden;
   }
   .card .bar {
     height: var(--hcard-bar-h); border-radius: 2px; margin: 2px 0;
-  }
-  .card .type {
-    font-family: var(--font-mono); font-size: clamp(5px, var(--hcard-font-type), 0.72rem);
-    color: var(--muted); text-align: center;
-    letter-spacing: 0; text-transform: uppercase;
-    align-self: end; justify-self: stretch; width: 100%; min-width: 0; overflow: hidden;
-    white-space: nowrap;
   }
   .card.text-disabled {
     border-color: rgba(255, 96, 128, 0.55);
@@ -139,7 +133,7 @@
     background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
     border-color: var(--card-edge);
   }
-  .card.facedown .name, .card.facedown .type,
+  .card.facedown .name,
   .card.facedown .cost, .card.facedown .power, .card.facedown .bar,
   .card.facedown .portrait {
     visibility: hidden;
@@ -158,10 +152,6 @@
   .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
   .card.lane-card.facedown,
   .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
-  .card.lane-card .name,
-  .lane-slots .card .name { font-size: var(--card-font-name); }
-  .card.lane-card .type,
-  .lane-slots .card .type { font-size: clamp(5px, var(--card-font-type), 0.54rem); }
   .card.lane-card .bar,
   .lane-slots .card .bar  { height: var(--card-bar-h); }
   .card.lane-card .cost,
@@ -179,21 +169,89 @@
     border-radius: calc(var(--card-badge-size) * 0.3);
   }
 
-  /* Spell silhouette: the card keeps the exact same layout/animation box as
-     every other card. Only its painted surface is clipped into a circular
-     head and narrower stem, so refs, slots, drag rects, and motion transforms
-     continue to use the canonical 5:7 geometry. */
-  .card[data-card-type="spell"] {
-    clip-path: polygon(
-      50% 0%, 75% 4%, 93% 16%, 100% 32%, 95% 44%,
-      90% 50%, 90% 100%, 10% 100%, 10% 50%, 5% 44%,
-      0% 32%, 7% 16%, 25% 4%
-    );
+  /* Spells keep the canonical 5:7 interaction/animation box. Their renderer
+     owns a genuinely circular painted surface inside that stable geometry. */
+  .card[data-card-type="spell"]:not(.facedown) {
+    display: block;
+    padding: 0;
+    background: transparent;
+    border-color: transparent;
     border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+  .card[data-card-type="spell"]:not(.facedown):hover,
+  .inspector-clone .card[data-card-type="spell"]:not(.facedown):hover {
+    border-color: transparent;
+    box-shadow: none;
+  }
+  .spell-card__base {
+    position: absolute;
+    z-index: 0;
+    top: 48%;
+    right: 16%;
+    bottom: 0;
+    left: 16%;
+    border: 1px solid rgba(180, 126, 255, 0.48);
+    border-radius: 0 0 12% 12%;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.025), transparent 20% 80%, rgba(255,255,255,0.025)),
+      linear-gradient(180deg, #25203a, #11101e);
+    box-shadow:
+      0 10px 22px rgba(0,0,0,0.38),
+      inset 0 0 14px rgba(166,109,255,0.12);
+  }
+  .spell-card-surface {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    aspect-ratio: 1;
+    display: grid;
+    grid-template-rows: 30% minmax(0, 1fr);
+    place-items: center;
+    padding: 12% 10% 8%;
+    border: 1px solid rgba(180, 126, 255, 0.58);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 50% 38%, rgba(142, 86, 220, 0.36), transparent 46%),
+      radial-gradient(circle at 50% 50%, #25203a 0 56%, #100f1d 76% 100%);
+    box-shadow:
+      0 10px 24px rgba(0,0,0,0.42),
+      inset 0 0 0 2px rgba(255,255,255,0.035),
+      inset 0 0 18px rgba(166,109,255,0.18);
+    overflow: visible;
+  }
+  .spell-card-surface::before {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 50%;
+    pointer-events: none;
+  }
+  .spell-card__sigil {
+    color: rgba(215, 187, 255, 0.82);
+    font-size: calc(var(--hcard-font-name) * 1.1);
+    line-height: 1;
+    text-shadow: 0 0 10px rgba(166,109,255,0.58);
+  }
+  .spell-card__name {
+    width: 78% !important;
+    height: 100% !important;
   }
   .card[data-card-type="spell"] .cost {
-    top: 4%;
-    left: 8%;
+    top: -2%;
+    left: 4%;
+    z-index: 2;
+  }
+  .card.lane-card[data-card-type="spell"] .spell-card__sigil,
+  .lane-slots .card[data-card-type="spell"] .spell-card__sigil {
+    font-size: calc(var(--card-font-name) * 1.1);
+  }
+  .card[data-card-type="spell"].facedown .spell-card-surface,
+  .card[data-card-type="spell"].facedown .spell-card__base {
+    visibility: hidden;
   }
 
   /* ── Location cards ─────────────────────────────────────────────── */

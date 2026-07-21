@@ -1,6 +1,8 @@
 {
   "defId": "rust-revenant",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Rust Revenant",
   "basePower": 6,
   "cost": 4,

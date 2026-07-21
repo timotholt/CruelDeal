@@ -12,6 +12,7 @@ const fail = (message: string): void => {
 
 const modules = getActiveCardModules(['core-v1']);
 const seen = new Set<string>();
+const knownTraits = new Set<string>();
 const locations = Object.values(loadLocationsFromSets(['core-v1']).locations);
 const locationIds = new Set(locations.map((location) => location.defId));
 
@@ -35,6 +36,7 @@ for (const module of modules) {
     fail(`${module.card.defId}: duplicate defId`);
   }
   seen.add(module.card.defId);
+  module.card.traits.forEach((trait) => knownTraits.add(trait));
 }
 
 const reportMissingCard = (source: string, path: string, defId: string): void => {
@@ -43,6 +45,10 @@ const reportMissingCard = (source: string, path: string, defId: string): void =>
 
 const reportMissingLocation = (source: string, path: string, defId: string): void => {
   if (!locationIds.has(defId)) fail(`${source}: missing location defId "${defId}" at ${path}`);
+};
+
+const reportMissingTrait = (source: string, path: string, trait: string): void => {
+  if (!knownTraits.has(trait)) fail(`${source}: unknown or empty card trait "${trait}" at ${path}`);
 };
 
 const visitRefs = (value: unknown, source: string, path = '$'): void => {
@@ -60,6 +66,9 @@ const visitRefs = (value: unknown, source: string, path = '$'): void => {
         if (typeof id === 'string') reportMissingCard(source, `${path}.ids[${index}]`, id);
       });
     }
+  }
+  if (record.kind === 'CARD_TRAIT' && typeof record.trait === 'string') {
+    reportMissingTrait(source, `${path}.trait`, record.trait);
   }
   if (record.kind === 'COPY_OF_DEF' && typeof record.defId === 'string') {
     reportMissingCard(source, `${path}.defId`, record.defId);

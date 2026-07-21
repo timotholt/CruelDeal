@@ -1,6 +1,8 @@
 {
   "defId": "getaway-driver",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Getaway Driver",
   "basePower": 4,
   "cost": 3,

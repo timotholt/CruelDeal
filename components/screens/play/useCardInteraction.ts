@@ -1,8 +1,8 @@
 /**
  * Unified card interaction controller for /play.
  *
- * Tap, keyboard, mouse, pen, and touch share a single instance-local legality and
- * action boundary. Pointer drag remains an enhancement. Every accepted path
+ * Tap, mouse, pen, and touch share a single instance-local legality and action
+ * boundary. Pointer drag remains an enhancement. Every accepted path
  * uses the canonical PlayMotionSurface handoff, so the original card keeps its
  * layout slot and staging never causes reflow.
  */
@@ -51,6 +51,7 @@ export interface CardInteractionOptions {
   cardRefs: Map<string, HTMLElement>;
   motionSurface: PlayMotionSurface;
   laneCapacity: number;
+  tapToPlayEnabled?: () => boolean;
   stageCardInLane: (cardId: string, laneIdx: LaneId) => Promise<boolean>;
   undoPendingCard: (cardId: string) => Promise<boolean>;
 }
@@ -100,6 +101,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     cardRefs,
     motionSurface,
     laneCapacity,
+    tapToPlayEnabled = () => false,
     stageCardInLane,
     undoPendingCard,
   } = opts;
@@ -140,7 +142,6 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
 
   const cancelSelection = (): void => {
     selection?.sourceEl.classList.remove('tap-selected');
-    selection?.sourceEl.setAttribute('aria-pressed', 'false');
     selection = null;
     boardEl.classList.remove('tap-selecting-card');
     clearTapTargets();
@@ -167,6 +168,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     if (!selection) return;
     const stillSelectable = selection.sourceEl.isConnected
       && !isResolving()
+      && tapToPlayEnabled()
       && (selection.origin === 'hand'
         ? Boolean(playableHandCard(selection.cardId))
         : isPending(selection.cardId));
@@ -178,6 +180,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
   };
 
   const selectSource = (source: HTMLElement): boolean => {
+    if (!tapToPlayEnabled()) return false;
     if (isResolving() || tapOperationPending || source.dataset.dragEnabled !== 'true') return false;
     const cardId = source.dataset.cardId;
     const origin = source.dataset.dragSource as DragOrigin | undefined;
@@ -191,7 +194,6 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     cancelSelection();
     selection = { cardId, origin, sourceEl: source };
     source.classList.add('tap-selected');
-    source.setAttribute('aria-pressed', 'true');
     boardEl.classList.add('tap-selecting-card');
     showTapTargets();
     return true;
@@ -344,8 +346,8 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
 
     // Staging is private state, so there is no committed presentation frame
     // at drop time. Keep the pointer surrogate as the sole representation
-    // until the new facedown lane endpoint is painted, while only the sibling
-    // cards participate in the hand reflow.
+    // until the new owner-visible lane endpoint is painted, while only the
+    // sibling cards participate in the hand reflow.
     await nextPaint();
     playCardLayoutSlide(oldRects, cardRefs);
     await animateGhostTo(drag);
@@ -483,43 +485,11 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     event.stopImmediatePropagation();
   };
 
-  const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') {
-      if (!selection) return;
-      cancelSelection();
-      event.preventDefault();
-      return;
-    }
-    if ((event.key === 'Backspace' || event.key === 'Delete') && selection?.origin === 'lane') {
-      const hand = boardEl.querySelector<HTMLElement>('[data-drop-zone="hand"]');
-      if (hand) performTapDrop({ kind: 'hand', element: hand });
-      event.preventDefault();
-      return;
-    }
-    if ((event.key !== 'Enter' && event.key !== ' ') || event.repeat) return;
-    const source = closestHTMLElement(event.target, '[data-drag-source]');
-    if (source && boardEl.contains(source) && selectSource(source)) {
-      event.preventDefault();
-      return;
-    }
-    if (!selection) return;
-    const zone = closestHTMLElement(event.target, '[data-drop-zone]');
-    if (!zone || !boardEl.contains(zone)) return;
-    if (selection.origin === 'hand' && zone.dataset.dropZone === 'lane') {
-      const laneId = Number(zone.dataset.laneId) as LaneId;
-      if (legalLane(laneId)) performTapDrop({ kind: 'lane', element: zone, laneId });
-    } else if (selection.origin === 'lane' && zone.dataset.dropZone === 'hand') {
-      performTapDrop({ kind: 'hand', element: zone });
-    }
-    event.preventDefault();
-  };
-
   boardEl.addEventListener('pointerdown', onPointerDown);
   boardEl.addEventListener('pointermove', onPointerMove);
   boardEl.addEventListener('pointerup', onPointerUp);
   boardEl.addEventListener('pointercancel', onPointerCancel);
   boardEl.addEventListener('click', onClickCapture, true);
-  boardEl.addEventListener('keydown', onKeyDown);
 
   return {
     cancelSelection,
@@ -538,7 +508,6 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
       boardEl.removeEventListener('pointerup', onPointerUp);
       boardEl.removeEventListener('pointercancel', onPointerCancel);
       boardEl.removeEventListener('click', onClickCapture, true);
-      boardEl.removeEventListener('keydown', onKeyDown);
     },
   };
 }

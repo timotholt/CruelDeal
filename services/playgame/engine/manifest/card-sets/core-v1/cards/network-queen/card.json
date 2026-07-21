@@ -1,6 +1,8 @@
 {
   "defId": "network-queen",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Network Queen",
   "basePower": 7,
   "cost": 5,

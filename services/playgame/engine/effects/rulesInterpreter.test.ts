@@ -26,6 +26,7 @@ import type {
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import type { CardId, LaneId, LocationCardInstanceId, Owner } from '../types/ids';
 import type { EffectExpr } from '../types/ability';
+import type { MatchEvent } from '../types/events';
 import { GENESIS_FRAME } from '../types/timeline';
 import { getCardCost, getCardPower } from '../projections';
 import {
@@ -52,11 +53,22 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 
 // ---- Fixture builders ------------------------------------------------------
 
-const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => ({
-  defId, version: 1, name: defId, basePower, cost, cardType: 'character', abilities: {},
-  cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
-  ...extra,
-});
+const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => {
+  const common = {
+    defId,
+    version: 1,
+    name: defId,
+    acquisitionPool: extra.acquisitionPool ?? 'tbd',
+    traits: extra.traits ?? [],
+    cost,
+    abilities: {},
+    cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
+  };
+  if (extra.cardType === 'spell') {
+    return { ...common, ...extra, cardType: 'spell' } as CardDef;
+  }
+  return { ...common, basePower, cardType: 'character', ...extra } as CardDef;
+};
 
 const mkLoc = (defId: string, extra: Partial<LocationCardDef> = {}): LocationCardDef => ({
   defId, version: 1, name: defId, rarity: 1, abilities: {},
@@ -381,7 +393,7 @@ function buildState(
   eq(res.state.lanesById[0].cards.P1.length, 0, 'opp lane cleared');
 }
 
-// -- CREATE_CARD_IN_ZONE: lane creation reveals and resolves the child ------
+// -- CREATE_CARDS_IN_ZONE: lane creation reveals and resolves the child ------
 
 {
   const grunt = mkCard('grunt', 2, 1, {
@@ -396,7 +408,9 @@ function buildState(
   const tinkerer = mkCard('tinkerer', 2, 2, {
     abilities: {
       onReveal: [{
-        kind: 'CREATE_CARD_IN_ZONE',
+        kind: 'CREATE_CARDS_IN_ZONE',
+        count: { kind: 'LIT', n: 1 },
+        replacement: 'WITH_REPLACEMENT',
         pool: { kind: 'DEF_ID_LIST', ids: ['grunt'] },
         owner: 'SELF_OWNER',
         destination: {
@@ -412,7 +426,7 @@ function buildState(
 
   const added = res.events.find(e => e.type === 'CARD_CREATED') as
     | { cardId: CardId; defId: string; spawnSource: { kind: string } } | undefined;
-  truthy(!!added, 'CREATE_CARD_IN_ZONE: CARD_CREATED emitted');
+  truthy(!!added, 'CREATE_CARDS_IN_ZONE: CARD_CREATED emitted');
   eq(added!.defId, 'grunt', 'spawned defId = grunt');
   eq(added!.spawnSource.kind, 'CARD_CREATED', 'spawnSource = CARD_CREATED');
 
@@ -775,14 +789,16 @@ function buildState(
   eq(destroyed.length, 1, 'onDestroyed: exactly 1 CARD_DESTROYED');
 }
 
-// -- CREATE_CARD_IN_ZONE: created hand card can have its cost set -----------
+// -- CREATE_CARDS_IN_ZONE: created hand card can have its cost set -----------
 
 {
   const illegalClone = mkCard('illegal-clone', 2, 1, {
     abilities: {
       onReveal: [{ kind: 'DESTROY', target: { kind: 'SELF' } }],
       onDestroyed: [{
-        kind: 'CREATE_CARD_IN_ZONE',
+        kind: 'CREATE_CARDS_IN_ZONE',
+        count: { kind: 'LIT', n: 1 },
+        replacement: 'WITH_REPLACEMENT',
         pool: { kind: 'DEF_ID_LIST', ids: ['illegal-clone'] },
         owner: 'SELF_OWNER',
         destination: { kind: 'HAND' },
@@ -1034,6 +1050,42 @@ function buildState(
   );
   eq(getCardState(res.state, 'c1' as CardId)?.zone, 'BANISHED', 'SPELL: zone becomes BANISHED');
   eq(res.state.lanesById[0].cards.P0.length, 0, 'SPELL: removed from lane after resolving');
+}
+
+// -- CREATE_CARDS_IN_ZONE: trait pool, count, and no replacement ------------
+
+{
+  const gadgets = ['grapple', 'smoke-bomb', 'tracker', 'armor'].map(defId =>
+    mkCard(defId, 1, 1, { traits: ['batman-gadget'] }));
+  const unrelated = mkCard('civilian', 1, 1, { traits: ['civilian'] });
+  const batman = mkCard('batman', 4, 4, {
+    abilities: {
+      onReveal: [{
+        kind: 'CREATE_CARDS_IN_ZONE',
+        pool: { kind: 'CARD_TRAIT', trait: 'batman-gadget' },
+        count: { kind: 'LIT', n: 2 },
+        replacement: 'WITHOUT_REPLACEMENT',
+        owner: 'SELF_OWNER',
+        destination: { kind: 'HAND' },
+      }],
+    },
+  });
+  const manifest = mkManifest([batman, ...gadgets, unrelated]);
+  const state = buildState([{ def: 'batman', owner: 'P0', lane: 0, revealed: false }]);
+  const first = executeCardRevealForTest(state, 'c1' as CardId, manifest, createRng('bat-gadgets'));
+  const second = executeCardRevealForTest(state, 'c1' as CardId, manifest, createRng('bat-gadgets'));
+  const createdDefIds = (result: typeof first): string[] => result.events
+    .filter((event): event is Extract<MatchEvent, { type: 'CARD_CREATED' }> => event.type === 'CARD_CREATED')
+    .map(event => event.defId);
+
+  eq(createdDefIds(first).length, 2, 'trait pool: count creates exactly two cards');
+  eq(new Set(createdDefIds(first)).size, 2, 'trait pool: without replacement prevents duplicates');
+  truthy(
+    createdDefIds(first).every(defId => gadgets.some(gadget => gadget.defId === defId)),
+    'trait pool: every created card has the requested gameplay trait',
+  );
+  eq(createdDefIds(first), createdDefIds(second), 'trait pool: same seed produces the same selection');
+  eq(first.state.hand.P0.length, 2, 'trait pool: both cards arrive in the requested hand');
 }
 
 // -- Exit -------------------------------------------------------------------

@@ -1,18 +1,21 @@
 {
   "defId": "tech-fixer",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Tech Fixer",
   "basePower": 3,
   "cost": 3,
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
-          "kind": "DECK_BY_CARD_TYPE",
-          "ownerDeck": "SELF_OWNER",
-          "excludeInPlay": true,
-          "cardType": "device"
+          "kind": "DECK_OF_OWNER",
+          "owner": "SELF_OWNER",
+          "excludeInPlay": true
         },
         "owner": "SELF_OWNER",
         "destination": {
@@ -24,7 +27,7 @@
   "cosmetic": {
     "displayName": "TECH FIXER",
     "flavorText": "Every system has a back door.",
-    "rulesText": "On Reveal: Draw an Device card.",
+    "rulesText": "On Reveal: Add a random card from your deck to your hand.",
     "accent": "#00b4d8",
     "frame": "common",
     "art": {

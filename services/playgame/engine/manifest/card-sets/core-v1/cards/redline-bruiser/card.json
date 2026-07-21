@@ -1,6 +1,8 @@
 {
   "defId": "redline-bruiser",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Redline Bruiser",
   "basePower": 3,
   "cost": 3,

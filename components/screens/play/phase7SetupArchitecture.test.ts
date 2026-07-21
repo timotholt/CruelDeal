@@ -52,6 +52,8 @@ describe('Phase 7 CSS isolation architecture', () => {
     const replay = source('./ReplayDrawer.tsx');
 
     expect(tokensCss).toContain('.playgame-root.playgame-portal-root');
+    expect(tokensCss).toContain('--board-w: var(--app-frame-w)');
+    expect(tokensCss).toContain('--board-h: var(--app-frame-h)');
     expect(responsiveCss).toContain('@scope (.playgame-root)');
     expect(responsiveCss).toContain(':scope.playfield-hidden');
     expect(vfxCss).toContain('@scope (.playgame-root)');

@@ -1,6 +1,8 @@
 {
   "defId": "blackmail-file",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Blackmail File",
   "cost": 2,
   "abilities": {

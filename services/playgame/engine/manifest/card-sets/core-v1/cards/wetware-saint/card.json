@@ -1,6 +1,8 @@
 {
   "defId": "wetware-saint",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Wetware Saint",
   "basePower": 5,
   "cost": 4,

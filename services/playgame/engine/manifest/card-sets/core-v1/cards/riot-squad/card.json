@@ -1,6 +1,8 @@
 {
   "defId": "riot-squad",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Riot Squad",
   "basePower": 1,
   "cost": 1,

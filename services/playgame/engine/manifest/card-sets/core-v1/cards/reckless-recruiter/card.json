@@ -1,6 +1,8 @@
 {
   "defId": "reckless-recruiter",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Reckless Recruiter",
   "basePower": 4,
   "cost": 3,

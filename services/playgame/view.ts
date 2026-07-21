@@ -6,7 +6,7 @@
  * transitions must never enter this module.
  */
 
-import type { Manifest } from './engine/manifest/types';
+import type { CardDomain, Manifest } from './engine/manifest/types';
 import type { LaneId, Seat } from './engine/types/ids';
 import { getCardTemplate } from './engine/projections/cardTemplate';
 import { getLocationTemplate } from './engine/projections/locationTemplate';
@@ -41,7 +41,8 @@ export interface ResolvedCard {
   basePower: number;
   art: string;
   portraitPath: string | null;
-  type: string;
+  /** Empty only while the authority withholds an unrevealed card's identity. */
+  type: CardDomain | '';
   text: string;
   textDisabled: boolean;
   owner: Seat;

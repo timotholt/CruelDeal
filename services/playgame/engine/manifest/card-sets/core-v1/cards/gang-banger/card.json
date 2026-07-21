@@ -1,13 +1,17 @@
 {
   "defId": "gang-banger",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Gang Banger",
   "basePower": 1,
   "cost": 1,
   "abilities": {
     "onEndOfTurn": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": { "kind": "DEF_ID_LIST", "ids": ["gang-banger-token"] },
         "owner": "SELF_OWNER",
         "destination": { "kind": "LANE", "lane": { "kind": "LANE_OF", "of": { "kind": "SELF" } } }

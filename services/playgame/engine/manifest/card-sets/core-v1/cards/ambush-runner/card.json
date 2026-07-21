@@ -1,6 +1,8 @@
 {
   "defId": "ambush-runner",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Ambush Runner",
   "basePower": 4,
   "cost": 3,

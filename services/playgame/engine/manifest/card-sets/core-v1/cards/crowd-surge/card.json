@@ -1,6 +1,8 @@
 {
   "defId": "crowd-surge",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Crowd Surge",
   "cost": 4,
   "abilities": {

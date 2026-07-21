@@ -39,14 +39,13 @@ const ender = testCardDef('ender', {
   cost: 3,
   onEndOfTurn: [selfPower],
 });
-const device = {
-  ...testCardDef('device', { power: 5, cost: 4 }),
-  cardType: 'device' as const,
+const specialist = {
+  ...testCardDef('specialist', { power: 5, cost: 4 }),
   abilities: { ongoing: [selfOngoingPower] },
 };
 const retired = testCardDef('retired', { power: 9, cost: 5 });
 
-const baseManifest = testManifest([vanilla, revealer, ender, device, retired]);
+const baseManifest = testManifest([vanilla, revealer, ender, specialist, retired]);
 const manifest = {
   ...baseManifest,
   disabled: {
@@ -75,7 +74,7 @@ const fixture = buildRuntimeFixture({
   lanes: [
     {
       P0: [{ id: 'board-vanilla', defId: 'vanilla', revealed: true }],
-      P1: [{ id: 'enemy-device', defId: 'device', revealed: true }],
+      P1: [{ id: 'enemy-specialist', defId: 'specialist', revealed: true }],
     },
     {
       P0: [{
@@ -139,7 +138,7 @@ describe('live InternalCardRecord queries', () => {
           ],
         },
       ],
-      not: { cardType: 'device' },
+      not: { hasOngoing: true },
     });
 
     expect(matches.map((card) => card.id)).toEqual([
@@ -176,7 +175,7 @@ describe('live InternalCardRecord queries', () => {
       slot: [1, 2, 3, 4],
     }).map(card => card.id)).toEqual([
       'board-vanilla',
-      'enemy-device',
+      'enemy-specialist',
       'created-ender',
       'enemy-revealer',
     ]);
@@ -199,7 +198,7 @@ describe('live InternalCardRecord queries', () => {
       column: 1,
     }).map(card => card.id)).toEqual([
       'board-vanilla',
-      'enemy-device',
+      'enemy-specialist',
     ]);
   });
 
@@ -266,10 +265,10 @@ describe('manifest CardDef queries', () => {
 
   it('combines taxonomy, cost, and ability criteria', () => {
     expect(findCardDefs(manifest, {
-      cardType: 'device',
+      cardType: 'character',
       cost: { between: [3, 5] },
       hasOngoing: true,
-    }).map((def) => def.defId)).toEqual(['device']);
+    }).map((def) => def.defId)).toEqual(['specialist']);
 
     expect(findCardDefs(manifest, {
       hasOnEndOfTurn: true,
@@ -284,7 +283,7 @@ describe('manifest CardDef queries', () => {
     expect(findCardDefs(manifest, {
       and: [
         { cost: { gte: 2 } },
-        { not: { cardType: 'device' } },
+        { not: { hasOngoing: true } },
       ],
     }).map((def) => def.defId)).toEqual([
       'revealer',
@@ -296,7 +295,7 @@ describe('manifest CardDef queries', () => {
   it('findCardDef returns the first stable match and null when none qualify', () => {
     expect(findCardDef(manifest, {
       cost: { gte: 2 },
-      not: { cardType: 'device' },
+      not: { hasOngoing: true },
     })?.defId).toBe('revealer');
 
     expect(findCardDef(manifest, {

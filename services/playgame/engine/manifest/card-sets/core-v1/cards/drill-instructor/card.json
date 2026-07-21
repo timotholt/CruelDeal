@@ -1,6 +1,8 @@
 {
   "defId": "drill-instructor",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Drill Instructor",
   "basePower": 1,
   "cost": 1,

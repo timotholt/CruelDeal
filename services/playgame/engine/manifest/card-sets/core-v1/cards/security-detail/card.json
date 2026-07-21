@@ -1,6 +1,8 @@
 {
   "defId": "security-detail",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Security Detail",
   "basePower": 2,
   "cost": 3,

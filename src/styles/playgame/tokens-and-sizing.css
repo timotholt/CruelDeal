@@ -90,6 +90,11 @@
   }
 
   .playgame-root.playgame-portal-root {
+    /* Portals live outside the game-frame query container. They must consume
+       AppViewport's canonical frame dimensions instead of allowing cqw/cqh to
+       fall back to the full browser viewport. */
+    --board-w: var(--app-frame-w);
+    --board-h: var(--app-frame-h);
     position: fixed;
     inset: 0;
     width: auto;

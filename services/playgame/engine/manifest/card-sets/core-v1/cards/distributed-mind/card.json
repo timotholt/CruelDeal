@@ -1,6 +1,8 @@
 {
   "defId": "distributed-mind",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Distributed Mind",
   "basePower": 4,
   "cost": 5,
@@ -42,5 +44,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

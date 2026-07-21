@@ -31,7 +31,8 @@ export interface GameTextV3Style {
 export interface GameTextV3Props {
   text: string;
   class?: string;
-  baseFontSize: number;
+  /** A number is interpreted as rem; CSS lengths allow container-relative type. */
+  baseFontSize: number | string;
   fitMode?: GameTextV3FitMode;
   maxLines?: number;
   minScale?: number;
@@ -162,6 +163,9 @@ export const GameTextV3 = (props: GameTextV3Props) => {
     if (fitMode() !== 'fixed-lines') return props.text;
     return props.text.split('\n').slice(0, maxLines()).join('\n');
   };
+  const baseFontSize = () => typeof props.baseFontSize === 'number'
+    ? `${props.baseFontSize}rem`
+    : props.baseFontSize;
 
   createEffect(() => {
     const container = containerRef;
@@ -172,25 +176,28 @@ export const GameTextV3 = (props: GameTextV3Props) => {
     assertFontReady(style.fontFamily, style.fontWeight, style.fontStyle);
 
     const fit = () => {
-      const rect = container.getBoundingClientRect();
-      const containerWidth = rect.width * skewFactor();
-      const containerHeight = rect.height;
+      // Fit in layout coordinates. getBoundingClientRect() includes ancestor
+      // transforms while scroll/offset metrics do not; mixing those spaces
+      // made scaled hand cards look permanently overflowing and forced every
+      // name to minScale.
+      const containerWidth = container.clientWidth * skewFactor();
+      const containerHeight = container.clientHeight;
       if (containerWidth <= 0 || containerHeight <= 0) return;
 
       const mode = fitMode();
       const safetyScale = props.safetyScale ?? (style.fontStyle === 'italic' ? 0.96 : 0.98);
 
       // Reset to base size so every fit starts from the same geometry.
-      textEl.style.fontSize = `${props.baseFontSize}rem`;
+      textEl.style.fontSize = baseFontSize();
       textEl.style.top = '0px';
-      const basePx = Number.parseFloat(getComputedStyle(textEl).fontSize) || props.baseFontSize * 16;
+      const basePx = Number.parseFloat(getComputedStyle(textEl).fontSize)
+        || (typeof props.baseFontSize === 'number' ? props.baseFontSize * 16 : 16);
 
       const measurements = () => {
-        const r = textEl.getBoundingClientRect();
         const computed = getComputedStyle(textEl);
         return {
-          width: Math.max(r.width, textEl.scrollWidth),
-          height: Math.max(r.height, textEl.scrollHeight),
+          width: Math.max(textEl.offsetWidth, textEl.scrollWidth),
+          height: Math.max(textEl.offsetHeight, textEl.scrollHeight),
           lineHeight: Number.parseFloat(computed.lineHeight) || Number.parseFloat(computed.fontSize) || 1,
         };
       };
@@ -249,10 +256,10 @@ export const GameTextV3 = (props: GameTextV3Props) => {
         scale = Math.min(maxScale(), Math.max(minScale(), Math.min(scaleX, scaleY)));
         textEl.style.fontSize = `${basePx * scale}px`;
         if (!fits() && scale > minScale()) {
-          const r2 = textEl.getBoundingClientRect();
+          const verified = measurements();
           const shrink = Math.min(
-            (containerWidth * safetyScale) / Math.max(r2.width, 1),
-            containerHeight / Math.max(r2.height, 1),
+            (containerWidth * safetyScale) / Math.max(verified.width, 1),
+            containerHeight / Math.max(verified.height, 1),
             1,
           );
           scale = Math.max(minScale(), scale * shrink);
@@ -265,6 +272,7 @@ export const GameTextV3 = (props: GameTextV3Props) => {
         const offset = opticalOffset(textEl, style, props.text, verticalMetric(), verticalAlign());
         // Keep the shifted rect inside the container so trimming never reads
         // as overflow.
+        const rect = container.getBoundingClientRect();
         const elRect = textEl.getBoundingClientRect();
         const slackTop = rect.top - elRect.top;
         const slackBottom = rect.bottom - elRect.bottom;
@@ -295,6 +303,7 @@ export const GameTextV3 = (props: GameTextV3Props) => {
       style={{
         display: 'grid',
         contain: 'strict',
+        'container-type': 'inline-size',
         'justify-items': justifyForAlign(align()),
         'align-items': alignForVertical(verticalAlign()),
       }}
@@ -316,7 +325,7 @@ export const GameTextV3 = (props: GameTextV3Props) => {
           'min-width': '0',
           'min-height': '0',
           'font-family': style().fontFamily,
-          'font-size': `${props.baseFontSize}rem`,
+          'font-size': baseFontSize(),
           'font-weight': style().fontWeight,
           'font-style': style().fontStyle,
           'letter-spacing': style().letterSpacing,

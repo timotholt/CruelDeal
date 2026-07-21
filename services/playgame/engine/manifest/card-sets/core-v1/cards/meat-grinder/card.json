@@ -1,6 +1,8 @@
 {
   "defId": "meat-grinder",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Meat Grinder",
   "basePower": 6,
   "cost": 5,

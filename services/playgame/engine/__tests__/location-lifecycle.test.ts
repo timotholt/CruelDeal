@@ -50,6 +50,8 @@ const cardDef = (
   defId,
   version: 1,
   name: defId,
+  acquisitionPool: 'tbd',
+  traits: [],
   cardType: 'character',
   cost: 1,
   basePower: 2,

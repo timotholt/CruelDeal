@@ -29,6 +29,8 @@ function cardDef(
     defId,
     version: 1,
     name: defId,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     basePower,
     cost: 1,
@@ -246,7 +248,9 @@ describe('C4D reveal transaction golden traces', () => {
     const dronePilot = cardDef('drone-pilot', {
       onReveal: [
         {
-          kind: 'CREATE_CARD_IN_ZONE',
+          kind: 'CREATE_CARDS_IN_ZONE',
+          count: { kind: 'LIT', n: 1 },
+          replacement: 'WITH_REPLACEMENT',
           pool: { kind: 'DEF_ID_LIST', ids: ['drone'] },
           owner: 'SELF_OWNER',
           destination: {
@@ -314,7 +318,9 @@ describe('C4D reveal transaction golden traces', () => {
   it('makes create-and-reveal a clean no-op when the lane is full', () => {
     const dronePilot = cardDef('drone-pilot', {
       onReveal: [{
-        kind: 'CREATE_CARD_IN_ZONE',
+        kind: 'CREATE_CARDS_IN_ZONE',
+        count: { kind: 'LIT', n: 1 },
+        replacement: 'WITH_REPLACEMENT',
         pool: { kind: 'DEF_ID_LIST', ids: ['drone'] },
         owner: 'SELF_OWNER',
         destination: {
@@ -395,16 +401,16 @@ describe('C4D reveal transaction golden traces', () => {
         delta: { kind: 'LIT', n: 2 },
       }],
     });
-    const spell: CardDef = {
-      ...cardDef('spell', {
+    const { basePower: _basePower, ...spellBase } = cardDef('spell', {
         onReveal: [{
           kind: 'ADJUST_NEXT_TURN_ENERGY_BONUS',
           owner: 'SELF_OWNER',
           delta: { kind: 'LIT', n: 1 },
         }],
-      }),
+      });
+    const spell: CardDef = {
+      ...spellBase,
       cardType: 'spell',
-      basePower: 0,
     };
     const gameManifest = manifest([spell], 4, [playedHere]);
     const played: InternalCardRecord = {

@@ -40,7 +40,7 @@ describe('END TURN card facing', () => {
     })).toBe(true);
   });
 
-  it('keeps staged cards down until their committed reveal frame', () => {
+  it('keeps a local staged card face-up while planning, then conceals it for resolution', () => {
     const local = [
       facing({ resolutionLocked: false }),
       facing({ resolutionLocked: true }),
@@ -51,10 +51,19 @@ describe('END TURN card facing', () => {
       facing({ owner: 'P1', resolutionLocked: true, revealed: true }),
     ];
 
-    expect(local).toEqual([true, true, false]);
+    expect(local).toEqual([false, true, false]);
     expect(remote).toEqual([true, false]);
-    expect(transitions(local)).toBe(1);
+    expect(transitions(local)).toBe(2);
     expect(transitions(remote)).toBeLessThanOrEqual(2);
+  });
+
+  it('does not expose another player staged card during planning', () => {
+    expect(facing({ owner: 'P1', viewerSeat: 'P0', resolutionLocked: false }))
+      .toBe(true);
+  });
+
+  it('does not expose an unstaged local delayed card during planning', () => {
+    expect(facing({ stagedCardIds: [], resolutionLocked: false })).toBe(true);
   });
 
   it('keeps an engine-delayed local card down after the resolution unlock', () => {
@@ -64,7 +73,7 @@ describe('END TURN card facing', () => {
       facing({ resolutionLocked: false, stagedCardIds: [] }),
     ];
 
-    expect(delayed).toEqual([true, true, true]);
-    expect(transitions(delayed)).toBe(0);
+    expect(delayed).toEqual([false, true, true]);
+    expect(transitions(delayed)).toBe(1);
   });
 });

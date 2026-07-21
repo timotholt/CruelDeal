@@ -311,7 +311,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
       expect(cardSource).not.toContain('<CardVfxStack');
       expect(cardSource).not.toContain("class={'cost '");
     }
-    expect(cardFace).toContain('registry={props.vfxRegistry}');
+    expect(cardFace).toContain('registry={registry}');
     expect(cardFace).not.toContain('data-drag-source');
   });
 
@@ -320,13 +320,25 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const handCard = source('./HandCard.tsx');
     const pileViewer = source('./PileViewer.tsx');
     const cardFace = source('./CardFace.tsx');
+    const regularFace = source('./card-faces/RegularCardFace.tsx');
+    const spellFace = source('./card-faces/SpellCardFace.tsx');
+    const cardName = source('./card-faces/CardName.tsx');
     expect(boardCard).toContain("'card lane-card'");
     expect(handCard).toContain("class={'hand-card-motion'");
     expect(handCard).toContain("class={'card'");
     expect(pileViewer).toContain('<CardFace card={card} variant="pile" />');
-    expect(cardFace).toContain("showPower: card.type !== 'spell'");
-    expect(cardFace).toContain('class="pile-card"');
-    expect(cardFace).toContain('class="portrait"');
+    expect(cardFace).toContain('<SpellCardFace');
+    expect(cardFace).toContain('<RegularCardFace');
+    expect(cardFace).not.toContain('class="pile-card"');
+    expect(regularFace).toContain('class="pile-card pile-card--regular"');
+    expect(regularFace).toContain('class="portrait"');
+    expect(spellFace).toContain('class="spell-card-surface"');
+    expect(spellFace).toContain('class="spell-card__base"');
+    expect(spellFace).not.toContain('class={\'power ');
+    expect(regularFace).not.toContain('pile-card__type');
+    expect(spellFace).not.toContain('pile-card__type');
+    expect(cardName).toContain('<GameTextV3');
+    expect(cardName).toContain('maxLines={3}');
   });
 
   it('scopes card effects to each mounted VFX host', () => {
@@ -350,7 +362,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(cardVfxStack).not.toContain('import { cardVfxRegistry }');
   });
 
-  it('routes pointer, tap, and keyboard staging through one manifest-sized controller', () => {
+  it('routes pointer and optional tap staging through one manifest-sized controller', () => {
     const board = source('./PlayBoard.tsx');
     const interaction = source('./useCardInteraction.ts');
 
@@ -358,24 +370,29 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(board).toContain('laneCapacity: manifest.constants.laneCapacity');
     expect(interaction).toContain("boardEl.addEventListener('pointerdown'");
     expect(interaction).toContain("boardEl.addEventListener('click'");
-    expect(interaction).toContain("boardEl.addEventListener('keydown'");
+    expect(interaction).not.toContain("boardEl.addEventListener('keydown'");
     expect(interaction).not.toContain('length >= 4');
     expect(interaction).not.toContain('length < 4');
   });
 
-  it('gives spells a surface-only silhouette inside the canonical card box', () => {
+  it('gives spells a circular painted surface inside the canonical card box', () => {
     const boardCard = source('./BoardCard.tsx');
     const handCard = source('./HandCard.tsx');
     const css = source('../../../src/styles/playgame.css');
     expect(boardCard).toContain('data-card-type={props.card.type}');
     expect(handCard).toContain('data-card-type={props.card.type}');
     const spellRule =
-      css.match(/\.card\[data-card-type="spell"\]\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
-    expect(spellRule).toContain('clip-path: polygon(');
+      css.match(/\.card\[data-card-type="spell"\]:not\(\.facedown\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const spellSurfaceRule =
+      css.match(/\.spell-card-surface\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(spellRule).not.toContain('clip-path:');
     expect(spellRule).not.toContain('width:');
     expect(spellRule).not.toContain('height:');
     expect(spellRule).not.toContain('transform:');
     expect(spellRule).not.toContain('transition:');
+    expect(spellSurfaceRule).toContain('aspect-ratio: 1');
+    expect(spellSurfaceRule).toContain('border-radius: 50%');
+    expect(css).toContain('.card[data-card-type="spell"].facedown .spell-card-surface');
   });
 
   it('animates lane position without animating lane dimensions', () => {

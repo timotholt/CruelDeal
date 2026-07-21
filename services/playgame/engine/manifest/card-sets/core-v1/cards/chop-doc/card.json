@@ -1,6 +1,8 @@
 {
   "defId": "chop-doc",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Chop Doc",
   "basePower": 2,
   "cost": 2,

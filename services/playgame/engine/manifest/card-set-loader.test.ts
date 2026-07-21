@@ -12,6 +12,8 @@ const cardModule = (card: Record<string, unknown>): CardModule => ({
 const baseCard = {
   defId: 'schema-proof',
   version: 1,
+  acquisitionPool: 'tbd',
+  traits: [],
   name: 'Schema Proof',
   cost: 1,
   abilities: {},
@@ -24,16 +26,11 @@ const baseCard = {
 };
 
 describe('card-set loader schema', () => {
-  it('accepts power only on character and device cards', () => {
+  it('accepts power on character cards', () => {
     expect(validateCardModule(cardModule({
       ...baseCard,
       cardType: 'character',
       basePower: 2,
-    }))).toEqual([]);
-    expect(validateCardModule(cardModule({
-      ...baseCard,
-      cardType: 'device',
-      basePower: 0,
     }))).toEqual([]);
   });
 
@@ -54,15 +51,49 @@ describe('card-set loader schema', () => {
     );
   });
 
-  it('requires non-negative integer power on character and device cards', () => {
+  it('requires non-negative integer power on character cards', () => {
     for (const basePower of [undefined, -1, 1.5]) {
       expect(validateCardModule(cardModule({
         ...baseCard,
         cardType: 'character',
         ...(basePower === undefined ? {} : { basePower }),
       })).map((issue) => issue.message)).toContain(
-        'character and device basePower must be an integer >= 0',
+        'character basePower must be an integer >= 0',
       );
+    }
+  });
+
+  it('rejects the removed device taxonomy', () => {
+    expect(validateCardModule(cardModule({
+      ...baseCard,
+      cardType: 'device',
+      basePower: 0,
+    })).map((issue) => issue.message)).toContain(
+      'cardType must be character or spell',
+    );
+  });
+
+  it('requires a canonical acquisition pool', () => {
+    for (const acquisitionPool of [undefined, 'unknown', 'p6']) {
+      expect(validateCardModule(cardModule({
+        ...baseCard,
+        acquisitionPool,
+        cardType: 'character',
+        basePower: 1,
+      })).map((issue) => issue.message)).toContain(
+        'acquisitionPool must be tbd, s1-s3, or p1-p5',
+      );
+    }
+  });
+
+  it('requires unique kebab-case gameplay traits', () => {
+    for (const traits of [undefined, ['Batman Gadget'], ['gadget', 'gadget']]) {
+      expect(validateCardModule(cardModule({
+        ...baseCard,
+        traits,
+        cardType: 'character',
+        basePower: 1,
+      }))).not.toEqual([]);
     }
   });
 });

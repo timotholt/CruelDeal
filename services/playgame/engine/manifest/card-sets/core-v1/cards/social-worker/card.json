@@ -1,6 +1,8 @@
 {
   "defId": "social-worker",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Social Worker",
   "basePower": 3,
   "cost": 5,

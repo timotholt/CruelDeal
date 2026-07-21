@@ -180,6 +180,7 @@ export type CardDestination =
 export type PoolRef =
   | { kind: 'DECK_OF_OWNER'; owner: OwnerRef; excludeInPlay?: boolean }
   | { kind: 'DEF_ID_LIST'; ids: string[] }
+  | { kind: 'CARD_TRAIT'; trait: string }
   | { kind: 'COST_RANGE'; ownerDeck: OwnerRef; min: number; max: number }
   | { kind: 'ANY_RANDOM'; ownerFilter: OwnerFilter }
   /**
@@ -211,8 +212,10 @@ export type EffectExpr =
   | { kind: 'DRAW'; owner: OwnerRef; count: NumExpr }
   | { kind: 'DISCARD'; target: Selector }
   | {
-      kind: 'CREATE_CARD_IN_ZONE';
+      kind: 'CREATE_CARDS_IN_ZONE';
       pool: PoolRef;
+      count: NumExpr;
+      replacement: 'WITH_REPLACEMENT' | 'WITHOUT_REPLACEMENT';
       owner: OwnerRef;
       destination: CardDestination;
       /** Permanently adjust the created card so its visible cost equals this value. */

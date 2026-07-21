@@ -31,10 +31,18 @@ export function isBoardCardResolutionLocked(input: BoardCardResolutionLockInput)
 /**
  * Presentation facing for a card already rendered in a lane.
  *
- * Every unrevealed card stays face-down until its committed reveal frame.
- * This keeps the canonical lane card aligned with the face-down staging
- * surrogate, so end turn does not introduce a second face transition.
+ * A viewer may see their own currently staged card face-up while planning so
+ * the board remains readable and undoable. Once resolution locks, that private
+ * planning exception closes and the unrevealed card uses its canonical
+ * face-down presentation until its committed reveal frame. Opponent cards and
+ * older delayed cards never receive the planning exception.
  */
 export function isBoardCardFaceDown(input: BoardCardFacingInput): boolean {
-  return !input.revealed;
+  if (input.revealed) return false;
+
+  const isVisibleLocalStage = input.owner === input.viewerSeat
+    && input.stagedCardIds.includes(input.cardId)
+    && !input.resolutionLocked;
+
+  return !isVisibleLocalStage;
 }

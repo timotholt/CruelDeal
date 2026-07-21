@@ -1,13 +1,17 @@
 {
   "defId": "golden-parachute",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Golden Parachute",
   "basePower": 1,
   "cost": 1,
   "abilities": {
     "onDestroyed": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [

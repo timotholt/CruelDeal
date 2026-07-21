@@ -1,6 +1,8 @@
 {
   "defId": "clean-operator",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Clean Operator",
   "basePower": 4,
   "cost": 3,

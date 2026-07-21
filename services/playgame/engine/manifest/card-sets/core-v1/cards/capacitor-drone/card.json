@@ -1,6 +1,8 @@
 {
   "defId": "capacitor-drone",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Capacitor Drone",
   "basePower": 2,
   "cost": 2,

@@ -1,6 +1,8 @@
 {
   "defId": "trace-hacker",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Trace Hacker",
   "basePower": 4,
   "cost": 3,

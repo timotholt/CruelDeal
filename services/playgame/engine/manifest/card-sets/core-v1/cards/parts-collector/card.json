@@ -1,6 +1,8 @@
 {
   "defId": "parts-collector",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Parts Collector",
   "basePower": 4,
   "cost": 3,

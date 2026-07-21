@@ -108,9 +108,10 @@ const LOCATION_DSL_KINDS = new Set([
   'COST_RANGE',
   'COST_REDUCED',
   'COUNT',
-  'CREATE_CARD_IN_ZONE',
+  'CREATE_CARDS_IN_ZONE',
   'DEPLOY_FROM_DECK',
   'CURRENT_TURN',
+  'CARD_TRAIT',
   'DEF_ID_LIST',
   'DESTROY',
   'DISABLE_ONGOING',
@@ -169,9 +170,10 @@ const REQUIRED_DSL_FIELDS: Readonly<Record<string, readonly string[]>> = {
   COST_RANGE: ['ownerDeck', 'min', 'max'],
   COST_REDUCED: ['target'],
   COUNT: ['of'],
-  CREATE_CARD_IN_ZONE: ['pool', 'owner', 'destination'],
+  CREATE_CARDS_IN_ZONE: ['pool', 'count', 'replacement', 'owner', 'destination'],
   DEPLOY_FROM_DECK: ['owner', 'lane', 'selection'],
   CURRENT_TURN: [],
+  CARD_TRAIT: ['trait'],
   DEF_ID_LIST: ['ids'],
   DESTROY: ['target'],
   DISABLE_ONGOING: ['target', 'stack'],
@@ -217,6 +219,7 @@ const OPTIONAL_DSL_FIELDS: Readonly<Record<string, readonly string[]>> = {
   BLOCK_PLAY: ['target', 'laneOf', 'pred', 'cardPred', 'when', 'ownerFilter'],
   BOOST_ONGOINGS: ['excludeSelf'],
   CONDITIONAL: ['else'],
+  CREATE_CARDS_IN_ZONE: ['setCost', 'adjustCost'],
   LANE: ['revealed'],
   LOCATION_COUNTER: ['lane', 'owner'],
   MODIFY_LOCATION_COUNTER: ['owner'],
@@ -298,6 +301,22 @@ const validateDslValue = (
         && (!Array.isArray(value.ids) || value.ids.some((id) => typeof id !== 'string'))
       ) {
         issues.push({ locationId, message: `${path}.ids must be an array of defId strings` });
+      }
+      if (
+        value.kind === 'CARD_TRAIT'
+        && (typeof value.trait !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value.trait))
+      ) {
+        issues.push({ locationId, message: `${path}.trait must be a kebab-case gameplay trait` });
+      }
+      if (
+        value.kind === 'CREATE_CARDS_IN_ZONE'
+        && value.replacement !== 'WITH_REPLACEMENT'
+        && value.replacement !== 'WITHOUT_REPLACEMENT'
+      ) {
+        issues.push({
+          locationId,
+          message: `${path}.replacement must be WITH_REPLACEMENT or WITHOUT_REPLACEMENT`,
+        });
       }
       if (
         value.kind === 'TRANSFORM_CARD'

@@ -1,6 +1,8 @@
 {
   "defId": "gun-dealer",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Gun Dealer",
   "basePower": 2,
   "cost": 3,

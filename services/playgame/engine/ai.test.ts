@@ -30,7 +30,8 @@ const truthy = (c: boolean, label: string) => (c ? pass(label) : fail(label));
 
 // ── Fixtures ────────────────────────────────────────────────────────────────
 const mkCard = (defId: string, basePower: number, cost: number): CardDef => ({
-  defId, version: 1, name: defId, basePower, cost, cardType: 'character', abilities: {},
+  defId, version: 1, name: defId, acquisitionPool: 'tbd', traits: [],
+  basePower, cost, cardType: 'character', abilities: {},
   cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
 });
 

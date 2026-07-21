@@ -1,6 +1,8 @@
 {
   "defId": "union-rep",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Union Rep",
   "basePower": 2,
   "cost": 2,

@@ -50,10 +50,6 @@ export const HandCard = (props: HandCardProps) => {
       data-card-id={props.card.id}
       data-drag-source="hand"
       data-drag-enabled={String(isPlayable())}
-      role="button"
-      tabIndex={isInspectable() ? 0 : undefined}
-      aria-label={isPlayable() ? `Select ${props.card.name} to play` : `Inspect ${props.card.name}`}
-      aria-pressed="false"
       style={{
         visibility: isHidden() ? 'hidden' : 'visible',
         'pointer-events': isHidden() ? 'none' : 'auto',

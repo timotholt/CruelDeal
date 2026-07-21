@@ -1,6 +1,8 @@
 {
   "defId": "panopticon-ai",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Panopticon AI",
   "basePower": 5,
   "cost": 5,
@@ -29,5 +31,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

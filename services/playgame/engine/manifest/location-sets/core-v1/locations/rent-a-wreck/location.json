@@ -1,7 +1,7 @@
 {
   "status": "playable",
   "poolOrder": 33,
-  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and a curated move-card pool.",
+  "implementationNote": "Implemented with CREATE_CARDS_IN_ZONE and a curated move-card pool.",
   "defId": "rent-a-wreck",
   "version": 1,
   "name": "Rent-A-Wreck",
@@ -9,7 +9,9 @@
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [
@@ -26,7 +28,9 @@
         }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [

@@ -1,6 +1,8 @@
 {
   "defId": "street-samurai",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Street Samurai",
   "basePower": 5,
   "cost": 3,

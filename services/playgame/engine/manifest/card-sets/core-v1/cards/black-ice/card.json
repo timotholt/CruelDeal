@@ -1,6 +1,8 @@
 {
   "defId": "black-ice",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Black ICE",
   "basePower": 3,
   "cost": 3,
@@ -38,5 +40,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

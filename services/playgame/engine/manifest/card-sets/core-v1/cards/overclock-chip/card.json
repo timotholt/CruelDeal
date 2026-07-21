@@ -1,6 +1,8 @@
 {
   "defId": "overclock-chip",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Overclock Chip",
   "cost": 1,
   "abilities": {

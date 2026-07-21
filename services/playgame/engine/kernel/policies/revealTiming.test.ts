@@ -63,6 +63,8 @@ function cardDef(
     defId,
     version: 1,
     name: defId,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     basePower: 1,
     cost: 1,

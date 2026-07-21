@@ -1,6 +1,8 @@
 {
   "defId": "illegal-implant",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Illegal Implant",
   "basePower": 8,
   "cost": 5,
@@ -43,5 +45,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

@@ -51,7 +51,11 @@ export function useLaneHighlight(opts: UseLaneHighlightOptions): void {
     const onOver = (e: MouseEvent): void => {
       const target = e.target as Element | null;
       const laneEl = target?.closest('.lane-slots') as HTMLElement | null;
-      if (!laneEl || target?.closest('.card')) {
+      if (
+        !laneEl
+        || laneEl.dataset.side !== 'bottom'
+        || target?.closest('.card')
+      ) {
         el.removeAttribute(HOVERED_ATTR);
         return;
       }

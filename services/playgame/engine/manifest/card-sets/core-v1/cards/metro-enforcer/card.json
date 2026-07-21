@@ -1,6 +1,8 @@
 {
   "defId": "metro-enforcer",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Metro Enforcer",
   "basePower": 7,
   "cost": 4,

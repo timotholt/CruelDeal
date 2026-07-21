@@ -1,6 +1,8 @@
 {
   "defId": "quiet-protocol",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Quiet Protocol",
   "basePower": 0,
   "cost": 2,
@@ -45,5 +47,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

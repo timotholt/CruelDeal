@@ -51,7 +51,12 @@ const truthy = (cond: boolean, label: string) => cond ? pass(label) : fail(label
 
 // ---- Fixture: small synthetic manifest -------------------------------------
 
-const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => ({
+const mkCard = (
+  defId: string,
+  basePower: number,
+  cost: number,
+  extra: Partial<Extract<CardDef, { cardType: 'character' }>> = {},
+): CardDef => ({
   defId,
   version: 1,
   name: defId,
@@ -66,6 +71,8 @@ const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<C
     art: { portrait: { path: '' } },
   },
   ...extra,
+  acquisitionPool: extra.acquisitionPool ?? 'tbd',
+  traits: extra.traits ?? [],
 });
 
 const mkLoc = (defId: string, extra: Partial<LocationCardDef> = {}): LocationCardDef => ({

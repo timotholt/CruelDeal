@@ -1,6 +1,8 @@
 {
   "defId": "middle-manager",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Middle Manager",
   "basePower": 2,
   "cost": 2,

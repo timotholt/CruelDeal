@@ -1,6 +1,8 @@
 {
   "defId": "gutter-legion",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Gutter Legion",
   "basePower": 5,
   "cost": 5,

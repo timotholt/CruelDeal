@@ -492,6 +492,8 @@ export function testCardDef(
     defId,
     version: 1,
     name: defId,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     basePower: options.power ?? 1,
     cost: options.cost ?? 1,

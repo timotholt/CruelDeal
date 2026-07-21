@@ -1,6 +1,8 @@
 {
   "defId": "hr-algorithm",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "HR Algorithm",
   "basePower": 2,
   "cost": 3,
@@ -42,5 +44,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

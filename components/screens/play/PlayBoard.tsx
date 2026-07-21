@@ -4,7 +4,7 @@
  * Orchestrates (not implements):
  *   - fixed header / board stage / player footer shell
  *   - stable vertical LaneColumn rendering
- *   - Tap, keyboard, and Pointer Events card interaction (useCardInteraction)
+ *   - Optional tap and Pointer Events card interaction (useCardInteraction)
  *   - opening prelude + committed transaction presentation
  *
  * Gameplay mutations go through typed runtime-backed context commands. The
@@ -39,9 +39,14 @@ import { startOpeningPresentation } from '@/services/playgame/presentation/openi
 import { createPlayPresentationHost } from '@/services/playgame/presentation/playPresentationHost';
 import { createPlayPresentationSink } from '@/services/playgame/presentation/playPresentationSink';
 import { showToast } from '@/services/playgame/toast';
+import {
+  DEFAULT_PLAY_INTERACTION_SETTINGS,
+  type PlayInteractionSettings,
+} from './playInteractionSettings';
 
 interface PlayBoardProps {
   onExit?: () => void;
+  interactionSettings?: PlayInteractionSettings;
 }
 
 export const PlayBoard = (props: PlayBoardProps) => {
@@ -221,6 +226,10 @@ export const PlayBoard = (props: PlayBoardProps) => {
       cardRefs,
       motionSurface: motion,
       laneCapacity: manifest.constants.laneCapacity,
+      tapToPlayEnabled: () => (
+        props.interactionSettings?.tapToPlay
+        ?? DEFAULT_PLAY_INTERACTION_SETTINGS.tapToPlay
+      ),
       stageCardInLane: async (cardId, lane) => {
         setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
         return actions.stageCardInLane(cardId, lane).finally(() => setReplayClientActivity(null));

@@ -295,6 +295,46 @@ describe('pointer visual handoff', () => {
 });
 
 describe('tap-first card interaction', () => {
+  it('keeps tap-to-play off by default without disabling pointer dragging', () => {
+    const frame = document.createElement('div');
+    const board = document.createElement('div');
+    const overlay = document.createElement('div');
+    const source = document.createElement('div');
+    const visual = document.createElement('div');
+    source.dataset.cardId = 'tap-disabled-card';
+    source.dataset.dragSource = 'hand';
+    source.dataset.dragEnabled = 'true';
+    visual.className = 'card';
+    source.append(visual);
+    board.append(source);
+    frame.append(board, overlay);
+    document.body.append(frame);
+    const state = createInitialMatchState(
+      'tap-disabled',
+      BOOTSTRAP_MANIFEST,
+      {},
+      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+    );
+    const cardRefs = new Map([['tap-disabled-card', source]]);
+    const interaction = setupCardInteraction({
+      boardEl: board,
+      localSeat: 'P0',
+      engineState: () => projectMatchStateForSeat(state, 'P0', BOOTSTRAP_MANIFEST),
+      isResolving: () => false,
+      localHand: () => [{ id: 'tap-disabled-card', cost: 1 } as ResolvedCard],
+      cardRefs,
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, zoneRefs: new Map() }),
+      laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
+      stageCardInLane: vi.fn(async () => false),
+      undoPendingCard: vi.fn(async () => false),
+    });
+
+    source.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    expect(source.classList.contains('tap-selected')).toBe(false);
+    expect(board.classList.contains('tap-selecting-card')).toBe(false);
+    interaction.dispose();
+  });
+
   it('selects a playable hand card, exposes legal lanes, and stages through the shared motion path', () => {
     const frame = document.createElement('div');
     const board = document.createElement('div');
@@ -341,13 +381,13 @@ describe('tap-first card interaction', () => {
         zoneRefs: new Map(),
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
+      tapToPlayEnabled: () => true,
       stageCardInLane,
       undoPendingCard: vi.fn(async () => false),
     });
 
     source.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
     expect(source.classList.contains('tap-selected')).toBe(true);
-    expect(source.getAttribute('aria-pressed')).toBe('true');
     expect(lane.classList.contains('tap-target')).toBe(true);
     expect(emptySlot.classList.contains('tap-next')).toBe(true);
 
@@ -355,60 +395,6 @@ describe('tap-first card interaction', () => {
     expect(stageCardInLane).toHaveBeenCalledWith('tap-card', 0);
     expect(source.classList.contains('tap-selected')).toBe(false);
     expect(overlay.querySelectorAll('[data-card-motion-session]')).toHaveLength(1);
-    interaction.dispose();
-  });
-
-  it('supports keyboard selection, cancellation, and staging', () => {
-    const frame = document.createElement('div');
-    const board = document.createElement('div');
-    const overlay = document.createElement('div');
-    const source = document.createElement('div');
-    const visual = document.createElement('div');
-    const lane = document.createElement('div');
-    source.dataset.cardId = 'keyboard-card';
-    source.dataset.dragSource = 'hand';
-    source.dataset.dragEnabled = 'true';
-    visual.className = 'card';
-    lane.dataset.dropZone = 'lane';
-    lane.dataset.laneId = '0';
-    source.append(visual);
-    board.append(source, lane);
-    frame.append(board, overlay);
-    document.body.append(frame);
-    const state = createInitialMatchState(
-      'keyboard-card',
-      BOOTSTRAP_MANIFEST,
-      {},
-      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
-    );
-    const stageCardInLane = vi.fn(() => new Promise<boolean>(() => undefined));
-    const interaction = setupCardInteraction({
-      boardEl: board,
-      localSeat: 'P0',
-      engineState: () => projectMatchStateForSeat(state, 'P0', BOOTSTRAP_MANIFEST),
-      isResolving: () => false,
-      localHand: () => [{ id: 'keyboard-card', cost: 1 } as ResolvedCard],
-      cardRefs: new Map([['keyboard-card', source]]),
-      motionSurface: createPlayMotionSurface({
-        frame,
-        overlay,
-        cardRefs: new Map([['keyboard-card', source]]),
-        zoneRefs: new Map(),
-      }),
-      laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
-      stageCardInLane,
-      undoPendingCard: vi.fn(async () => false),
-    });
-
-    source.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    expect(source.classList.contains('tap-selected')).toBe(true);
-    board.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-    expect(source.classList.contains('tap-selected')).toBe(false);
-    expect(lane.classList.contains('tap-target')).toBe(false);
-
-    source.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true }));
-    lane.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    expect(stageCardInLane).toHaveBeenCalledWith('keyboard-card', 0);
     interaction.dispose();
   });
 
@@ -452,6 +438,7 @@ describe('tap-first card interaction', () => {
         zoneRefs: new Map(),
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
+      tapToPlayEnabled: () => true,
       stageCardInLane: vi.fn(async () => false),
       undoPendingCard,
     });

@@ -98,6 +98,11 @@ export function listDefIdsFromPool(
       // (disabled cards, typos, deprecated entries).
       return pool.ids.filter(id => getCardTemplate(manifest, id) !== null);
 
+    case 'CARD_TRAIT':
+      return getAllCardTemplates(manifest)
+        .filter(def => def.traits.includes(pool.trait))
+        .map(def => def.defId);
+
     case 'COST_RANGE': {
       // Sample from the whole manifest bucketed by cost. The `ownerDeck`
       // field is retained for future per-player pool biasing but is

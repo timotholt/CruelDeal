@@ -1,6 +1,8 @@
 {
   "defId": "debt-collector",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Debt Collector",
   "basePower": 6,
   "cost": 4,

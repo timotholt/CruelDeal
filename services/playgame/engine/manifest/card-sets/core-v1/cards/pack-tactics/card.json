@@ -1,6 +1,8 @@
 {
   "defId": "pack-tactics",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Pack Tactics",
   "cost": 3,
   "abilities": {

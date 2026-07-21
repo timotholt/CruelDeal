@@ -1,7 +1,7 @@
 {
   "status": "playable",
   "poolOrder": 28,
-  "implementationNote": "Implemented with CREATE_CARD_IN_ZONE and drone token.",
+  "implementationNote": "Implemented with CREATE_CARDS_IN_ZONE and drone token.",
   "defId": "drone-hive",
   "version": 1,
   "name": "Drone Hive",
@@ -9,7 +9,9 @@
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [
@@ -25,7 +27,9 @@
         }
       },
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DEF_ID_LIST",
           "ids": [

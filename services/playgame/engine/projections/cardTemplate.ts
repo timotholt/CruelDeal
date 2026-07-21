@@ -1,4 +1,5 @@
 import type {
+  CardAcquisitionPool,
   CardAbilities,
   CardDomain,
   Manifest,
@@ -14,6 +15,8 @@ export interface CardTemplate {
   readonly canonicalName: string;
   readonly name: string;
   readonly domain: CardDomain;
+  readonly acquisitionPool: CardAcquisitionPool;
+  readonly traits: readonly string[];
   readonly baseCost: number;
   readonly basePower: number | null;
   readonly abilities: CardAbilities;
@@ -37,6 +40,8 @@ export function getCardTemplate(
     canonicalName: definition.name,
     name: definition.cosmetic.displayName || definition.name,
     domain: definition.cardType,
+    acquisitionPool: definition.acquisitionPool,
+    traits: definition.traits,
     baseCost: definition.cost,
     basePower: definition.cardType === 'spell' ? null : definition.basePower,
     abilities: definition.abilities,

@@ -1,6 +1,8 @@
 {
   "defId": "crash-dummy",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Crash Dummy",
   "basePower": 2,
   "cost": 1,

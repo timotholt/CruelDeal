@@ -19,7 +19,11 @@ import { type EvalCtx } from '../projections/context';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { getCardPower } from '../projections/power';
-import { pickDefIdFromPool, resolveOwnerRef } from './pools';
+import {
+  listDefIdsFromPool,
+  pickDefIdFromPool,
+  resolveOwnerRef,
+} from './pools';
 import {
   planBuiltinCommands,
   planBuiltinRevealCreations,
@@ -447,11 +451,11 @@ function expandCanonicalAuthoredEffect(
     })));
   }
 
-  if (effect.kind === 'CREATE_CARD_IN_ZONE') {
+  if (effect.kind === 'CREATE_CARDS_IN_ZONE') {
     if (effect.setCost && effect.adjustCost) {
       return kernelStepFailure({
         code: 'INVALID_OPERATION_OUTPUT',
-        message: 'CREATE_CARD_IN_ZONE cannot set and adjust cost together.',
+        message: 'CREATE_CARDS_IN_ZONE cannot set and adjust cost together.',
         sourceInstanceId: String(context.source.sourceId),
       });
     }
@@ -461,16 +465,31 @@ function expandCanonicalAuthoredEffect(
       liveContext.eventOwner ?? null,
     );
     if (!owner) return kernelStepSuccess({ work: [] });
-    const defId = pickDefIdFromPool(
+    const candidates = listDefIdsFromPool(
       effect.pool,
       state,
       manifest,
       liveContext.selfOwner,
-      liveContext.rng.scope('pool'),
       liveContext.eventOwner ?? null,
     );
-    if (!defId) return kernelStepSuccess({ work: [] });
-    const cardId = mintCardId(liveContext.rng.scope('id'));
+    if (candidates.length === 0) return kernelStepSuccess({ work: [] });
+    const requestedCount = Math.max(0, Math.floor(evalNum(effect.count, liveContext)));
+    if (requestedCount === 0) return kernelStepSuccess({ work: [] });
+    const poolRng = liveContext.rng.scope('pool');
+    const defIds: string[] = [];
+    const remaining = [...candidates];
+    for (let index = 0; index < requestedCount; index++) {
+      const source = effect.replacement === 'WITHOUT_REPLACEMENT'
+        ? remaining
+        : candidates;
+      if (source.length === 0) break;
+      const pickedIndex = poolRng.int(0, source.length - 1);
+      defIds.push(source[pickedIndex]!);
+      if (effect.replacement === 'WITHOUT_REPLACEMENT') {
+        remaining.splice(pickedIndex, 1);
+      }
+    }
+    if (defIds.length === 0) return kernelStepSuccess({ work: [] });
     const spawnSource = spawnSourceForSource(
       context.source,
       owner === liveContext.selfOwner,
@@ -493,39 +512,43 @@ function expandCanonicalAuthoredEffect(
     } else {
       destination = effect.destination;
     }
-    const commands: RulesCommand[] = [{
-      type: 'CREATE_CARD',
-      owner,
-      cardId,
-      defId,
-      depth: context.depth,
-      spawnSource,
-      destination,
-      cause: { ...context.source },
-    }];
-    if (effect.setCost) {
+    const commands: RulesCommand[] = [];
+    for (const [index, defId] of defIds.entries()) {
+      const cardId = mintCardId(liveContext.rng.scope(`id:${index}`));
       commands.push({
-        type: 'CHANGE_COST',
+        type: 'CREATE_CARD',
+        owner,
         cardId,
-        mutation: {
-          kind: 'SET',
-          value: Math.max(
-            0,
-            Math.floor(evalNum(effect.setCost, liveContext)),
-          ),
-        },
+        defId,
+        depth: context.depth,
+        spawnSource,
+        destination,
         cause: { ...context.source },
       });
-    } else if (effect.adjustCost) {
-      commands.push({
-        type: 'CHANGE_COST',
-        cardId,
-        mutation: {
-          kind: 'ADD',
-          delta: Math.trunc(evalNum(effect.adjustCost, liveContext)),
-        },
-        cause: { ...context.source },
-      });
+      if (effect.setCost) {
+        commands.push({
+          type: 'CHANGE_COST',
+          cardId,
+          mutation: {
+            kind: 'SET',
+            value: Math.max(
+              0,
+              Math.floor(evalNum(effect.setCost, liveContext)),
+            ),
+          },
+          cause: { ...context.source },
+        });
+      } else if (effect.adjustCost) {
+        commands.push({
+          type: 'CHANGE_COST',
+          cardId,
+          mutation: {
+            kind: 'ADD',
+            delta: Math.trunc(evalNum(effect.adjustCost, liveContext)),
+          },
+          cause: { ...context.source },
+        });
+      }
     }
     return commandWork(commands);
   }

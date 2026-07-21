@@ -69,7 +69,7 @@ describe('location-set loader', () => {
     expect(locations.map((location) => location.defId)).toEqual(EXPECTED_LOCATION_ORDER);
     expect(loaded.disabledLocationIds).toEqual([]);
     expect(createHash('sha256').update(normalized).digest('hex')).toBe(
-      '0423559df99d93a83bcafba642c36df13a187ccb3ff40d2d4ed4f5b2797ea1f8',
+      'f20210c929ad488c4f052a0ebda7c480d56bf3dd22dfcb91db073901a126d745',
     );
   });
 

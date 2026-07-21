@@ -1,6 +1,8 @@
 {
   "defId": "rootkit-kid",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Rootkit Kid",
   "basePower": 1,
   "cost": 2,

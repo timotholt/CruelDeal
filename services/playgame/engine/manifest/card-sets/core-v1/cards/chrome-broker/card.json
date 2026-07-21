@@ -1,13 +1,17 @@
 {
   "defId": "chrome-broker",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Chrome Broker",
   "basePower": 1,
   "cost": 2,
   "abilities": {
     "onReveal": [
       {
-        "kind": "CREATE_CARD_IN_ZONE",
+        "kind": "CREATE_CARDS_IN_ZONE",
+        "count": { "kind": "LIT", "n": 1 },
+        "replacement": "WITH_REPLACEMENT",
         "pool": {
           "kind": "DECK_BY_CARD_TYPE",
           "ownerDeck": "SELF_OWNER",

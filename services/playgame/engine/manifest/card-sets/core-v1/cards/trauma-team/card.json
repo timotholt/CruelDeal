@@ -1,6 +1,8 @@
 {
   "defId": "trauma-team",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Trauma Team",
   "basePower": 3,
   "cost": 2,

@@ -1,6 +1,8 @@
 {
   "defId": "silent-engine",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Silent Engine",
   "basePower": 5,
   "cost": 4,
@@ -58,5 +60,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

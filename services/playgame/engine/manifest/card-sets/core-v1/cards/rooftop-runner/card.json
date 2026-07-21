@@ -1,6 +1,8 @@
 {
   "defId": "rooftop-runner",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Rooftop Runner",
   "basePower": 3,
   "cost": 3,

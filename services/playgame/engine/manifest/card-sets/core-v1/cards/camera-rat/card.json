@@ -1,6 +1,8 @@
 {
   "defId": "camera-rat",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Camera Rat",
   "basePower": 2,
   "cost": 1,

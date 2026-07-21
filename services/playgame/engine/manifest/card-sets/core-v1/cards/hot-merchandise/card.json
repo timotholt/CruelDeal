@@ -1,6 +1,8 @@
 {
   "defId": "hot-merchandise",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Hot Merchandise",
   "basePower": 9,
   "cost": 5,

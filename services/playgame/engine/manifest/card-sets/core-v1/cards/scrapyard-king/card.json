@@ -1,6 +1,8 @@
 {
   "defId": "scrapyard-king",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Scrapyard King",
   "basePower": 8,
   "cost": 6,

@@ -44,6 +44,8 @@ function cardDef(
     defId,
     version: 1,
     name: defId,
+    acquisitionPool: 'tbd',
+    traits: [],
     cardType: 'character',
     basePower,
     cost,
@@ -946,7 +948,9 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       locations: [{ lane: 1, defId: entryLocation.defId }],
     });
     const generic = evaluate(genericState, gameManifest, creator, {
-      kind: 'CREATE_CARD_IN_ZONE',
+      kind: 'CREATE_CARDS_IN_ZONE',
+      count: { kind: 'LIT', n: 1 },
+      replacement: 'WITH_REPLACEMENT',
       pool: { kind: 'DEF_ID_LIST', ids: ['token'] },
       owner: 'SELF_OWNER',
       destination: {
@@ -1131,7 +1135,9 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       locations: [{ lane: 0, defId: spawnLocation.defId }],
     });
     const result = evaluate(initial, gameManifest, spawner, {
-      kind: 'CREATE_CARD_IN_ZONE',
+      kind: 'CREATE_CARDS_IN_ZONE',
+      count: { kind: 'LIT', n: 1 },
+      replacement: 'WITH_REPLACEMENT',
       pool: { kind: 'DEF_ID_LIST', ids: ['spawned'] },
       owner: 'SELF_OWNER',
       destination: {

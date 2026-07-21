@@ -1,6 +1,8 @@
 {
   "defId": "adaptive-shell",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Adaptive Shell",
   "basePower": 2,
   "cost": 2,
@@ -51,5 +53,5 @@
       }
     }
   },
-  "cardType": "device"
+  "cardType": "character"
 }

@@ -1,6 +1,8 @@
 {
   "defId": "adrenal-graft",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Adrenal Graft",
   "basePower": 3,
   "cost": 3,

@@ -1,6 +1,8 @@
 {
   "defId": "kingpin-broker",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Kingpin Broker",
   "basePower": 7,
   "cost": 6,

@@ -1,6 +1,8 @@
 {
   "defId": "block-party",
   "version": 1,
+  "acquisitionPool": "tbd",
+  "traits": [],
   "name": "Block Party",
   "basePower": 2,
   "cost": 2,

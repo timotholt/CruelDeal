@@ -33,6 +33,8 @@ const basicCard = (defId: string, abilities: CardDef['abilities'] = {}): CardDef
   defId,
   version: 1,
   name: defId,
+  acquisitionPool: 'tbd',
+  traits: [],
   basePower: 2,
   cost: 1,
   cardType: 'character',

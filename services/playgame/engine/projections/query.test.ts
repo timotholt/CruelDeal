@@ -11,9 +11,6 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import {
   matchesNum,
   matchesString,
-  matchesCard,
-  matchesCardDef,
-  matchesLane,
   findCards,
   findCard,
   countCards,
@@ -43,11 +40,22 @@ const eq = <T>(a: T, b: T, label: string) =>
 const truthy = (c: boolean, label: string) => (c ? pass(label) : fail(label));
 
 // ── Fixture builders ─────────────────────────────────────────────────────────
-const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => ({
-  defId, version: 1, name: defId, basePower, cost, cardType: 'character', abilities: {},
-  cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
-  ...extra,
-});
+const mkCard = (defId: string, basePower: number, cost: number, extra: Partial<CardDef> = {}): CardDef => {
+  const common = {
+    defId,
+    version: 1,
+    name: defId,
+    acquisitionPool: extra.acquisitionPool ?? 'tbd',
+    traits: extra.traits ?? [],
+    cost,
+    abilities: {},
+    cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
+  };
+  if (extra.cardType === 'spell') {
+    return { ...common, ...extra, cardType: 'spell' } as CardDef;
+  }
+  return { ...common, basePower, cardType: 'character', ...extra } as CardDef;
+};
 
 const mkManifest = (cards: CardDef[]): Manifest => ({
   version: 1,
@@ -198,7 +206,7 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([
     mkCard('cheap', 2, 1, { cardType: 'character' }),
-    mkCard('mid',   4, 3, { cardType: 'device' }),
+    mkCard('mid',   4, 3, { cardType: 'character' }),
     mkCard('big',   8, 5, { cardType: 'spell' }),
   ]);
   const state = buildState([
@@ -212,8 +220,8 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
   eq(findCards(state, manifest, { cost: { gt: 1 } }).length, 2, 'cost: gt');
   eq(findCards(state, manifest, { cost: { between: [2, 4] } }).length, 1, 'cost: between');
   eq(findCards(state, manifest, { basePower: { gte: 4 } }).length, 1, 'basePower: gte excludes non-power-bearing spells');
-  eq(findCards(state, manifest, { cardType: 'character' }).length, 1, 'cardType: single');
-  eq(findCards(state, manifest, { cardType: ['device', 'spell'] }).length, 2, 'cardType: array');
+  eq(findCards(state, manifest, { cardType: 'character' }).length, 2, 'cardType: single');
+  eq(findCards(state, manifest, { cardType: ['character', 'spell'] }).length, 3, 'cardType: array');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -301,7 +309,7 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([
     mkCard('cheap', 2, 1, { cardType: 'character' }),
-    mkCard('mid',   4, 3, { cardType: 'device' }),
+    mkCard('mid',   4, 3, { cardType: 'character' }),
     mkCard('big',   8, 5, { cardType: 'spell' }),
   ]);
   const state = buildState([
@@ -312,19 +320,19 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 
   // AND: cheap AND character
   eq(findCards(state, manifest, { and: [{ cost: { lte: 2 } }, { cardType: 'character' }] }).length, 1, 'and');
-  // OR: cheap OR device
-  eq(findCards(state, manifest, { or: [{ cost: { lte: 1 } }, { cardType: 'device' }] }).length, 2, 'or');
+  // OR: cheap OR spell
+  eq(findCards(state, manifest, { or: [{ cost: { lte: 1 } }, { cardType: 'spell' }] }).length, 2, 'or');
   // NOT: not character
-  eq(findCards(state, manifest, { not: { cardType: 'character' } }).length, 2, 'not');
+  eq(findCards(state, manifest, { not: { cardType: 'character' } }).length, 1, 'not');
   // Custom
   eq(findCards(state, manifest, { custom: (c, _, m) => m.cards[c.defId].basePower > 5 }).length, 1, 'custom');
   // Nested
   eq(findCards(state, manifest, {
     and: [
-      { not: { cardType: 'device' } },
+      { not: { cardType: 'spell' } },
       { or: [{ cost: 1 }, { cost: 5 }] },
     ],
-  }).length, 2, 'and+not+or nested');
+  }).length, 1, 'and+not+or nested');
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -334,13 +342,13 @@ truthy(matchesString('fooBar', { contains: 'oB' }), 'str: contains');
 {
   const manifest = mkManifest([
     mkCard('a', 2, 1, { cardType: 'character' }),
-    mkCard('b', 4, 3, { cardType: 'device' }),
+    mkCard('b', 4, 3, { cardType: 'character' }),
     mkCard('c', 8, 5, { cardType: 'spell' }),
   ]);
 
   eq(findCardDefs(manifest, { cost: { lte: 3 } }).length, 2, 'CardDef: cost lte');
-  eq(findCardDefs(manifest, { cardType: 'character' }).length, 1, 'CardDef: cardType');
-  eq(findCardDefs(manifest, { cardType: ['device', 'spell'] }).length, 2, 'CardDef: cardType array');
+  eq(findCardDefs(manifest, { cardType: 'character' }).length, 2, 'CardDef: cardType');
+  eq(findCardDefs(manifest, { cardType: ['character', 'spell'] }).length, 3, 'CardDef: cardType array');
   truthy(findCardDef(manifest, { cost: 5 })?.defId === 'c', 'CardDef: findCardDef');
   eq(countCardDefs(manifest, {}), 3, 'CardDef: countCardDefs empty filter');
 }
