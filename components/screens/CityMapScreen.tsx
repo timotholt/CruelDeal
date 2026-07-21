@@ -14,7 +14,6 @@ import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import { getHandForSeat } from '@/services/playgame/view';
-import { BoardSizer } from './play/BoardSizer';
 import { EnergyBadge } from './play/EnergyBadge';
 import { HandCard } from './play/HandCard';
 import { HiddenHandIndicator } from './play/HiddenHandIndicator';
@@ -126,10 +125,9 @@ export const CityMapScreen = (props: CityMapScreenProps) => {
   const session = MatchSession.fromBootstrap(candidate);
 
   return (
-    <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
+    <div class="playgame-root city-play-root">
       <VfxHost class="board-wrap" id="boardWrap">
         <PlayProviders session={session}>
-          <BoardSizer />
           <CityGameBoard onExit={props.onExit} />
         </PlayProviders>
       </VfxHost>

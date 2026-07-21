@@ -3,7 +3,8 @@
 ## Status
 
 Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is
-active; its shared-card-rendering slice is complete and board sizing is next.
+active; shared card rendering and board sizing are complete, and declarative
+lane maps are next.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -917,7 +918,7 @@ Extract cohesive units without changing the visual design:
   the circle's upper-left; spells still show no power stat.
 - **[BUILD LAST]** Keep zone-specific interaction/visibility in small adapters, use one explicit presentation model, and bind refs through the host.
 
-### Board Sizing
+### Board Sizing — COMPLETE
 
 - **[BUILD LAST]** Move playgame sizing variables to the `/play` root, observe the board host, and choose one `--board-w`/`--board-h` owner.
 - **[BUILD LAST]** Prefer CSS sizing/local properties and retain JS only for geometry CSS cannot express.
@@ -1127,7 +1128,7 @@ npm run lint
 11. **[BUILD AFTER — COMPLETE]** Phase 3b opening separation, script removal, and slicing removal.
 12. **[BUILD AFTER — COMPLETE]** Phase 4 `PlayBoard` decomposition.
 13. **[BUILD LAST — COMPLETE]** Phase 5 shared card rendering.
-14. **[BUILD LAST]** Phase 5 board sizing.
+14. **[BUILD LAST — COMPLETE]** Phase 5 board sizing.
 15. **[BUILD LAST]** Phase 5 declarative lane maps.
 16. **[BUILD LAST]** Phase 5 instance-scoped VFX.
 17. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.

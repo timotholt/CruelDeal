@@ -33,7 +33,7 @@ export const TensorPlayScreen = (props: TensorPlayScreenProps) => {
   });
 
   return (
-    <div class="playgame-root city-play-root" style={{ width: '100%', height: '100%', background: '#000' }}>
+    <div class="playgame-root city-play-root">
       <div class="board-wrap">
         <div class="board city-game-board ready" id="board">
           {/* HUD */}

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const source = (relativePath: string): string => readFileSync(
@@ -19,8 +19,26 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('does not install a second board-sizing authority on canonical /play', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
+    const cityMap = source('../CityMapScreen.tsx');
+    const tensorPlay = source('../TensorPlayScreen.tsx');
     const css = source('../../../src/styles/playgame.css');
+    const appViewportCss = source('../../../src/styles/app-viewport.css');
     expect(classicPlay).not.toContain('BoardSizer');
+    expect(existsSync(new URL('./BoardSizer.tsx', import.meta.url))).toBe(false);
+    expect(classicPlay).not.toContain("style={{ width: '100%', height: '100%'");
+    expect(cityMap).not.toContain("style={{ width: '100%', height: '100%'");
+    expect(tensorPlay).not.toContain("style={{ width: '100%', height: '100%'");
+    const rootRule = css.match(/:root\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const playRootRule = css.match(/\.playgame-root\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const playFrameRule = css.match(/\.board\.play-frame\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(rootRule).not.toContain('--board-w');
+    expect(rootRule).not.toContain('--lane-gap');
+    expect(playRootRule).toContain('--board-w: 100cqw');
+    expect(playRootRule).toContain('--board-h: 100cqh');
+    expect(playFrameRule).not.toContain('--board-w');
+    expect(playFrameRule).not.toContain('--board-h');
+    expect(appViewportCss).toContain('--app-frame-w: min(100dvw, calc(100dvh * 9 / 16)');
+    expect(appViewportCss).toContain('--app-frame-h: calc(var(--app-frame-w) * 16 / 9)');
     expect(css).toContain('grid-template-columns: minmax(0, 1fr)');
   });
 

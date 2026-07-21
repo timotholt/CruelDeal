@@ -33,10 +33,7 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
   };
 
   return (
-    <div
-      class="playgame-root playfield-hidden"
-      style={{ width: '100%', height: '100%', background: '#000' }}
-    >
+    <div class="playgame-root playfield-hidden">
       <Show when={session() === null}>
         <DebugDeckPicker onConfirm={handleDeckConfirmed} />
       </Show>
