@@ -15,7 +15,7 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
 
   it('centralizes structural cloning and canonical visibility ownership', () => {
     const animator = source('../eventAnimator.ts');
-    const drag = source('../../../../components/screens/play/useDragDrop.ts');
+    const drag = source('../../../../components/screens/play/useCardInteraction.ts');
     const reveal = source('../../../../services/vfx/animations/reveal-cinematic.ts');
     for (const livePath of [animator, drag, reveal]) {
       expect(livePath).not.toContain('cloneNode(');
@@ -27,7 +27,7 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
   });
 
   it('uses the pointer session surrogate through accepted landing', () => {
-    const drag = source('../../../../components/screens/play/useDragDrop.ts');
+    const drag = source('../../../../components/screens/play/useCardInteraction.ts');
     expect(drag).toContain('motionSession.surrogate');
     expect(drag).toContain('session.animateTo(endpoint');
     expect(drag).toContain('session.handoffTo(endpoint)');

@@ -1,10 +1,10 @@
 /**
- * Unified Pointer Events drag controller for /play.
+ * Unified card interaction controller for /play.
  *
- * Mouse, pen, and touch share one state machine. The original card keeps its
- * layout slot while a visual clone moves on the canonical PlayMotionSurface,
- * so dragging never causes reflow. On a successful drop, that same clone
- * lands on the newly rendered destination before ownership returns to DOM.
+ * Tap, keyboard, mouse, pen, and touch share a single instance-local legality and
+ * action boundary. Pointer drag remains an enhancement. Every accepted path
+ * uses the canonical PlayMotionSurface handoff, so the original card keeps its
+ * layout slot and staging never causes reflow.
  */
 
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
@@ -23,6 +23,7 @@ const LANDING_DURATION_MS = 120;
 type DragOrigin = 'hand' | 'lane';
 
 interface ActivePointerDrag {
+  interaction: 'pointer' | 'tap';
   pointerId: number;
   cardId: string;
   origin: DragOrigin;
@@ -41,7 +42,7 @@ type DropTarget =
   | { kind: 'lane'; element: HTMLElement; laneId: LaneId }
   | { kind: 'hand'; element: HTMLElement };
 
-export interface DragDropOpts {
+export interface CardInteractionOptions {
   boardEl: HTMLElement;
   localSeat: Seat;
   engineState: () => SeatVisibleMatchState;
@@ -49,8 +50,21 @@ export interface DragDropOpts {
   localHand: () => ResolvedCard[];
   cardRefs: Map<string, HTMLElement>;
   motionSurface: PlayMotionSurface;
-  stageCardInLane: (cardId: string, laneIdx: number) => Promise<boolean>;
+  laneCapacity: number;
+  stageCardInLane: (cardId: string, laneIdx: LaneId) => Promise<boolean>;
   undoPendingCard: (cardId: string) => Promise<boolean>;
+}
+
+interface TapSelection {
+  cardId: string;
+  origin: DragOrigin;
+  sourceEl: HTMLElement;
+}
+
+export interface CardInteractionController {
+  cancelSelection(): void;
+  refreshSelection(): void;
+  dispose(): void;
 }
 
 const nextPaint = (): Promise<void> => new Promise((resolve) => {
@@ -76,7 +90,7 @@ const visualCardElement = (source: HTMLElement): HTMLElement => (
     : source
 );
 
-export function setupDragDrop(opts: DragDropOpts): () => void {
+export function setupCardInteraction(opts: CardInteractionOptions): CardInteractionController {
   const {
     boardEl,
     localSeat,
@@ -85,6 +99,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     localHand,
     cardRefs,
     motionSurface,
+    laneCapacity,
     stageCardInLane,
     undoPendingCard,
   } = opts;
@@ -92,6 +107,8 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   let disposed = false;
   let moveFrame: number | null = null;
   let pendingMove: { drag: ActivePointerDrag; clientX: number; clientY: number } | null = null;
+  let selection: TapSelection | null = null;
+  let tapOperationPending = false;
 
   const clearDropState = (): void => {
     boardEl.querySelectorAll('.drop-target').forEach((element) => element.classList.remove('drop-target'));
@@ -100,6 +117,85 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
 
   const isPending = (cardId: string): boolean =>
     engineState().stagedCards.includes(cardId);
+
+  const playableHandCard = (cardId: string): ResolvedCard | null => {
+    const card = localHand().find(candidate => candidate.id === cardId) ?? null;
+    if (!card || card.cost > engineState().energy[localSeat]) return null;
+    return card;
+  };
+
+  const legalLane = (laneId: LaneId): boolean => {
+    const lane = engineState().lanes.find(candidate => candidate.id === laneId);
+    return Boolean(
+      lane
+      && lane.status === 'ACTIVE'
+      && lane.cards[localSeat].length < laneCapacity,
+    );
+  };
+
+  const clearTapTargets = (): void => {
+    boardEl.querySelectorAll('.tap-target').forEach(element => element.classList.remove('tap-target'));
+    boardEl.querySelectorAll('.tap-next').forEach(element => element.classList.remove('tap-next'));
+  };
+
+  const cancelSelection = (): void => {
+    selection?.sourceEl.classList.remove('tap-selected');
+    selection?.sourceEl.setAttribute('aria-pressed', 'false');
+    selection = null;
+    boardEl.classList.remove('tap-selecting-card');
+    clearTapTargets();
+  };
+
+  const showTapTargets = (): void => {
+    clearTapTargets();
+    if (!selection || isResolving()) return;
+    if (selection.origin === 'lane') {
+      boardEl.querySelector<HTMLElement>('[data-drop-zone="hand"]')?.classList.add('tap-target');
+      return;
+    }
+    boardEl.querySelectorAll<HTMLElement>('[data-drop-zone="lane"]').forEach(element => {
+      const laneId = Number(element.dataset.laneId) as LaneId;
+      if (!legalLane(laneId)) return;
+      element.classList.add('tap-target');
+      [...element.querySelectorAll<HTMLElement>('.slot')]
+        .find(slot => !slot.querySelector('.card'))
+        ?.classList.add('tap-next');
+    });
+  };
+
+  const refreshSelection = (): void => {
+    if (!selection) return;
+    const stillSelectable = selection.sourceEl.isConnected
+      && !isResolving()
+      && (selection.origin === 'hand'
+        ? Boolean(playableHandCard(selection.cardId))
+        : isPending(selection.cardId));
+    if (!stillSelectable) {
+      cancelSelection();
+      return;
+    }
+    showTapTargets();
+  };
+
+  const selectSource = (source: HTMLElement): boolean => {
+    if (isResolving() || tapOperationPending || source.dataset.dragEnabled !== 'true') return false;
+    const cardId = source.dataset.cardId;
+    const origin = source.dataset.dragSource as DragOrigin | undefined;
+    if (!cardId || (origin !== 'hand' && origin !== 'lane')) return false;
+    if (origin === 'hand' && !playableHandCard(cardId)) return false;
+    if (origin === 'lane' && !isPending(cardId)) return false;
+    if (selection?.cardId === cardId && selection.origin === origin) {
+      cancelSelection();
+      return true;
+    }
+    cancelSelection();
+    selection = { cardId, origin, sourceEl: source };
+    source.classList.add('tap-selected');
+    source.setAttribute('aria-pressed', 'true');
+    boardEl.classList.add('tap-selecting-card');
+    showTapTargets();
+    return true;
+  };
 
   const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
     if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
@@ -112,10 +208,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     }
     if (zone.dataset.dropZone !== 'lane') return null;
     const laneId = Number(zone.dataset.laneId) as LaneId;
-    const state = engineState();
-    const lane = state.lanes.find(candidate => candidate.id === laneId);
-    if (!lane || lane.status !== 'ACTIVE') return null;
-    if (lane.cards[localSeat].length >= 4) return null;
+    if (!legalLane(laneId)) return null;
     return { kind: 'lane', element: zone, laneId };
   };
 
@@ -131,11 +224,12 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   };
 
   const beginVisualDrag = (drag: ActivePointerDrag): void => {
+    cancelSelection();
     const cardId = drag.cardId;
     const snapshot = captureCardVisual(cardId, drag.visualSourceEl);
     const motionSession = motionSurface.cardMotion.begin({
       cardId,
-      route: `pointer-${drag.origin}`,
+      route: `${drag.interaction}-${drag.origin}`,
       basis: { kind: 'clone', snapshot },
       startRect: snapshot.rect,
       rotationDegrees: snapshot.rotationDegrees,
@@ -211,11 +305,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     active = null;
   };
 
-  const animateGhostTo = async (
-    drag: ActivePointerDrag,
-    _destination: HTMLElement | null,
-    _fallbackRect: DOMRect,
-  ): Promise<void> => {
+  const animateGhostTo = async (drag: ActivePointerDrag): Promise<void> => {
     const session = drag.motionSession;
     if (!session) return;
     const endpoint = motionSurface.cardMotion.endpoint(drag.cardId);
@@ -229,7 +319,7 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   };
 
   const returnToSource = async (drag: ActivePointerDrag): Promise<void> => {
-    await animateGhostTo(drag, drag.sourceEl.isConnected ? drag.sourceEl : null, drag.sourceRect);
+    await animateGhostTo(drag);
   };
 
   const performDrop = async (drag: ActivePointerDrag): Promise<void> => {
@@ -258,22 +348,59 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
     // cards participate in the hand reflow.
     await nextPaint();
     playCardLayoutSlide(oldRects, cardRefs);
-    await animateGhostTo(drag, cardRefs.get(drag.cardId) ?? null, drag.sourceRect);
+    await animateGhostTo(drag);
+  };
+
+  const performTapDrop = (target: DropTarget): void => {
+    const selected = selection;
+    if (!selected || tapOperationPending) return;
+    const visual = visualCardElement(selected.sourceEl);
+    const sourceRect = visual.getBoundingClientRect();
+    const drag: ActivePointerDrag = {
+      interaction: 'tap',
+      pointerId: -1,
+      cardId: selected.cardId,
+      origin: selected.origin,
+      sourceEl: selected.sourceEl,
+      visualSourceEl: visual,
+      sourceRect,
+      offsetX: 0,
+      offsetY: 0,
+      started: false,
+      ghost: null,
+      motionSession: null,
+      target,
+    };
+    cancelSelection();
+    tapOperationPending = true;
+    beginVisualDrag(drag);
+    drag.target = target;
+    void performDrop(drag).finally(() => {
+      tapOperationPending = false;
+      if (!disposed) cleanup(drag);
+      else void drag.motionSession?.cancel('screen-disposed');
+    });
   };
 
   const onPointerDown = (event: PointerEvent): void => {
-    if (active || isResolving() || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    if (
+      active
+      || tapOperationPending
+      || isResolving()
+      || (event.pointerType === 'mouse' && event.button !== 0)
+    ) return;
     const source = closestHTMLElement(event.target, '[data-drag-source]');
     if (!source || !boardEl.contains(source) || source.dataset.dragEnabled !== 'true') return;
     const cardId = source.dataset.cardId;
     const origin = source.dataset.dragSource as DragOrigin | undefined;
     if (!cardId || (origin !== 'hand' && origin !== 'lane')) return;
-    if (origin === 'hand' && !localHand().some((card) => card.id === cardId)) return;
+    if (origin === 'hand' && !playableHandCard(cardId)) return;
     if (origin === 'lane' && !isPending(cardId)) return;
 
     const visual = visualCardElement(source);
     const sourceRect = visual.getBoundingClientRect();
     active = {
+      interaction: 'pointer',
       pointerId: event.pointerId,
       cardId,
       origin,
@@ -327,11 +454,64 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   const onPointerUp = (event: PointerEvent): void => finishPointer(event, false);
   const onPointerCancel = (event: PointerEvent): void => finishPointer(event, true);
   const onClickCapture = (event: MouseEvent): void => {
-    const source = closestHTMLElement(event.target, '[data-suppress-drag-click="true"]');
-    if (!source) return;
+    const suppressed = closestHTMLElement(event.target, '[data-suppress-drag-click="true"]');
+    if (suppressed) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      delete suppressed.dataset.suppressDragClick;
+      return;
+    }
+    const source = closestHTMLElement(event.target, '[data-drag-source]');
+    if (source && boardEl.contains(source) && selectSource(source)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+    if (!selection) return;
+    const zone = closestHTMLElement(event.target, '[data-drop-zone]');
+    if (!zone || !boardEl.contains(zone)) {
+      cancelSelection();
+      return;
+    }
+    if (selection.origin === 'hand' && zone.dataset.dropZone === 'lane') {
+      const laneId = Number(zone.dataset.laneId) as LaneId;
+      if (legalLane(laneId)) performTapDrop({ kind: 'lane', element: zone, laneId });
+    } else if (selection.origin === 'lane' && zone.dataset.dropZone === 'hand') {
+      performTapDrop({ kind: 'hand', element: zone });
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
-    delete source.dataset.suppressDragClick;
+  };
+
+  const onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key === 'Escape') {
+      if (!selection) return;
+      cancelSelection();
+      event.preventDefault();
+      return;
+    }
+    if ((event.key === 'Backspace' || event.key === 'Delete') && selection?.origin === 'lane') {
+      const hand = boardEl.querySelector<HTMLElement>('[data-drop-zone="hand"]');
+      if (hand) performTapDrop({ kind: 'hand', element: hand });
+      event.preventDefault();
+      return;
+    }
+    if ((event.key !== 'Enter' && event.key !== ' ') || event.repeat) return;
+    const source = closestHTMLElement(event.target, '[data-drag-source]');
+    if (source && boardEl.contains(source) && selectSource(source)) {
+      event.preventDefault();
+      return;
+    }
+    if (!selection) return;
+    const zone = closestHTMLElement(event.target, '[data-drop-zone]');
+    if (!zone || !boardEl.contains(zone)) return;
+    if (selection.origin === 'hand' && zone.dataset.dropZone === 'lane') {
+      const laneId = Number(zone.dataset.laneId) as LaneId;
+      if (legalLane(laneId)) performTapDrop({ kind: 'lane', element: zone, laneId });
+    } else if (selection.origin === 'lane' && zone.dataset.dropZone === 'hand') {
+      performTapDrop({ kind: 'hand', element: zone });
+    }
+    event.preventDefault();
   };
 
   boardEl.addEventListener('pointerdown', onPointerDown);
@@ -339,19 +519,26 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
   boardEl.addEventListener('pointerup', onPointerUp);
   boardEl.addEventListener('pointercancel', onPointerCancel);
   boardEl.addEventListener('click', onClickCapture, true);
+  boardEl.addEventListener('keydown', onKeyDown);
 
-  return (): void => {
-    disposed = true;
-    cancelScheduledMove();
-    if (active?.motionSession) void active.motionSession.cancel('screen-disposed');
-    active?.sourceEl.classList.remove('drag-source-active');
-    clearDropState();
-    boardEl.classList.remove('dragging-card');
-    active = null;
-    boardEl.removeEventListener('pointerdown', onPointerDown);
-    boardEl.removeEventListener('pointermove', onPointerMove);
-    boardEl.removeEventListener('pointerup', onPointerUp);
-    boardEl.removeEventListener('pointercancel', onPointerCancel);
-    boardEl.removeEventListener('click', onClickCapture, true);
+  return {
+    cancelSelection,
+    refreshSelection,
+    dispose: (): void => {
+      disposed = true;
+      cancelSelection();
+      cancelScheduledMove();
+      if (active?.motionSession) void active.motionSession.cancel('screen-disposed');
+      active?.sourceEl.classList.remove('drag-source-active');
+      clearDropState();
+      boardEl.classList.remove('dragging-card');
+      active = null;
+      boardEl.removeEventListener('pointerdown', onPointerDown);
+      boardEl.removeEventListener('pointermove', onPointerMove);
+      boardEl.removeEventListener('pointerup', onPointerUp);
+      boardEl.removeEventListener('pointercancel', onPointerCancel);
+      boardEl.removeEventListener('click', onClickCapture, true);
+      boardEl.removeEventListener('keydown', onKeyDown);
+    },
   };
 }

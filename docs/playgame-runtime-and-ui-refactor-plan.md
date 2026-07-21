@@ -2,8 +2,8 @@
 
 ## Status
 
-Phases 1.5, 2, 3a, 3b, 4, and 5 are implemented and exit-proven. Phase 6 is
-next: tap-first mobile interaction with pointer drag retained as an enhancement.
+Phases 1.5, 2, 3a, 3b, 4, 5, and 6 are implemented and exit-proven. Phase 7 is
+next: scoped CSS, content, and tooling cleanup.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -19,8 +19,9 @@ Final Phase 1.5 evidence is recorded in
 evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. Final Phase
 3b evidence is recorded in `docs/agent-checkpoints/phase3b-exit.md`. Final
 Phase 4 evidence is recorded in `docs/agent-checkpoints/phase4-exit.md`. Final
-Phase 5 evidence is recorded in `docs/agent-checkpoints/phase5-exit.md`. The
-next implementation phase is Phase 6: mobile interaction rewrite.
+Phase 5 evidence is recorded in `docs/agent-checkpoints/phase5-exit.md`. Final
+Phase 6 evidence is recorded in `docs/agent-checkpoints/phase6-exit.md`. The
+next implementation phase is Phase 7: CSS, content, and tooling cleanup.
 
 ## Cost Model
 
@@ -938,7 +939,7 @@ Extract cohesive units without changing the visual design:
 
 - **[BUILD LAST]** Sizing is locally owned, lane maps are declarative, card faces are canonical, and two surfaces cannot corrupt registries.
 
-## Phase 6: Mobile Interaction Rewrite
+## Phase 6: Mobile Interaction Rewrite — COMPLETE
 
 ### Objective
 
@@ -1043,7 +1044,7 @@ Extract cohesive units without changing the visual design:
 ### Replace Narrowly
 
 - **[BUILD NOW]** authoritative gameplay portions of `script/actions.ts`
-- **[BUILD LAST]** `BoardSizer.tsx`, `useLaneMaps.ts`, and `useDragDrop.ts`
+- **[BUILD LAST]** `BoardSizer.tsx`, `useLaneMaps.ts`, and `useCardInteraction.ts`
 
 **[SEAM]** “Replace narrowly” retains proven algorithms/behavior and does not authorize a broad screen or engine rewrite.
 
@@ -1131,7 +1132,7 @@ npm run lint
 14. **[BUILD LAST — COMPLETE]** Phase 5 board sizing.
 15. **[BUILD LAST — COMPLETE]** Phase 5 declarative lane maps.
 16. **[BUILD LAST — COMPLETE]** Phase 5 instance-scoped VFX.
-17. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
+17. **[BUILD LAST — COMPLETE]** Phase 6 tap-first mobile/pointer enhancement.
 18. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.
 
 **[SEAM]** Do not combine Phase 1.5 engine behavior with Phase 2/3 provider or presentation migration. Do not combine component extraction and CSS cleanup with either.

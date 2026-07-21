@@ -4,7 +4,7 @@
  * Orchestrates (not implements):
  *   - fixed header / board stage / player footer shell
  *   - stable vertical LaneColumn rendering
- *   - Pointer Events drag-and-drop (useDragDrop)
+ *   - Tap, keyboard, and Pointer Events card interaction (useCardInteraction)
  *   - opening prelude + committed transaction presentation
  *
  * Gameplay mutations go through typed runtime-backed context commands. The
@@ -21,7 +21,7 @@ import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { VisiblePileZone } from '@/services/playgame/view';
 import { HandRow } from './HandRow';
 import { LaneGrid } from './LaneGrid';
-import { setupDragDrop } from './useDragDrop';
+import { setupCardInteraction } from './useCardInteraction';
 import { useLaneHighlight } from './useLaneHighlight';
 import { useLaneTopologyMotion } from './useLaneTopologyMotion';
 import { MatchActionBar } from './MatchActionBar';
@@ -212,7 +212,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const playRoot = boardEl.closest<HTMLElement>('.playgame-root');
     if (!playRoot) return;
 
-    const unbindDnd = setupDragDrop({
+    const cardInteraction = setupCardInteraction({
       boardEl,
       localSeat,
       engineState,
@@ -220,6 +220,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       localHand: interactiveHand,
       cardRefs,
       motionSurface: motion,
+      laneCapacity: manifest.constants.laneCapacity,
       stageCardInLane: async (cardId, lane) => {
         setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
         return actions.stageCardInLane(cardId, lane).finally(() => setReplayClientActivity(null));
@@ -229,7 +230,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
         return actions.undoPendingCard(cardId).finally(() => setReplayClientActivity(null));
       },
     });
-    onCleanup(unbindDnd);
+    createEffect(() => {
+      engineState();
+      interactiveHand();
+      isResolving();
+      cardInteraction.refreshSelection();
+    });
+    onCleanup(() => cardInteraction.dispose());
 
     const host = createPlayPresentationHost({
       manifest,

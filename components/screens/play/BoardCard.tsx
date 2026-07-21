@@ -104,6 +104,10 @@ export const BoardCard = (props: BoardCardProps) => {
       data-card-resting-rotation={tilt()}
       data-drag-source="lane"
       data-drag-enabled={String(isDraggablePending())}
+      role={isDraggablePending() ? 'button' : undefined}
+      tabIndex={isDraggablePending() ? 0 : undefined}
+      aria-label={isDraggablePending() ? `Select ${props.card.name} to return to hand` : undefined}
+      aria-pressed={isDraggablePending() ? 'false' : undefined}
       style={{
         '--card-tilt': tilt(),
         cursor: isDraggablePending() ? 'grab' : isFaceDown() ? 'default' : 'pointer',

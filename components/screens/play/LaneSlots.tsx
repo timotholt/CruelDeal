@@ -47,6 +47,9 @@ export const LaneSlots = (props: LaneSlotsProps) => {
       data-side={props.side}
       data-drop-zone={props.side === 'bottom' ? 'lane' : undefined}
       data-lane-id={props.side === 'bottom' ? props.laneIdx : undefined}
+      role={props.side === 'bottom' ? 'button' : undefined}
+      tabIndex={props.side === 'bottom' && props.interactive ? 0 : undefined}
+      aria-label={props.side === 'bottom' ? `Play selected card to lane ${props.laneIdx + 1}` : undefined}
     >
       <For each={[0, 1, 2, 3]}>
         {(gridIdx) => (

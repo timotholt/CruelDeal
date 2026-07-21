@@ -29,6 +29,7 @@ export const HandCard = (props: HandCardProps) => {
   const isHidden = createMemo(() => Boolean(props.hidden));
   const isInteractive = createMemo(() => props.interactive !== false && !isHidden());
   const isInspectable = createMemo(() => props.inspectable !== false && !isHidden());
+  const isPlayable = createMemo(() => isInteractive() && props.playable);
 
   const onClick = (e: MouseEvent): void => {
     if (!isInspectable()) return;
@@ -48,7 +49,11 @@ export const HandCard = (props: HandCardProps) => {
       class={'hand-card-motion' + (isHidden() ? ' hand-card-motion--reserved' : '')}
       data-card-id={props.card.id}
       data-drag-source="hand"
-      data-drag-enabled={String(isInteractive())}
+      data-drag-enabled={String(isPlayable())}
+      role="button"
+      tabIndex={isInspectable() ? 0 : undefined}
+      aria-label={isPlayable() ? `Select ${props.card.name} to play` : `Inspect ${props.card.name}`}
+      aria-pressed="false"
       style={{
         visibility: isHidden() ? 'hidden' : 'visible',
         'pointer-events': isHidden() ? 'none' : 'auto',
@@ -61,7 +66,7 @@ export const HandCard = (props: HandCardProps) => {
         data-card-type={props.card.type}
         style={{
           opacity: props.playable ? 1 : 0.5,
-          cursor: isInteractive() ? 'pointer' : 'default',
+          cursor: isInspectable() ? 'pointer' : 'default',
         }}
       >
         <CardFace card={props.card} variant="play" vfxRegistry={cardVfxRegistry} />

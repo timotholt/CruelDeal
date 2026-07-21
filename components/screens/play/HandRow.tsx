@@ -1,4 +1,4 @@
-import { For, createMemo } from 'solid-js';
+import { For, createMemo, untrack } from 'solid-js';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { HAND_SLOT_RESERVE_MS } from '@/services/playgame/presentation/handPresentation';
 import type { Seat } from '@/services/playgame/engine/types/ids';
@@ -24,7 +24,7 @@ interface HandSlotProps {
 }
 
 const HandSlot = (props: HandSlotProps) => {
-  const initialCard = props.cardById.get(props.cardId) as ResolvedCard;
+  const initialCard = untrack(() => props.cardById.get(props.cardId) as ResolvedCard);
   const card = createMemo<ResolvedCard>(
     (previous) => props.cardById.get(props.cardId) ?? previous,
     initialCard,
@@ -62,6 +62,7 @@ export const HandRow = (props: HandRowProps) => {
       class="hand"
       id="hand"
       data-drop-zone="hand"
+      aria-label="Return selected staged card to hand"
       style={{
         '--hand-scale': handScale().toFixed(3),
         '--hand-slot-reserve-ms': `${HAND_SLOT_RESERVE_MS}ms`,

@@ -334,6 +334,19 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(cardVfxStack).not.toContain('import { cardVfxRegistry }');
   });
 
+  it('routes pointer, tap, and keyboard staging through one manifest-sized controller', () => {
+    const board = source('./PlayBoard.tsx');
+    const interaction = source('./useCardInteraction.ts');
+
+    expect(board).toContain('setupCardInteraction({');
+    expect(board).toContain('laneCapacity: manifest.constants.laneCapacity');
+    expect(interaction).toContain("boardEl.addEventListener('pointerdown'");
+    expect(interaction).toContain("boardEl.addEventListener('click'");
+    expect(interaction).toContain("boardEl.addEventListener('keydown'");
+    expect(interaction).not.toContain('length >= 4');
+    expect(interaction).not.toContain('length < 4');
+  });
+
   it('gives spells a surface-only silhouette inside the canonical card box', () => {
     const boardCard = source('./BoardCard.tsx');
     const handCard = source('./HandCard.tsx');
