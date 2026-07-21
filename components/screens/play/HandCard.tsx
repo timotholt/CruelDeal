@@ -12,7 +12,7 @@
 import { createEffect, createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { usePlayUi } from '@/contexts/PlayUiContext';
-import type { ResolvedCard } from '@/services/playgame/view';
+import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
 
@@ -38,12 +38,8 @@ export const HandCard = (props: HandCardProps) => {
     cardVfxRegistry.reconcilePersistent(props.card.id, sources);
   });
 
-  const powerClass = (): string => {
-    const c = props.card;
-    if (c.power > c.basePower) return 'buffed';
-    if (c.power < c.basePower) return 'debuffed';
-    return '';
-  };
+  const costClass = (): string => cardStatTone(props.card, 'cost');
+  const powerClass = (): string => cardStatTone(props.card, 'power');
 
   const onClick = (e: MouseEvent): void => {
     if (!isInspectable()) return;
@@ -79,7 +75,7 @@ export const HandCard = (props: HandCardProps) => {
         }}
       >
         <CardVfxStack cardId={props.card.id}>
-          <div class="cost">{props.card.cost}</div>
+          <div class={'cost ' + costClass()}>{props.card.cost}</div>
           {props.card.type !== 'spell'
             ? <div class={'power ' + powerClass()}>{props.card.power}</div>
             : null}

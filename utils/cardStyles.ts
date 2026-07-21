@@ -47,8 +47,21 @@ export const getCardVisualState = (card: CardInstance | CardDefinition) => {
     const currentPower = isInstance(card) ? card.totalPower : def.basePower;
     const currentCost = isInstance(card) ? card.totalCost : def.baseCost;
     
-    const powerColor = currentPower > def.basePower ? 'text-emerald-400' : (currentPower < def.basePower ? 'text-red-400' : 'text-white');
-    const costColor = currentCost < def.baseCost ? 'text-emerald-400' : (currentCost > def.baseCost ? 'text-red-400' : 'text-white');
+    const modifiersFor = (stat: 'cost' | 'power') => isInstance(card)
+        ? (stat === 'cost' ? card.costModifiers : card.powerModifiers).filter(modifier => modifier.type !== 'BASE')
+        : [];
+    const colorFor = (stat: 'cost' | 'power') => {
+        const modifiers = modifiersFor(stat);
+        const hasModifier = modifiers.some(modifier => modifier.value !== 0);
+        if (!hasModifier) return stat === 'cost' ? 'text-blue-400' : 'text-yellow-400';
+
+        const hasHarmfulModifier = stat === 'cost'
+            ? modifiers.some(modifier => modifier.value > 0)
+            : modifiers.some(modifier => modifier.value < 0);
+        return hasHarmfulModifier ? 'text-red-400' : 'text-emerald-400';
+    };
+    const powerColor = colorFor('power');
+    const costColor = colorFor('cost');
 
     // Aesthetics
     const rarity = def.rarity || 'Common';

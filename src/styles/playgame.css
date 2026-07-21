@@ -804,12 +804,13 @@
     top: var(--hcard-badge-off); left: var(--hcard-badge-off);
     width: var(--hcard-badge-size); height: var(--hcard-badge-size);
     border-radius: 50%;
-    background: var(--p1);
+    background: #60a5fa;
     color: #061024; font-weight: 700; font-size: var(--hcard-font-badge);
     display: flex; align-items: center; justify-content: center;
     border: 2px solid #061024;
   }
-  .card.enemy .cost { background: var(--p2); }
+  .card .cost.buffed { background: #2dd4a7; color: #052e22; }
+  .card .cost.debuffed { background: #ff6080; color: #3a0616; }
 
   /* Power badge (top-right pill) */
   .card .power {

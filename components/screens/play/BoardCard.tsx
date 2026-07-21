@@ -11,7 +11,7 @@ import { createEffect } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { useMatchSession } from '@/contexts/MatchSessionContext';
 import { usePlayUi } from '@/contexts/PlayUiContext';
-import type { ResolvedCard } from '@/services/playgame/view';
+import { cardStatTone, type ResolvedCard } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import { CardVfxStack } from '../../card/CardVfxStack';
 import { cardVfxRegistry } from '@/services/vfx/card-effects/registry';
@@ -72,12 +72,8 @@ export const BoardCard = (props: BoardCardProps) => {
   };
   const isPending = isFaceDown;
 
-  const powerClass = (): string => {
-    const c = props.card;
-    if (c.power > c.basePower) return 'buffed';
-    if (c.power < c.basePower) return 'debuffed';
-    return '';
-  };
+  const costClass = (): string => cardStatTone(props.card, 'cost');
+  const powerClass = (): string => cardStatTone(props.card, 'power');
 
   // Deterministic tilt per id so cards don't jitter between re-renders.
   const tilt = (): string => {
@@ -126,7 +122,7 @@ export const BoardCard = (props: BoardCardProps) => {
       onClick={onClick}
     >
       <CardVfxStack cardId={props.card.id}>
-        <div class="cost">{props.card.cost}</div>
+        <div class={'cost ' + costClass()}>{props.card.cost}</div>
         {props.card.type !== 'spell'
           ? <div class={'power ' + powerClass()}>{props.card.power}</div>
           : null}

@@ -51,6 +51,43 @@ export interface ResolvedCard {
   stats: SeatCardStatReadModel | null;
 }
 
+export type CardStatTone = 'base' | 'buffed' | 'debuffed';
+
+/**
+ * A harmful modifier takes precedence over beneficial modifiers, even when
+ * their combined total happens to equal the printed stat.
+ */
+export function cardStatTone(
+  card: ResolvedCard,
+  stat: 'cost' | 'power',
+): CardStatTone {
+  const deltas = stat === 'cost'
+    ? [
+        ...(card.stats?.costHistory.map(modifier => modifier.delta) ?? []),
+        ...(card.stats?.liveCostModifiers.map(modifier => modifier.delta) ?? []),
+      ]
+    : [
+        ...(card.stats?.powerHistory.map(modifier => modifier.delta) ?? []),
+        ...(card.stats?.livePowerModifiers.map(modifier => modifier.delta) ?? []),
+      ];
+
+  if (deltas.length === 0) {
+    const delta = stat === 'cost'
+      ? card.cost - card.baseCost
+      : card.power - card.basePower;
+    if (delta === 0) return 'base';
+    return stat === 'cost'
+      ? delta > 0 ? 'debuffed' : 'buffed'
+      : delta < 0 ? 'debuffed' : 'buffed';
+  }
+
+  if (!deltas.some(delta => delta !== 0)) return 'base';
+  const hasHarmfulModifier = stat === 'cost'
+    ? deltas.some(delta => delta > 0)
+    : deltas.some(delta => delta < 0);
+  return hasHarmfulModifier ? 'debuffed' : 'buffed';
+}
+
 export interface ResolvedLocation {
   defId: string;
   name: string;
