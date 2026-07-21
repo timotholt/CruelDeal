@@ -1,9 +1,9 @@
-import type { JSX } from 'solid-js';
 import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
 import { LaneSlots } from './LaneSlots';
 import { LocationTile } from './LocationTile';
+import { LaneMap } from './LaneMap';
 
 interface LaneColumnProps {
   laneId: LaneId;
@@ -21,6 +21,8 @@ interface LaneColumnProps {
   viewerSeat: Seat;
   stagedCardIds: readonly string[];
   resolutionLocked: boolean;
+  mapRef?: (element: HTMLElement) => void;
+  locationRef?: (element: HTMLElement) => void;
 }
 
 export const laneCenterPercent = (order: number, activeLaneCount: number): number => {
@@ -37,10 +39,6 @@ export const laneCenterPercent = (order: number, activeLaneCount: number): numbe
  * DOM node horizontally when lanes are added or removed.
  */
 export const LaneColumn = (props: LaneColumnProps) => {
-  const mapStyle = (): JSX.CSSProperties => ({
-    'background-image': props.location.mapArt ? `url("${props.location.mapArt}")` : 'none',
-  });
-
   return (
     <section
       class="lane-column"
@@ -51,12 +49,10 @@ export const LaneColumn = (props: LaneColumnProps) => {
         '--lane-center': `${laneCenterPercent(props.order, props.activeLaneCount)}%`,
       }}
     >
-      <div
-        class="lane-map"
-        data-lane={props.laneId}
-        data-revealed={String(props.location.revealed)}
-        style={mapStyle()}
-        aria-hidden="true"
+      <LaneMap
+        laneId={props.laneId}
+        location={props.location}
+        elementRef={props.mapRef}
       />
       <LaneSlots
         side="top"
@@ -76,6 +72,7 @@ export const LaneColumn = (props: LaneColumnProps) => {
         bottomBreakdown={props.bottomBreakdown}
         topBreakdown={props.topBreakdown}
         interactive={props.inspectable}
+        elementRef={props.locationRef}
       />
       <LaneSlots
         side="bottom"

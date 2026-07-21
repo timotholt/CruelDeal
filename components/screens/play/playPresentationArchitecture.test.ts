@@ -53,6 +53,25 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(laneGrid).not.toContain('player-row');
   });
 
+  it('renders lane maps declaratively and binds animation elements by ref', () => {
+    const playBoard = source('./PlayBoard.tsx');
+    const laneGrid = source('./LaneGrid.tsx');
+    const laneColumn = source('./LaneColumn.tsx');
+    const laneMap = source('./LaneMap.tsx');
+    const sink = source('../../../services/playgame/presentation/playPresentationSink.ts');
+    expect(laneColumn).toContain('<LaneMap');
+    expect(laneColumn).not.toContain("'background-image'");
+    expect(laneMap).toContain("'background-image': props.location.mapArt");
+    expect(laneGrid).toContain('mapRef={props.bindMapRef(laneId)}');
+    expect(playBoard).toContain('useLanePresentationRefs()');
+    expect(playBoard).not.toContain('querySelector<HTMLElement>(\n          `.lane-map');
+    expect(playBoard).not.toContain('querySelector<HTMLElement>(\n          `.location');
+    expect(sink).not.toContain('mapElement.style.backgroundImage');
+    expect(sink).not.toContain('getLocationTemplate');
+    expect(laneMap).not.toContain('Math.random');
+    expect(laneMap).not.toContain('shuffle');
+  });
+
   it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
     const playBoard = source('./PlayBoard.tsx');

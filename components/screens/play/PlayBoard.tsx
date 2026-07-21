@@ -28,6 +28,7 @@ import { MatchActionBar } from './MatchActionBar';
 import { MatchHud } from './MatchHud';
 import { PlayOverlays } from './PlayOverlays';
 import { usePlayBoardViewModel } from './usePlayBoardViewModel';
+import { useLanePresentationRefs } from './useLanePresentationRefs';
 import {
   prepareHandLayoutTransition,
 } from '@/services/playgame/presentation/handPresentation';
@@ -80,6 +81,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     P1: { name: bootstrap.participants.P1.displayName },
   } as const;
   const { cardRefs, motionSurface, bindZoneRef } = useVfx();
+  const lanePresentationRefs = useLanePresentationRefs();
   const replayTimeline = createMemo(() => match.debug?.replay() ?? null);
   const view = usePlayBoardViewModel({
     manifest,
@@ -252,12 +254,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
         setEndGamePromptVisible: value => setUi('showEndGamePrompt', value),
       },
       browser: {
-        locationMap: lane => boardEl?.querySelector<HTMLElement>(
-          `.lane-map[data-lane="${lane}"]`,
-        ) ?? null,
-        locationTile: lane => boardEl?.querySelector<HTMLElement>(
-          `.location[data-lane="${lane}"]`,
-        ) ?? null,
+        locationMap: lanePresentationRefs.mapElement,
+        locationTile: lanePresentationRefs.tileElement,
         showToast: (message, options) => showToast(
           toastAreaEl!,
           message,
@@ -370,6 +368,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
           replayAvailable={replayTimeline() !== null}
           replayOpen={replayOpen()}
           onToggleReplay={() => setReplayOpen((open) => !open)}
+          bindMapRef={lanePresentationRefs.bindMap}
+          bindLocationRef={lanePresentationRefs.bindTile}
         />
 
         <footer class="player-footer">

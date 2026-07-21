@@ -21,6 +21,8 @@ interface LaneGridProps {
   readonly replayAvailable: boolean;
   readonly replayOpen: boolean;
   readonly onToggleReplay: () => void;
+  readonly bindMapRef: (lane: LaneId) => (element: HTMLElement) => void;
+  readonly bindLocationRef: (lane: LaneId) => (element: HTMLElement) => void;
 }
 
 /**
@@ -58,6 +60,8 @@ export const LaneGrid = (props: LaneGridProps) => (
             viewerSeat={props.viewerSeat}
             stagedCardIds={props.stagedCardIds}
             resolutionLocked={props.resolutionLocked}
+            mapRef={props.bindMapRef(laneId)}
+            locationRef={props.bindLocationRef(laneId)}
           />
         )}
       </For>

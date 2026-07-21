@@ -3,8 +3,8 @@
 ## Status
 
 Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is
-active; shared card rendering and board sizing are complete, and declarative
-lane maps are next.
+active; shared card rendering, board sizing, and declarative lane maps are
+complete, and instance-scoped VFX is next.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -924,7 +924,7 @@ Extract cohesive units without changing the visual design:
 - **[BUILD LAST]** Prefer CSS sizing/local properties and retain JS only for geometry CSS cannot express.
 - **[SEAM]** Shiny-engine and non-playgame global variables remain out of scope.
 
-### Lane Maps
+### Lane Maps — COMPLETE
 
 - **[BUILD LAST]** Render/position lane maps declaratively and remove imperative DOM/measurement code.
 - **[BUILD LAST]** Remove unused random shuffle behavior.
@@ -1129,7 +1129,7 @@ npm run lint
 12. **[BUILD AFTER — COMPLETE]** Phase 4 `PlayBoard` decomposition.
 13. **[BUILD LAST — COMPLETE]** Phase 5 shared card rendering.
 14. **[BUILD LAST — COMPLETE]** Phase 5 board sizing.
-15. **[BUILD LAST]** Phase 5 declarative lane maps.
+15. **[BUILD LAST — COMPLETE]** Phase 5 declarative lane maps.
 16. **[BUILD LAST]** Phase 5 instance-scoped VFX.
 17. **[BUILD LAST]** Phase 6 tap-first mobile/pointer enhancement.
 18. **[BUILD LAST]** Phase 7 CSS/content/tooling cleanup.

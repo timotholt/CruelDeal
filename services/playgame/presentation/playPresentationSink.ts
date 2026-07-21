@@ -1,5 +1,4 @@
 import type { LaneId } from '../engine/types/ids';
-import { getLocationTemplate } from '../engine/projections/locationTemplate';
 import type {
   SeatCardToken,
   SeatTransactionFrame,
@@ -127,16 +126,7 @@ const prepareLocationReveal = (
   if (lane === null) return null;
   const mapElement = browser.locationMap(lane);
   const hiddenTile = browser.locationTile(lane);
-  const defId = eventString(frame.event, 'defId')
-    ?? frame.after.lanes.find(candidate => candidate.id === lane)?.location?.defId;
-  const mapPath = defId
-    ? getLocationTemplate(host.manifest, defId)?.mapArtPath
-    : undefined;
-
   if (mapElement) {
-    if (mapPath) {
-      mapElement.style.backgroundImage = `url(${JSON.stringify(mapPath)})`;
-    }
     mapElement.style.transition = 'none';
     mapElement.style.opacity = '0';
     void mapElement.offsetWidth;

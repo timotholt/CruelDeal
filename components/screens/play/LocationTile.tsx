@@ -17,6 +17,7 @@ interface LocationTileProps {
   bottomBreakdown: SeatLanePowerReadModel;
   topBreakdown: SeatLanePowerReadModel;
   interactive?: boolean;
+  elementRef?: (element: HTMLElement) => void;
 }
 
 export const LocationTile = (props: LocationTileProps) => {
@@ -37,6 +38,7 @@ export const LocationTile = (props: LocationTileProps) => {
   };
   return (
     <div
+      ref={(element) => props.elementRef?.(element)}
       class={'location' + (props.location.revealed ? '' : ' location--hidden')}
       data-lane={props.laneIdx}
       onClick={onClick}
