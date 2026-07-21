@@ -31,13 +31,10 @@ export function isBoardCardResolutionLocked(input: BoardCardResolutionLockInput)
 /**
  * Presentation facing for a card already rendered in a lane.
  *
- * The owner may inspect only cards in the current private staging order.
- * Every other unresolved card stays face-down, including cards with a future
- * authoritative reveal schedule and effect-created cards never staged by hand.
+ * Every unrevealed card stays face-down until its committed reveal frame.
+ * This keeps the canonical lane card aligned with the face-down staging
+ * surrogate, so end turn does not introduce a second face transition.
  */
 export function isBoardCardFaceDown(input: BoardCardFacingInput): boolean {
-  if (input.revealed) return false;
-  if (input.owner !== input.viewerSeat) return true;
-  if (!input.stagedCardIds.includes(input.cardId)) return true;
-  return input.resolutionLocked;
+  return !input.revealed;
 }

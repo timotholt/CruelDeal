@@ -132,8 +132,14 @@ class MotionSession implements CardMotionSession {
     const targetFace = style.faceAtLanding ?? endpointFace(endpoint, this.currentFace);
     const scaleFrom = style.scaleFrom ?? 1;
     const scaleTo = style.scaleTo ?? 1;
+    const changesFace = targetFace !== this.currentFace;
+    const halfDurationMs = Math.max(1, durationMs / 2);
+    const midpointScale = (scaleFrom + scaleTo) / 2;
     this.visual.root.style.opacity = String(style.opacityFrom ?? 1);
-    this.visual.visual.style.transform = `rotateY(${this.currentFace === 'faceDown' ? 180 : 0}deg) scale(${scaleFrom})`;
+    // Both canonical faces rest unmirrored. A face change uses two 90-degree
+    // halves with an edge-on artwork swap instead of leaving the back at 180
+    // degrees, which mirrors diagonal card-back artwork at handoff.
+    this.visual.visual.style.transform = `rotateY(0deg) scale(${scaleFrom})`;
     void this.visual.root.offsetWidth;
 
     this.visual.root.style.transition = [
@@ -144,15 +150,31 @@ class MotionSession implements CardMotionSession {
       `opacity ${durationMs}ms ${style.easing}`,
     ].join(', ');
     this.visual.restingShell.style.transition = `transform ${durationMs}ms ${style.easing}`;
-    this.visual.visual.style.transition = `transform ${durationMs}ms ${style.easing}`;
+    this.visual.visual.style.transition = `transform ${changesFace ? halfDurationMs : durationMs}ms ${style.easing}`;
     placeSurrogate(this.host, this.visual, rect);
     this.visual.restingShell.style.transform = `rotate(${endpointRotation(endpoint)}deg)`;
     this.visual.root.style.opacity = String(style.opacityTo ?? 1);
-    this.visual.visual.style.transform = `rotateY(${targetFace === 'faceDown' ? 180 : 0}deg) scale(${scaleTo})`;
-    setSurrogateFace(this.visual, targetFace);
-    this.currentFace = targetFace;
+    this.visual.visual.style.transform = changesFace
+      ? `rotateY(90deg) scale(${midpointScale})`
+      : `rotateY(0deg) scale(${scaleTo})`;
+    const landingWait = this.wait(durationMs + 30);
+    if (changesFace) {
+      // Keep the source artwork on the visible half of the turn. Swapping the
+      // card background before it reaches edge-on reads as a flash, not a
+      // flip. At the midpoint the card has no visible face, so ownership can
+      // change without exposing either image for an extra frame.
+      await this.wait(halfDurationMs);
+      if (this.terminalResult) return this.terminalResult;
+      setSurrogateFace(this.visual, targetFace);
+      this.currentFace = targetFace;
+      this.visual.visual.style.transition = 'none';
+      this.visual.visual.style.transform = `rotateY(-90deg) scale(${midpointScale})`;
+      void this.visual.visual.offsetWidth;
+      this.visual.visual.style.transition = `transform ${halfDurationMs}ms ${style.easing}`;
+      this.visual.visual.style.transform = `rotateY(0deg) scale(${scaleTo})`;
+    }
 
-    await this.wait(durationMs + 30);
+    await landingWait;
     if (this.terminalResult) return this.terminalResult;
     this.setPhase('landed');
     this.recordDiagnostic('landed');

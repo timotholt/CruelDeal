@@ -75,6 +75,43 @@ describe('governed card motion session', () => {
     expect(await session.handoffTo(endpoint)).toEqual({ status: 'completed' });
   });
 
+  it('changes face artwork only when a flip reaches edge-on', async () => {
+    vi.useFakeTimers();
+    const { source, destination, cardId, surface, overlay } = fixture();
+    destination.classList.add('facedown');
+    const snapshot = captureCardVisual(cardId, source);
+    const session = surface.cardMotion.begin({
+      cardId,
+      route: 'hand-to-lane-flip',
+      basis: { kind: 'clone', snapshot },
+      startRect: snapshot.rect,
+      face: 'faceUp',
+      sourceElement: source,
+    });
+    const visual = overlay.querySelector<HTMLElement>('.card-motion-visual')!;
+
+    const flight = session.animateTo(surface.cardMotion.endpoint(cardId), {
+      durationMs: 120,
+      easing: 'linear',
+      faceAtLanding: 'faceDown',
+    });
+    expect(visual.dataset.cardMotionFace).toBe('faceUp');
+    expect(visual.classList.contains('facedown')).toBe(false);
+
+    await vi.advanceTimersByTimeAsync(59);
+    expect(visual.dataset.cardMotionFace).toBe('faceUp');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(visual.dataset.cardMotionFace).toBe('faceDown');
+    expect(visual.classList.contains('facedown')).toBe(true);
+
+    await vi.runAllTimersAsync();
+    expect(await flight).toBeNull();
+    expect(visual.style.transform).toBe('rotateY(0deg) scale(1)');
+    expect(await session.handoffTo(surface.cardMotion.endpoint(cardId))).toEqual({
+      status: 'completed',
+    });
+  });
+
   it('re-resolves a remounted canonical destination at handoff', async () => {
     vi.useFakeTimers();
     const { source, destination, cardId, cardRefs, surface } = fixture();

@@ -64,6 +64,9 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
 
     // Position clone absolutely at original location — always full brightness in inspector
     clone.style.opacity = '1';
+    clone.querySelectorAll('.card').forEach((card) => {
+      (card as HTMLElement).style.opacity = '1';
+    });
     clone.style.transition = 'none';
     clone.classList.add('card-clone', 'inspector-clone');
     clone.draggable = false;
@@ -269,7 +272,6 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
 
       <Show when={
         props.target.kind === 'card'
-        && props.target.card.type !== 'spell'
         && props.target.card.stats
         && logKind()
       }>

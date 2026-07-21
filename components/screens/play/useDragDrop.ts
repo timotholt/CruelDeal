@@ -252,6 +252,10 @@ export function setupDragDrop(opts: DragDropOpts): () => void {
       return;
     }
 
+    // Staging is private state, so there is no committed presentation frame
+    // at drop time. Keep the pointer surrogate as the sole representation
+    // until the new facedown lane endpoint is painted, while only the sibling
+    // cards participate in the hand reflow.
     await nextPaint();
     playCardLayoutSlide(oldRects, cardRefs);
     await animateGhostTo(drag, cardRefs.get(drag.cardId) ?? null, drag.sourceRect);

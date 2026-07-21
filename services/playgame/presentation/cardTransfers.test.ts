@@ -154,6 +154,17 @@ const stateWithHandCard = () => {
     route: 'visible-to-visible',
     face: 'faceDown',
   }, 'CARD_STAGED normalizes hand -> lane');
+
+  const projectedStage = projected(s0, e, s1);
+  eq(
+    deriveProjectedCardTransfers(
+      projectedStage.after,
+      projectedStage.event,
+      projectedStage.after,
+    ).length,
+    0,
+    'CARD_STAGED already overlaid in its destination produces no transfer',
+  );
 }
 
 {

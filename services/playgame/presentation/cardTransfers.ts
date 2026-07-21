@@ -234,6 +234,10 @@ function transfer(
 ): readonly CardTransfer[] {
   const card = cardAt(after, token) ?? cardAt(before, token);
   if (!card || !from || !to) return [];
+  const samePlacement = from.kind === to.kind
+    && ('owner' in from ? from.owner : null) === ('owner' in to ? to.owner : null)
+    && (from.kind === 'LANE' ? from.lane : null) === (to.kind === 'LANE' ? to.lane : null);
+  if (samePlacement) return [];
   const touched = [from, to].filter(visibleZone);
   return [{
     cardId: token,

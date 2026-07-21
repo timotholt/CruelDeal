@@ -125,7 +125,7 @@ describe('pointer visual handoff', () => {
     lane.dataset.dropZone = 'lane';
     lane.dataset.laneId = '0';
     emptySlot.className = 'slot';
-    destination.className = 'card lane-card';
+    destination.className = 'card lane-card facedown';
     destination.dataset.cardId = 'pointer-card';
     source.append(visual);
     lane.append(emptySlot);

@@ -158,6 +158,34 @@ type PreparedState = {
   status: 'prepared' | 'running' | 'complete' | 'disposed';
 };
 
+const wasPrivatelyPresentedStage = (
+  host: PlayPresentationHost,
+  transfer: CardTransfer,
+): boolean => {
+  if (
+    transfer.reason !== 'CARD_STAGED'
+    || transfer.owner !== host.localSeat
+    || transfer.to.kind !== 'LANE'
+  ) return false;
+
+  const rendered = host.cardElement(transfer.cardId as string);
+  const renderedLane = rendered?.closest<HTMLElement>('[data-drop-zone="lane"]');
+  return renderedLane?.dataset.laneId === String(transfer.to.lane);
+};
+
+const excludeStructurallyAnimatedCards = (
+  oldRects: Map<string, DOMRect>,
+  transfers: readonly CardTransfer[],
+): Map<string, DOMRect> => {
+  const layoutRects = new Map(oldRects);
+  for (const transfer of transfers) {
+    if (transfer.style.route !== 'layout-only') {
+      layoutRects.delete(transfer.cardId as string);
+    }
+  }
+  return layoutRects;
+};
+
 export interface PreparedEventAnimation {
   readonly frame: SeatTransactionFrame;
   readonly transfers: readonly CardTransfer[];
@@ -252,14 +280,24 @@ export function prepareEventAnimation(
   const choreography = frame.event
     ? describeEventChoreography(frame.event)
     : null;
-  const transfers = frame.event
+  const derivedTransfers = frame.event
     ? deriveCardTransfers(frame.before, frame.event, frame.after)
     : [];
   if (frame.event && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
-    assertTransferCoverage(frame.before, frame.event, frame.after, transfers);
+    assertTransferCoverage(frame.before, frame.event, frame.after, derivedTransfers);
   }
+  // A local private plan is already painted before its authoritative stage
+  // frames arrive. Depending on when projection is materialized, that frame
+  // can describe either LANE->same LANE or HAND->LANE; the live destination
+  // is the final arbiter for suppressing the already-presented transfer.
+  const transfers = derivedTransfers.filter(
+    transfer => !wasPrivatelyPresentedStage(host, transfer),
+  );
 
-  const oldRects = captureCardRects(host.cardIds(), host.motionSurface.cardRefs);
+  const oldRects = excludeStructurallyAnimatedCards(
+    captureCardRects(host.cardIds(), host.motionSurface.cardRefs),
+    transfers,
+  );
   const state: PreparedState = {
     host,
     frame,

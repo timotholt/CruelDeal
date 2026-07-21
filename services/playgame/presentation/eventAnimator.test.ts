@@ -215,6 +215,7 @@ describe('event animator transfer origins', () => {
         },
       });
       const transferSession = document.querySelector('.transfer-flyer') as HTMLElement;
+      expect(cardEl.style.translate).toBe('');
       expect(transferSession.dataset.cardMotionSession).toBeTruthy();
       expect(transferSession.style.transform).toBe('');
       expect((transferSession.querySelector('.card-motion-resting-shell') as HTMLElement).style.transform)
@@ -235,6 +236,76 @@ describe('event animator transfer origins', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('does not replay a local private stage when end turn commits it', () => {
+    let before = createInitialMatchState(
+      'private-stage-deduplication',
+      BOOTSTRAP_MANIFEST,
+      {},
+      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+    );
+    const cardId = before.deck.P0[0];
+    before = apply(before, {
+      type: 'CARD_DRAWN',
+      owner: 'P0',
+      cardId,
+      cause: drawCause,
+    }, BOOTSTRAP_MANIFEST);
+    const event = {
+      type: 'CARD_STAGED' as const,
+      intentId: 'private-stage-deduplication',
+      owner: 'P0' as const,
+      cardId,
+      lane: 0 as LaneId,
+      energyPaid: 1,
+      cause: drawCause,
+    } satisfies MatchEvent;
+    const after = apply(before, event, BOOTSTRAP_MANIFEST);
+    const projectedFrame = projectFrame({
+      transactionId: 'private-stage-deduplication:tx',
+      index: 0,
+      framedEvent: {
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
+        event,
+      },
+      frame: after.timeline.frame,
+      scope: after.timeline.scope!,
+      event,
+      before,
+      after,
+    });
+    const token = projectedFrame.event?.data.card as string;
+    const board = document.createElement('div');
+    const overlay = document.createElement('div');
+    const lane = document.createElement('div');
+    const stagedCard = document.createElement('div');
+    lane.dataset.dropZone = 'lane';
+    lane.dataset.laneId = '0';
+    stagedCard.className = 'card lane-card facedown';
+    stagedCard.dataset.cardId = token;
+    stagedCard.dataset.dragSource = 'lane';
+    stagedCard.getBoundingClientRect = () => new DOMRect(160, 300, 70, 100);
+    board.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+    lane.append(stagedCard);
+    board.append(lane, overlay);
+    document.body.append(board);
+    const motionSurface = createPlayMotionSurface({
+      frame: board,
+      overlay,
+      cardRefs: new Map([[token, stagedCard]]),
+      zoneRefs: new Map(),
+    });
+
+    const prepared = prepareEventAnimation(
+      presentationHost(motionSurface),
+      projectedFrame,
+    );
+
+    expect(prepared.transfers).toEqual([]);
+    expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
+    expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
   });
 
   it('keeps a revealed local card face-up throughout a Leon-style lane-to-hand return', async () => {

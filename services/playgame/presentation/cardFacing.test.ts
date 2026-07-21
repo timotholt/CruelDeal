@@ -40,7 +40,7 @@ describe('END TURN card facing', () => {
     })).toBe(true);
   });
 
-  it('allows at most one down and one up transition per card per resolution', () => {
+  it('keeps staged cards down until their committed reveal frame', () => {
     const local = [
       facing({ resolutionLocked: false }),
       facing({ resolutionLocked: true }),
@@ -51,9 +51,9 @@ describe('END TURN card facing', () => {
       facing({ owner: 'P1', resolutionLocked: true, revealed: true }),
     ];
 
-    expect(local).toEqual([false, true, false]);
+    expect(local).toEqual([true, true, false]);
     expect(remote).toEqual([true, false]);
-    expect(transitions(local)).toBeLessThanOrEqual(2);
+    expect(transitions(local)).toBe(1);
     expect(transitions(remote)).toBeLessThanOrEqual(2);
   });
 
@@ -64,7 +64,7 @@ describe('END TURN card facing', () => {
       facing({ resolutionLocked: false, stagedCardIds: [] }),
     ];
 
-    expect(delayed).toEqual([false, true, true]);
-    expect(transitions(delayed)).toBe(1);
+    expect(delayed).toEqual([true, true, true]);
+    expect(transitions(delayed)).toBe(0);
   });
 });
