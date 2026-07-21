@@ -1,10 +1,10 @@
 # Phase 3a — Presentation Director Readiness
 
-Status: ready to implement
+Status: complete and exit-proven — P3A-0 through P3A-4 implemented
 
 Date: 2026-07-20
 
-Next active phase: Phase 3a — Convert the Event Animator to Frames
+Next active phase: Phase 3b — opening cinematics and remaining script-authority cleanup
 
 ## Authority and Scope
 
@@ -44,36 +44,32 @@ cursor owner at every merge point.
   Canonical transitions do not cross the provider boundary.
 - `MatchSessionProvider` owns projected match/session state and commands;
   `PlayUiProvider` owns presented state and UI sidecars.
-- `eventAnimator.ts`, `committedTimeline.ts`, and the script pacing actions
-  already consume projected seat frames rather than canonical transitions.
+- `eventAnimator.ts` consumes projected seat frames rather than canonical
+  transitions.
 - `deriveCardTransfers`, transfer coverage checks, rectangle capture, governed
   motion sessions, hand reservations, FLIP layout movement, and VFX/SFX
   choreography are existing assets to preserve.
 - Provider disposal guards and basic unmount/remount tests exist, but they do
   not constitute the complete director-generation or H1-H7 proof.
 
-### Remaining ownership defects
+### Delivered ownership
 
-- No `PresentationDirector` implementation exists. Timeline iteration, frame
-  adoption, animation waits, timeout handling, and cleanup currently live in
-  `paceTimeline` inside `services/playgame/script/actions.ts`.
-- `PlayBoard.tsx` creates and cancels the generic script runner, starts opening
-  pacing, and chains an accepted end-turn timeline into `resolveTurnFlow`.
-- `PlayUiContext.tsx` exposes `beginTurnPresentation`,
-  `presentCommittedFrame`, and `finishTurnPresentation`, but those cursor writes
-  carry no presentation generation and have no stale-write rejection.
-- `services/playgame/script/runner.ts` uses a mutable `cancelled` boolean rather
-  than a current-generation run with an `AbortSignal`.
-- `eventAnimator.ts` accepts the broad `PlayScriptCtx`, reads DOM registries and
-  presentation services from it, and advances the visible frame through a
-  callback currently named `dispatchPresentedFrame`.
-- `PlayScriptCtx` still owns `boardEl`, `toastArea`, `cardRefs`, `zoneRefs`,
-  `deckEl`, and `motionSurface`; `PlayBoard` assembles those host concerns.
-- `describeEventChoreography` has a broad `dispatch-only` default. It does not
-  yet prove an explicit animation, structural-only, intentional-no-op, or
-  development-failure disposition for every stabilized event/reason pair.
-- The general H1-H7 director/cursor interleaving suite and generated
-  `P-INTERLEAVE` property are not yet implemented.
+- `PresentationDirector` now owns timeline iteration, frame adoption,
+  generation invalidation, timeout handling, fast-forward, and terminal snap.
+- `PlayUiContext` subscribes to complete committed transaction publication and
+  owns the continuously locked presentation queue.
+- `PlayBoard` supplies only the browser host/sink wiring and player commands;
+  the generic script runner, pacing actions, and alternate committed-timeline
+  planner have been removed.
+- `eventAnimator.ts` now has a pre-adoption preparation phase and post-adoption
+  animation phase behind the narrow `PlayPresentationHost`.
+- `describeEventChoreography` explicitly classifies the complete stabilized
+  event alphabet. There is no broad default, and an unknown runtime event
+  fails closed.
+- H1-H7 provider/director interleavings and generated `P-INTERLEAVE` runs prove
+  complete-block FIFO presentation, continuous locking, failure/timeout snap,
+  idempotent fast-forward, stale-completion rejection, disposal/remount safety,
+  and runtime/AI independence from presentation speed.
 
 ## Required Contract
 
@@ -100,6 +96,29 @@ The presentation host owns DOM anchors, motion surface, sound, VFX, toast, and
 geometry services. The animator receives a projected frame plus that narrow
 host/sink contract; it does not receive `PlayScriptCtx`, runtime authority, a
 canonical state, or a gameplay dispatch function.
+
+### Atomic presentation payload and interaction lock
+
+- One accepted turn resolves and commits completely before presentation is
+  notified. The publication unit is one `SeatTransactionTimeline` containing
+  the transaction identity, base/final revisions, complete ordered frame list,
+  and final projected state. Frames are not streamed to the presentation
+  director as the resolver produces them.
+- Publication updates the authoritative projected snapshot and enqueues that
+  complete block in one synchronous batch. Enqueueing raises the presentation
+  and turn-flow locks before reactive UI consumers can adopt the final
+  authoritative snapshot.
+- The director alone walks the already-committed block. A later committed block
+  queues behind the active block; its arrival does not truncate or supersede
+  presentation already in progress.
+- The complete projected block may contain identity that becomes visible later
+  in its own presentation. That is acceptable after commit: the security
+  boundary is pre-commit redaction plus disabled gameplay interaction during
+  presentation, not secrecy between animation frames.
+- This is not permission for a future transport to emit per-frame messages.
+  The remote protocol must deliver the committed seat transaction as one
+  message/block. Presentation speed and network resolution speed remain
+  independent.
 
 ## Delivery Slices
 
@@ -203,8 +222,8 @@ Run the focused presentation/provider slice first:
 ```sh
 npx vitest run \
   services/playgame/presentation \
-  services/playgame/script \
   contexts/PlayProviders.test.tsx \
+  contexts/PlayUiInterleaving.test.tsx \
   contexts/PlayProviders.architecture.test.ts \
   components/screens/play/playPresentationArchitecture.test.ts
 ```
@@ -231,10 +250,10 @@ npm run lint
 git diff --check
 ```
 
-The new director suite must run H1-H7 and `P-INTERLEAVE` at the configured CI
-property depth. Existing unrelated lint failures may be recorded, but Phase 3a
-must add no warning and may not weaken a gate. The roadmap's browser matrix is
-tagged **BUILD LAST** and is not promoted to a Phase 3a merge gate here.
+The director suite runs H1-H7 and `P-INTERLEAVE` at the configured CI property
+depth. Existing unrelated lint failures may be recorded, but Phase 3a adds no
+warning and weakens no gate. The roadmap's browser matrix is tagged **BUILD
+LAST** and is not promoted to a Phase 3a merge gate here.
 
 ## Stop Conditions
 

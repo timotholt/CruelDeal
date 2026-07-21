@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ResolvedCard, UiState } from '../view';
-import { createScript } from '../script/runner';
 import {
   releaseAllHandSlots,
   withHandReservations,
@@ -42,12 +41,7 @@ describe('presentation hand reservations', () => {
   it('clears all residual reservations on a presentation abort', () => {
     const { ctx, ui } = fixture();
     ui.handReservations = [card('stuck-opening-card')];
-    const script = createScript({
-      ...ctx,
-      onCancel: () => releaseAllHandSlots(ctx),
-    });
-
-    script.cancel();
+    releaseAllHandSlots(ctx);
 
     expect(ui.handReservations).toEqual([]);
   });

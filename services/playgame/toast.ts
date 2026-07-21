@@ -10,8 +10,16 @@ export interface ShowToastOpts {
   duration?: number;
 }
 
+export interface ToastHandle {
+  dismiss(): void;
+}
+
 /** Show a toast inside the given toast-area element. */
-export function showToast(area: HTMLElement, message: string, opts: ShowToastOpts = {}): void {
+export function showToast(
+  area: HTMLElement,
+  message: string,
+  opts: ShowToastOpts = {},
+): ToastHandle {
   const t = document.createElement('div');
   t.className = 'toast';
   if (message.startsWith('TURN')) t.classList.add('turn-msg');
@@ -20,10 +28,16 @@ export function showToast(area: HTMLElement, message: string, opts: ShowToastOpt
   t.style.setProperty('--toast-duration', `${duration}ms`);
   area.classList.add('has-message');
   area.appendChild(t);
-  setTimeout(() => {
+  let dismissed = false;
+  const dismiss = (): void => {
+    if (dismissed) return;
+    dismissed = true;
+    clearTimeout(timeout);
     t.remove();
     if (!area.querySelector('.toast')) area.classList.remove('has-message');
-  }, duration + 100);
+  };
+  const timeout = setTimeout(dismiss, duration + 100);
+  return { dismiss };
 }
 
 /**

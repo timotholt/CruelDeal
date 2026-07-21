@@ -8,6 +8,8 @@ import type { MatchEvent } from '../../engine/types/events';
 import { mkPendingEffectId } from '../../engine/types/ids';
 import { asFrame } from '../../engine/types/timeline';
 import {
+  CRUEL_DEAL_PROTOCOL_VERSION,
+  validateProtocolMessage,
   validateSeatCommittedTransactionWire,
   validateSeatMatchSnapshotWire,
 } from '../../protocol';
@@ -100,6 +102,67 @@ describe('seat-safe JSON projection', () => {
     expect(openingJson).not.toContain('"newOrder"');
     expect(openingJson).not.toContain('"cause"');
     expect(openingJson).not.toContain('"rng"');
+  });
+
+  it('encodes a seat commit as one atomic ordered message with a post-state', () => {
+    const session = sessionFixture('seat-atomic-message-fixture');
+    const opening = session.runtime.initialization().opening;
+    const packet = projectTransactionForSeat(
+      opening.transaction,
+      opening.transitions,
+      'P0',
+      BOOTSTRAP_MANIFEST,
+    );
+    const message = {
+      protocolVersion: CRUEL_DEAL_PROTOCOL_VERSION,
+      kind: 'SEAT_COMMITTED_TRANSACTION',
+      payload: packet,
+    };
+
+    expect(validateProtocolMessage(message).ok).toBe(true);
+    expect(Object.keys(packet).sort()).toEqual([
+      'baseRevision',
+      'events',
+      'frame',
+      'matchId',
+      'postState',
+      'revision',
+      'transactionId',
+      'version',
+      'viewerSeat',
+    ]);
+    expect(packet.events.length).toBeGreaterThan(1);
+    expect(packet.events.map(event => event.frame)).toEqual(
+      [...packet.events].map(event => event.frame).sort((left, right) => left - right),
+    );
+    expect(JSON.stringify(packet)).not.toMatch(/"before"|"after"|"frames"|"finalState"/);
+
+    const withoutPostState = Object.fromEntries(
+      Object.entries(packet).filter(([key]) => key !== 'postState'),
+    );
+    expect(validateProtocolMessage({
+      ...message,
+      payload: withoutPostState,
+    }).ok).toBe(false);
+    expect(validateProtocolMessage({
+      ...message,
+      payload: packet.events[0],
+    }).ok).toBe(false);
+
+    const outOfOrder = {
+      ...packet,
+      events: [...packet.events].reverse(),
+    };
+    const genesis = projectSnapshotForSeat(
+      session.bootstrap.matchId,
+      packet.baseRevision,
+      opening.transitions[0]!.before,
+      'P0',
+      BOOTSTRAP_MANIFEST,
+    );
+    expect(() => applySeatCommittedTransaction(genesis, outOfOrder)).toThrow(
+      /invalid projected frame/,
+    );
   });
 
   it('filters stable pending-effect identity events without projecting their payloads', () => {

@@ -9,7 +9,7 @@ const source = (relativePath: string): string => readFileSync(
 describe('Phase 1.22 governed card-motion architecture fences', () => {
   it('keeps semantic transfer normalization upstream of the shared execution layer', () => {
     const animator = source('../eventAnimator.ts');
-    expect(animator).toContain('deriveCardTransfers(before, event, after)');
+    expect(animator).toContain('deriveCardTransfers(frame.before, frame.event, frame.after)');
     expect(animator).toContain('motionSurface.cardMotion.begin');
   });
 
@@ -47,12 +47,13 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
     expect(reveal).not.toContain("classList.remove('facedown'");
   });
 
-  it('keeps local committed stage adoption motion-free and cancels timed-out sessions', () => {
-    const actions = source('../../script/actions.ts');
-    expect(actions).toContain("beat.kind === 'local-stage-adoption'");
-    expect(actions).toContain("(presentFrame(), 'completed' as const)");
-    expect(actions).toContain("c.motionSurface?.cardMotion.cancelAll(");
-    expect(actions).toContain("'presentation-timeout'");
+  it('has no local-stage iterator special case and cancels invalidated sessions', () => {
+    const animator = source('../eventAnimator.ts');
+    const director = source('../presentationDirector.ts');
+    expect(animator).not.toContain('local-stage-adoption');
+    expect(animator).toContain("disposePreparedState(state, 'presentation-invalidated')");
+    expect(director).toContain("run.controller.abort('presentation-failed')");
+    expect(director).toContain('PresentationTimeoutError');
   });
 
   it('removes obsolete standalone flyer APIs from the live tree', () => {

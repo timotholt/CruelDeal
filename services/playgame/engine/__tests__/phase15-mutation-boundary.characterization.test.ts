@@ -7,7 +7,6 @@ const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..');
 const PRODUCTION_ROOTS = [
   'services/playgame/engine',
   'services/playgame/runtime',
-  'services/playgame/script',
 ] as const;
 const EVENT_DECLARATIONS = 'services/playgame/engine/types/events.ts';
 const NON_MUTATING_EVENTS = new Set([

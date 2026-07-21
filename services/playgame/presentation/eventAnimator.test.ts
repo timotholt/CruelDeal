@@ -6,14 +6,21 @@ import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { MatchEvent } from '../engine/types/events';
 import type { EventTransition } from '../engine/transactionTimeline';
-import type { PlayScriptCtx } from '../script/actions';
 import type { CardId, LaneId } from '../engine/types/ids';
 import {
   projectAnimationEventForSeat,
   projectMatchStateForSeat,
   type SeatTransactionFrame,
 } from '../runtime/projection';
-import { animateEvent, fallbackRectForZone } from './eventAnimator';
+import {
+  animatePreparedEvent,
+  fallbackRectForZone,
+  prepareEventAnimation,
+} from './eventAnimator';
+import {
+  createPlayPresentationHost,
+  type PlayPresentationHost,
+} from './playPresentationHost';
 import { createPlayMotionSurface } from './playMotionSurface';
 
 const drawCause = {
@@ -31,6 +38,67 @@ const projectFrame = (frame: EventTransition): SeatTransactionFrame => ({
   before: projectMatchStateForSeat(frame.before, 'P0', BOOTSTRAP_MANIFEST),
   after: projectMatchStateForSeat(frame.after, 'P0', BOOTSTRAP_MANIFEST),
 });
+
+const presentationHost = (
+  motionSurface: ReturnType<typeof createPlayMotionSurface>,
+): PlayPresentationHost => createPlayPresentationHost({
+  manifest: BOOTSTRAP_MANIFEST,
+  localSeat: 'P0',
+  remoteSeat: 'P1',
+  motionSurface,
+  cardStatReadModel: () => null,
+  handSlots: {
+    reserve: vi.fn(),
+    release: vi.fn(),
+  },
+});
+
+const projectedMoveFrame = (): SeatTransactionFrame => {
+  let before = createInitialMatchState(
+    'moved-transfer-cancellation',
+    BOOTSTRAP_MANIFEST,
+    {},
+    orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+  );
+  const cardId = before.deck.P0[0];
+  before = apply(before, {
+    type: 'CARD_DRAWN',
+    owner: 'P0',
+    cardId,
+    cause: drawCause,
+  }, BOOTSTRAP_MANIFEST);
+  before = apply(before, {
+    type: 'CARD_STAGED',
+    intentId: 'stage-cancellable-move',
+    owner: 'P0',
+    cardId,
+    lane: 0 as LaneId,
+    energyPaid: 1,
+    cause: drawCause,
+  }, BOOTSTRAP_MANIFEST);
+  const event = {
+    type: 'CARD_MOVED' as const,
+    cardId,
+    fromLane: 0 as LaneId,
+    toLane: 2 as LaneId,
+    cause: drawCause,
+  } satisfies MatchEvent;
+  const after = apply(before, event, BOOTSTRAP_MANIFEST);
+  return projectFrame({
+    transactionId: 'moved-transfer-cancellation:tx',
+    index: 0,
+    framedEvent: {
+      frame: after.timeline.frame,
+      scope: after.timeline.scope!,
+      event,
+    },
+    frame: after.timeline.frame,
+    scope: after.timeline.scope!,
+    event,
+    before,
+    after,
+  });
+};
 
 describe('event animator transfer origins', () => {
   it('falls remote hand transfers back to the opponent hand region at board top-center', () => {
@@ -137,33 +205,11 @@ describe('event animator transfer origins', () => {
         cardRefs,
         zoneRefs: new Map(),
       });
-      const ctx = {
-        state: projectedFrame.before,
-        ui: {
-          handReservations: [],
-          history: [],
-          isFlipped: true,
-          lockedResult: null,
-          showEndGamePrompt: false,
-        },
-        setUi: vi.fn(),
-        manifest: BOOTSTRAP_MANIFEST,
-        localSeat: 'P0',
-        remoteSeat: 'P1',
-        boardEl,
-        motionSurface,
-        toastArea,
-        cardRefs,
-        zoneRefs: new Map(),
-        cardStatReadModel: () => null,
-        presentCommittedFrame: vi.fn(),
-        finishTurnPresentation: vi.fn(),
-      } as unknown as PlayScriptCtx;
-
-      const animation = animateEvent(ctx, projectedFrame, () => {
-        adopted = true;
-        calls.push('adopt');
-      }, {
+      const host = presentationHost(motionSurface);
+      const prepared = prepareEventAnimation(host, projectedFrame);
+      adopted = true;
+      calls.push('adopt');
+      const animation = animatePreparedEvent(prepared, new AbortController().signal, {
         onTransferAnimation: (transfer) => {
           calls.push(`transfer:${transfer.reason}:${transfer.from.kind}->${transfer.to.kind}`);
         },
@@ -277,35 +323,16 @@ describe('event animator transfer origins', () => {
         cardRefs,
         zoneRefs: new Map(),
       });
-      const ctx = {
-        state: projectedFrame.before,
-        ui: {
-          handReservations: [],
-          history: [],
-          isFlipped: false,
-          lockedResult: null,
-          showEndGamePrompt: false,
-        },
-        setUi: vi.fn(),
-        manifest: BOOTSTRAP_MANIFEST,
-        localSeat: 'P0',
-        remoteSeat: 'P1',
-        boardEl,
-        motionSurface,
-        toastArea,
-        cardRefs,
-        zoneRefs: new Map(),
-        cardStatReadModel: () => null,
-        presentCommittedFrame: vi.fn(),
-        finishTurnPresentation: vi.fn(),
-      } as unknown as PlayScriptCtx;
-
-      const animation = animateEvent(ctx, projectedFrame, () => {
-        source.remove();
-        handWrapper.append(destination);
-        boardEl.append(handWrapper);
-        cardRefs.set(token, handWrapper);
-      });
+      const host = presentationHost(motionSurface);
+      const prepared = prepareEventAnimation(host, projectedFrame);
+      source.remove();
+      handWrapper.append(destination);
+      boardEl.append(handWrapper);
+      cardRefs.set(token, handWrapper);
+      const animation = animatePreparedEvent(
+        prepared,
+        new AbortController().signal,
+      );
 
       const surrogate = overlay.querySelector('.transfer-flyer') as HTMLElement;
       const surrogateVisual = surrogate.querySelector('.card-motion-visual') as HTMLElement;
@@ -395,33 +422,14 @@ describe('event animator transfer origins', () => {
         cardRefs,
         zoneRefs,
       });
-      const ctx = {
-        state: projectedFrame.before,
-        ui: {
-          handReservations: [],
-          history: [],
-          isFlipped: true,
-          lockedResult: null,
-          showEndGamePrompt: false,
-        },
-        setUi: vi.fn(),
-        manifest: BOOTSTRAP_MANIFEST,
-        localSeat: 'P0',
-        remoteSeat: 'P1',
-        boardEl,
-        motionSurface,
-        toastArea,
-        cardRefs,
-        zoneRefs,
-        cardStatReadModel: () => null,
-        presentCommittedFrame: vi.fn(),
-        finishTurnPresentation: vi.fn(),
-      } as unknown as PlayScriptCtx;
-
-      const animation = animateEvent(ctx, projectedFrame, () => {
-        boardEl.append(destination);
-        cardRefs.set(token, destination);
-      });
+      const host = presentationHost(motionSurface);
+      const prepared = prepareEventAnimation(host, projectedFrame);
+      boardEl.append(destination);
+      cardRefs.set(token, destination);
+      const animation = animatePreparedEvent(
+        prepared,
+        new AbortController().signal,
+      );
       const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
       expect(surrogate).not.toBeNull();
       expect(surrogate.querySelector('.card-motion-synthetic-back')).not.toBeNull();
@@ -440,6 +448,113 @@ describe('event animator transfer origins', () => {
       expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
       expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
       expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a prepared source lease and surrogate when presentation is aborted', async () => {
+    vi.useFakeTimers();
+    try {
+      const frame = projectedMoveFrame();
+      const token = frame.event?.data.card as string;
+      const board = document.createElement('div');
+      const overlay = document.createElement('div');
+      const card = document.createElement('div');
+      card.className = 'card lane-card';
+      card.dataset.cardId = token;
+      board.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+      card.getBoundingClientRect = () => new DOMRect(60, 220, 70, 100);
+      board.append(card, overlay);
+      document.body.append(board);
+
+      const motionSurface = createPlayMotionSurface({
+        frame: board,
+        overlay,
+        cardRefs: new Map([[token, card]]),
+        zoneRefs: new Map(),
+      });
+      const prepared = prepareEventAnimation(
+        presentationHost(motionSurface),
+        frame,
+      );
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(1);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(1);
+      expect(overlay.querySelector('[data-card-motion-session]')).not.toBeNull();
+
+      const controller = new AbortController();
+      const animation = animatePreparedEvent(prepared, controller.signal);
+      controller.abort('test-fast-forward');
+      await animation;
+
+      expect(prepared.disposed).toBe(true);
+      expect(card.style.visibility).toBe('');
+      expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers safely when card and zone anchors are all missing', async () => {
+    vi.useFakeTimers();
+    try {
+      const before = createInitialMatchState(
+        'missing-animation-anchors',
+        BOOTSTRAP_MANIFEST,
+        {},
+        orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+      );
+      const cardId = before.deck.P0[0];
+      const event = {
+        type: 'CARD_DRAWN' as const,
+        owner: 'P0' as const,
+        cardId,
+        cause: drawCause,
+      } satisfies MatchEvent;
+      const after = apply(before, event, BOOTSTRAP_MANIFEST);
+      const frame = projectFrame({
+        transactionId: 'missing-animation-anchors:tx',
+        index: 0,
+        framedEvent: {
+          frame: after.timeline.frame,
+          scope: after.timeline.scope!,
+          event,
+        },
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
+        event,
+        before,
+        after,
+      });
+      const board = document.createElement('div');
+      const overlay = document.createElement('div');
+      board.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+      board.append(overlay);
+      document.body.append(board);
+      const motionSurface = createPlayMotionSurface({
+        frame: board,
+        overlay,
+        cardRefs: new Map(),
+        zoneRefs: new Map(),
+      });
+      const prepared = prepareEventAnimation(
+        presentationHost(motionSurface),
+        frame,
+      );
+
+      const animation = animatePreparedEvent(
+        prepared,
+        new AbortController().signal,
+      );
+      await vi.runAllTimersAsync();
+      await expect(animation).resolves.toBeUndefined();
+
+      expect(prepared.disposed).toBe(false);
+      expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
+      expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+      expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
     } finally {
       vi.useRealTimers();
     }

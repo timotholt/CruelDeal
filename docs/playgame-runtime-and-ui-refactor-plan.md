@@ -2,8 +2,8 @@
 
 ## Status
 
-Phases 1.5 and 2 are implemented and exit-proven. Phase 3a is the next active
-phase.
+Phases 1.5, 2, and 3a are implemented and exit-proven. Phase 3b is the next
+active phase.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -15,9 +15,10 @@ transactional-rules-kernel specification wins.
 
 Final Phase 1.5 evidence is recorded in
 `docs/agent-checkpoints/phase1.5-exit.md`. Final Phase 2 evidence is recorded in
-`docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. The next
-implementation phase is Phase 3a: make the presentation director the sole
-committed-frame iterator and move DOM-anchor ownership into its host.
+`docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. Final Phase 3a
+evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. The next
+implementation phase is Phase 3b: finish separating opening cinematics from
+gameplay authority and remove any remaining script-owned event behavior.
 
 ## Cost Model
 
@@ -1092,7 +1093,7 @@ npm run lint
 7. **[BUILD AFTER]** Phase 1.5 committed lifecycle reaction dispatcher and migration of play/reveal/move/destroy/banish/create/return hooks.
 8. **[BUILD AFTER]** Phase 1.5 remaining operation/built-in conformance, old manual-trigger deletion, architectural enforcement, and full exit gates.
 9. **[BUILD AFTER]** Phase 2 provider split and facade removal.
-10. **[BUILD AFTER]** Phase 3a animator frame conversion and DOM-ref relocation.
+10. **[BUILD AFTER — COMPLETE]** Phase 3a animator frame conversion and DOM-ref relocation.
 11. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
 12. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
 13. **[BUILD LAST]** Phase 5 shared card rendering.

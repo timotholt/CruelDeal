@@ -5,10 +5,10 @@
  *   - fixed header / board stage / player footer shell
  *   - stable vertical LaneColumn rendering
  *   - Pointer Events drag-and-drop (useDragDrop)
- *   - opening sequence + turn-resolve flow (script/runner)
+ *   - opening prelude + committed transaction presentation
  *
  * Gameplay mutations go through typed runtime-backed context commands. The
- * script context is presentation-only. Rendering goes through
+ * presentation host is read-only. Rendering goes through
  * `services/playgame/view.ts` selectors.
  * UI primitives (HandCard, BoardCard, etc.) live in sibling files so they
  * can change without touching engine-coupled code.
@@ -33,9 +33,6 @@ import type { LaneId } from '@/services/playgame/engine/types/ids';
 import type {
   SeatLanePowerReadModel,
 } from '@/services/playgame/runtime/seatReadModels';
-import { createScript, type Script } from '@/services/playgame/script/runner';
-import type { PlayScriptCtx } from '@/services/playgame/script/actions';
-import { openingSequence, resolveTurnFlow } from '@/services/playgame/script/flows';
 import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { ZoomInspector } from '../ZoomInspector';
 import { HandRow } from './HandRow';
@@ -51,9 +48,16 @@ import { PileViewer } from './PileViewer';
 import { TurnOrb } from './TurnOrb';
 import { MiniDeckIndicator } from './MiniDeckIndicator';
 import { selectInteractiveHand } from './handInteractivity';
-import { releaseAllHandSlots } from '@/services/playgame/presentation/handReservations';
+import {
+  releaseAllHandSlots,
+  releaseHandSlots,
+  reserveHandSlots,
+} from '@/services/playgame/presentation/handReservations';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
 import { createPlayfieldEventPresenter } from '@/services/playgame/presentation/playfieldEvents';
+import { createPlayPresentationHost } from '@/services/playgame/presentation/playPresentationHost';
+import { createPlayPresentationSink } from '@/services/playgame/presentation/playPresentationSink';
+import { showToast } from '@/services/playgame/toast';
 
 interface PlayBoardProps {
   onExit?: () => void;
@@ -87,14 +91,13 @@ export const PlayBoard = (props: PlayBoardProps) => {
     setReplayCursor,
     setReplayFollowingLive,
     setReplayClientActivity,
-    setTurnFlowRunning,
   } = uiActions;
   const actions = match.actions;
   const seatMeta = {
     P0: { name: bootstrap.participants.P0.displayName },
     P1: { name: bootstrap.participants.P1.displayName },
   } as const;
-  const { cardRefs, zoneRefs, motionSurface, bindZoneRef } = useVfx();
+  const { cardRefs, motionSurface, bindZoneRef } = useVfx();
   const replayTimeline = createMemo(() => match.debug?.replay() ?? null);
   const replayLastCursor = createMemo(() => Math.max(0, (replayTimeline()?.steps.length ?? 1) - 1));
   const replayStep = createMemo(() => {
@@ -293,12 +296,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
     queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
   };
 
-  // ── Script instance for opening + resolveTurn ────────────────────────────
-  let script: Script | undefined;
-
   let boardEl: HTMLDivElement | undefined;
   let toastAreaEl: HTMLDivElement | undefined;
-  let deckEl: HTMLElement | undefined;
 
   onMount(() => {
     const closeMenus = (e: MouseEvent) => {
@@ -337,39 +336,83 @@ export const PlayBoard = (props: PlayBoardProps) => {
     });
     onCleanup(unbindDnd);
 
-    // Opening authority is already committed by the runtime. The script is a
-    // presentation-only reader of committed transitions plus the UI sidecar.
-    const ctx: PlayScriptCtx = {
-      get state() {
-        return engineState();
-      },
-      ui,
-      setUi,
+    const host = createPlayPresentationHost({
       manifest,
       localSeat,
       remoteSeat,
-      boardEl,
       motionSurface: motion,
-      toastArea: toastAreaEl,
-      cardRefs,
-      zoneRefs,
-      deckEl,
       cardStatReadModel: actions.cardStatReadModel,
-      presentCommittedFrame: uiActions.presentCommittedFrame,
-      recordFramePresentationTiming:
-        uiActions.recordFramePresentationTiming,
-      finishTurnPresentation: uiActions.finishTurnPresentation,
-      presentPlayfieldEvent: createPlayfieldEventPresenter(playRoot),
+      handSlots: {
+        reserve: cards => reserveHandSlots({ setUi }, cards),
+        release: cardIds => releaseHandSlots({ setUi }, cardIds),
+      },
+    });
+    const sink = createPlayPresentationSink({
+      host,
+      ui: {
+        setFlipped: value => setUi('isFlipped', value),
+        setLockedResult: result => setUi('lockedResult', result),
+        setEndGamePromptVisible: value => setUi('showEndGamePrompt', value),
+      },
+      browser: {
+        locationMap: lane => boardEl?.querySelector<HTMLElement>(
+          `.lane-map[data-lane="${lane}"]`,
+        ) ?? null,
+        locationTile: lane => boardEl?.querySelector<HTMLElement>(
+          `.location[data-lane="${lane}"]`,
+        ) ?? null,
+        showToast: (message, options) => showToast(
+          toastAreaEl!,
+          message,
+          { duration: options.durationMs },
+        ),
+      },
+    });
+    const openingController = new AbortController();
+    let unbindPresentationSink: (() => void) | null = null;
+    let openingToast: ReturnType<typeof showToast> | null = null;
+    const presentPlayfieldEvent = createPlayfieldEventPresenter(playRoot);
+    const waitForOpeningBeat = (durationMs: number): Promise<boolean> => {
+      const signal = openingController.signal;
+      if (signal.aborted) return Promise.resolve(false);
+      return new Promise(resolve => {
+        let settled = false;
+        const finish = (completed: boolean): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timeout);
+          signal.removeEventListener('abort', onAbort);
+          resolve(completed);
+        };
+        const onAbort = (): void => finish(false);
+        const timeout = setTimeout(() => finish(true), durationMs);
+        signal.addEventListener('abort', onAbort, { once: true });
+      });
     };
-    ctx.onCancel = () => {
-      releaseAllHandSlots(ctx);
-      ctx.motionSurface.cardMotion.cancelAll('presentation-invalidated');
-    };
-    script = createScript(ctx);
-    setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
-    void script.run(openingSequence(openingTimeline))
-      .finally(() => setReplayClientActivity(null));
-    onCleanup(() => script?.cancel());
+
+    // The opening transaction is already one committed immutable block. Keep
+    // the input lock active while the non-gameplay title prelude runs, then
+    // let the director adopt and animate that block frame by frame.
+    uiActions.presentOpening(openingTimeline);
+    void (async () => {
+      await presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' });
+      if (!await waitForOpeningBeat(200)) return;
+      openingToast = showToast(toastAreaEl!, 'CRUEL DEAL', { duration: 2_500 });
+      if (!await waitForOpeningBeat(2_800)) return;
+      await presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' });
+      if (!await waitForOpeningBeat(150)) return;
+      if (openingController.signal.aborted) return;
+      unbindPresentationSink = uiActions.bindPresentationSink(sink);
+    })();
+
+    onCleanup(() => {
+      openingController.abort('play-board-unmounted');
+      openingToast?.dismiss();
+      unbindPresentationSink?.();
+      sink.dispose();
+      releaseAllHandSlots({ setUi });
+      motion.cardMotion.cancelAll('presentation-invalidated');
+    });
   });
 
   const selectReplayCursor = (cursor: number): void => {
@@ -541,7 +584,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
               count={localDeckSize()}
               label="Your deck"
               anchorRef={(element) => {
-                deckEl = element;
                 bindZoneRef(`${localSeat}:deck`)(element);
               }}
             />
@@ -557,25 +599,15 @@ export const PlayBoard = (props: PlayBoardProps) => {
               class="end-turn"
               disabled={!boardInteractive()}
               onClick={() => {
-                if (!boardInteractive() || !script || turnFlowRunning()) return;
-                setTurnFlowRunning(true);
-                uiActions.beginTurnPresentation();
+                if (!boardInteractive() || turnFlowRunning()) return;
                 setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
                 void actions.endTurn((seat) => {
                   setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
                 })
-                  .then((timeline) => {
-                    if (!timeline) {
-                      uiActions.finishTurnPresentation();
-                      return undefined;
-                    }
-                    setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
-                    return script?.run(resolveTurnFlow(timeline));
+                  .then((accepted) => {
+                    if (!accepted) setReplayClientActivity(null);
                   })
-                  .finally(() => {
-                    setReplayClientActivity(null);
-                    setTurnFlowRunning(false);
-                  });
+                  .catch(() => setReplayClientActivity(null));
               }}
             >
               END TURN

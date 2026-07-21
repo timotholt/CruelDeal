@@ -1,4 +1,5 @@
 import {
+  batch,
   createContext,
   createSignal,
   onCleanup,
@@ -35,6 +36,9 @@ export interface MatchSessionContextValue {
   readonly remoteSeat: Seat;
   readonly snapshot: Accessor<SeatMatchSnapshot>;
   readonly openingTimeline: SeatTransactionTimeline;
+  readonly subscribeCommittedTransactions: (
+    subscriber: (timeline: SeatTransactionTimeline) => void,
+  ) => () => void;
   readonly debug: {
     readonly performanceProfile: Accessor<MatchPerformanceProfile>;
     readonly replay: Accessor<SeatReplayTimeline>;
@@ -43,9 +47,7 @@ export interface MatchSessionContextValue {
     stageCardInLane: (token: SeatCardToken, lane: LaneId) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
     undoPendingCard: (token: SeatCardToken) => Promise<boolean>;
-    endTurn: (
-      onWaitingForSeat?: (seat: Seat) => void,
-    ) => Promise<SeatTransactionTimeline | null>;
+    endTurn: (onWaitingForSeat?: (seat: Seat) => void) => Promise<boolean>;
     refreshSnapshot: () => void;
     presentationStateForFrame: (
       frame: SeatTransactionFrame,
@@ -82,8 +84,8 @@ export const MatchSessionProvider = (props: {
   const debugEnabled =
     (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
   let providerDisposed = false;
-  const resolutionWaiters = new Set<
-    (timeline: SeatTransactionTimeline | null) => void
+  const transactionSubscribers = new Set<
+    (timeline: SeatTransactionTimeline) => void
   >();
 
   const refreshSnapshot = (): void => {
@@ -92,29 +94,39 @@ export const MatchSessionProvider = (props: {
     setReplayRevision(revision => revision + 1);
   };
 
-  const unsubscribe = adapter.subscribeCommittedTransactions(timeline =>
+  const unsubscribeAdapter = adapter.subscribeCommittedTransactions(timeline =>
     untrack(() => {
       if (providerDisposed) return;
-      setReplayRevision(revision => revision + 1);
-      const isTurnResolution = timeline.frames.some(
-        frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
-      );
-      if (isTurnResolution && resolutionWaiters.size > 0) {
-        for (const resolve of [...resolutionWaiters]) resolve(timeline);
-        resolutionWaiters.clear();
-        return;
-      }
-      setSnapshot({
-        version: 1,
-        matchId: timeline.matchId,
-        revision: timeline.revision,
-        frame: timeline.frames.at(-1)?.frame ?? snapshot().frame,
-        viewerSeat: localSeat,
-        state: timeline.finalState,
+      batch(() => {
+        setSnapshot({
+          version: 1,
+          matchId: timeline.matchId,
+          revision: timeline.revision,
+          frame: timeline.frames.at(-1)?.frame ?? snapshot().frame,
+          viewerSeat: localSeat,
+          state: timeline.finalState,
+        });
+        setReplayRevision(revision => revision + 1);
+
+        for (const subscriber of [...transactionSubscribers]) {
+          try {
+            subscriber(timeline);
+          } catch {
+            // A presentation consumer cannot interrupt authoritative publication
+            // or prevent the remaining consumers from observing the transaction.
+          }
+        }
       });
     }),
   );
-  onCleanup(unsubscribe);
+
+  const subscribeCommittedTransactions = (
+    subscriber: (timeline: SeatTransactionTimeline) => void,
+  ): (() => void) => {
+    if (providerDisposed) return () => undefined;
+    transactionSubscribers.add(subscriber);
+    return () => transactionSubscribers.delete(subscriber);
+  };
 
   const accepted = async (
     command: Promise<{ readonly status: string }>,
@@ -132,6 +144,7 @@ export const MatchSessionProvider = (props: {
     remoteSeat,
     snapshot,
     openingTimeline: initialization.opening,
+    subscribeCommittedTransactions,
     debug: debugEnabled
       ? {
           replay: () => {
@@ -149,20 +162,16 @@ export const MatchSessionProvider = (props: {
       undoPending: () => accepted(adapter.undoLastStagedCard()),
       undoPendingCard: token => accepted(adapter.unstageCard(token)),
       endTurn: async (onWaitingForSeat) => {
-        let resolveTimeline!:
-          (timeline: SeatTransactionTimeline | null) => void;
-        const timeline = new Promise<SeatTransactionTimeline | null>((resolve) => {
-          resolveTimeline = resolve;
-          resolutionWaiters.add(resolve);
-        });
         const result = await adapter.endTurn();
         if (providerDisposed || result.status !== 'accepted') {
-          resolutionWaiters.delete(resolveTimeline);
           refreshSnapshot();
-          return null;
+          return false;
         }
-        if (result.commit === 'PRIVATE') onWaitingForSeat?.(remoteSeat);
-        return timeline;
+        if (result.commit === 'PRIVATE') {
+          refreshSnapshot();
+          onWaitingForSeat?.(remoteSeat);
+        }
+        return true;
       },
       refreshSnapshot,
       presentationStateForFrame:
@@ -196,8 +205,8 @@ export const MatchSessionProvider = (props: {
   }
   onCleanup(() => {
     providerDisposed = true;
-    for (const resolve of resolutionWaiters) resolve(null);
-    resolutionWaiters.clear();
+    transactionSubscribers.clear();
+    unsubscribeAdapter();
     uninstallDebug();
   });
 

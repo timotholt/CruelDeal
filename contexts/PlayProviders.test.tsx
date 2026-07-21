@@ -1,6 +1,5 @@
 import {
   createEffect,
-  createRenderEffect,
   onMount,
 } from 'solid-js';
 import { render } from 'solid-js/web';
@@ -19,13 +18,9 @@ import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBo
 import { MatchSession } from '@/services/playgame/runtime/matchSession';
 import type {
   SeatCardToken,
-  SeatTransactionFrame,
+  SeatTransactionTimeline,
 } from '@/services/playgame/runtime/projection';
-import {
-  paceCommittedOpening,
-  type PlayScriptCtx,
-} from '@/services/playgame/script/actions';
-import { createPlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+import type { MatchPresentationSink } from '@/services/playgame/presentation/presentationDirector';
 
 const disposers: Array<() => void> = [];
 
@@ -102,10 +97,28 @@ function firstPlayableCard(harness: Harness): SeatCardToken {
   return token;
 }
 
-function presentOpeningImmediately(harness: Harness): void {
-  for (const frame of harness.match.openingTimeline.frames) {
-    harness.ui.actions.presentCommittedFrame(frame);
-  }
+async function presentOpeningImmediately(
+  harness: Harness,
+  sink: MatchPresentationSink = {},
+): Promise<void> {
+  let resolveCompleted!: () => void;
+  const completed = new Promise<void>((resolve) => {
+    resolveCompleted = resolve;
+  });
+  harness.ui.actions.bindPresentationSink({
+    beforeTransaction: sink.beforeTransaction,
+    beforeFrame: sink.beforeFrame,
+    afterFrame: sink.afterFrame,
+    afterTransaction: async () => {
+      await sink.afterTransaction?.();
+      resolveCompleted();
+    },
+  });
+  harness.ui.actions.presentOpening(harness.match.openingTimeline);
+  await completed;
+  await vi.waitFor(() => {
+    expect(harness.ui.isResolving()).toBe(false);
+  });
 }
 
 function laneCards(harness: Harness, lane: number): readonly string[] {
@@ -119,14 +132,63 @@ function firstLocationRevealed(harness: Harness): boolean {
 }
 
 describe('split play providers', () => {
-  it('settles a pending turn wait when its provider is disposed', async () => {
-    const harness = mountSession(remoteHumanSession('provider-dispose-wait'));
-    presentOpeningImmediately(harness);
-    const pendingTurn = harness.match.actions.endTurn();
+  it('accepts a private turn lock without waiting for presentation', async () => {
+    const harness = mountSession(remoteHumanSession('provider-private-lock'));
+    await presentOpeningImmediately(harness);
+    const waitingForSeat = vi.fn();
+
+    await expect(harness.match.actions.endTurn(waitingForSeat))
+      .resolves.toBe(true);
+    expect(waitingForSeat).toHaveBeenCalledOnce();
+    expect(waitingForSeat).toHaveBeenCalledWith(harness.match.remoteSeat);
+  });
+
+  it('publishes committed transactions after the authoritative snapshot', async () => {
+    const harness = mountHarness('provider-transaction-publication');
+    const observed: Array<{
+      timeline: SeatTransactionTimeline;
+      snapshotRevision: number;
+      snapshotState: SeatTransactionTimeline['finalState'];
+    }> = [];
+    const unsubscribeThrowing = harness.match.subscribeCommittedTransactions(
+      () => { throw new Error('consumer failure'); },
+    );
+    const unsubscribeObserver = harness.match.subscribeCommittedTransactions(
+      timeline => observed.push({
+        timeline,
+        snapshotRevision: harness.match.snapshot().revision,
+        snapshotState: harness.match.snapshot().state,
+      }),
+    );
+
+    await expect(harness.match.actions.endTurn()).resolves.toBe(true);
+
+    expect(observed).toHaveLength(1);
+    expect(observed[0]?.snapshotRevision).toBe(observed[0]?.timeline.revision);
+    expect(observed[0]?.snapshotState).toBe(observed[0]?.timeline.finalState);
+
+    unsubscribeObserver();
+    await expect(harness.match.actions.endTurn()).resolves.toBe(true);
+    expect(observed).toHaveLength(1);
+    unsubscribeThrowing();
+  });
+
+  it('stops publishing to context subscribers after disposal', async () => {
+    const session = debugSession('provider-publication-disposal');
+    const harness = mountSession(session);
+    const subscriber = vi.fn();
+    harness.match.subscribeCommittedTransactions(subscriber);
 
     disposers.pop()?.();
+    await session.runtime.submitIntent({
+      matchId: session.bootstrap.matchId,
+      seat: session.bootstrap.viewerSeat,
+      intentId: 'commit-after-provider-disposal',
+      expectedRevision: session.runtime.revision(),
+      intent: { type: 'CONCEDE' },
+    });
 
-    await expect(pendingTurn).resolves.toBeNull();
+    expect(subscriber).not.toHaveBeenCalled();
   });
 
   it('owns overlays per mount and resets them on remount', () => {
@@ -140,7 +202,6 @@ describe('split play providers', () => {
       kind: 'WAITING_FOR_PLAYER',
       seat: 'P1',
     });
-    first.ui.actions.setTurnFlowRunning(true);
 
     disposers.pop()?.();
     document.body.replaceChildren();
@@ -156,7 +217,7 @@ describe('split play providers', () => {
     expect(remounted.ui.inspectorTarget()).toBeNull();
   });
 
-  it('mounts projected setup and presents the committed opening', () => {
+  it('mounts projected setup and presents the committed opening', async () => {
     const harness = mountHarness('provider-opening-boundary');
     const setup = harness.ui.presentedState();
     expect(setup.lanes.map(lane => lane.id)).toEqual([0, 1, 2]);
@@ -167,7 +228,7 @@ describe('split play providers', () => {
       frame => frame.event?.type === 'LANE_CREATED',
     )).toBe(false);
 
-    presentOpeningImmediately(harness);
+    await presentOpeningImmediately(harness);
     expect(harness.ui.presentedState().hands[harness.match.localSeat])
       .toHaveLength(4);
     expect(harness.ui.presentedState().deckCounts[harness.match.localSeat])
@@ -202,7 +263,7 @@ describe('split play providers', () => {
       ),
       host,
     ));
-    presentOpeningImmediately(harness);
+    await presentOpeningImmediately(harness);
 
     const token = firstPlayableCard(harness);
     const energyBefore =
@@ -222,130 +283,93 @@ describe('split play providers', () => {
     expect(harness.ui.presentedState().stagedCards).not.toContain(token);
     await harness.match.actions.stageCardInLane(token, 0);
 
-    harness.ui.actions.beginTurnPresentation();
-    const timeline = await harness.match.actions.endTurn();
-    expect(timeline).not.toBeNull();
-    expect(harness.ui.presentedState().turn).toBe(1);
-    expect(harness.ui.presentedState().stagedCards).toContain(token);
-    for (const frame of timeline?.frames ?? []) {
-      harness.ui.actions.presentCommittedFrame(frame);
-    }
-    expect(harness.ui.presentedState().turn).toBe(2);
+    await expect(harness.match.actions.endTurn()).resolves.toBe(true);
+    await vi.waitFor(() => {
+      expect(harness.ui.presentedState().turn).toBe(2);
+    });
     expect(harness.ui.presentedState().stagedCards).toHaveLength(0);
-    harness.ui.actions.finishTurnPresentation();
   });
 
-  it('keeps a private staged card when an older committed frame is adopted', async () => {
+  it('keeps a private staged card when the authoritative snapshot refreshes', async () => {
     const harness = mountHarness('provider-private-plan');
-    presentOpeningImmediately(harness);
+    await presentOpeningImmediately(harness);
     const token = firstPlayableCard(harness);
     await harness.match.actions.stageCardInLane(token, 0);
     expect(laneCards(harness, 0)).toContain(token);
-    const finalOpeningFrame = harness.match.openingTimeline.frames.at(-1);
-    if (!finalOpeningFrame) throw new Error('opening has no final frame');
-    harness.ui.actions.presentCommittedFrame(finalOpeningFrame);
+    harness.match.actions.refreshSnapshot();
     expect(harness.ui.presentedState().stagedCards).toContain(token);
     expect(laneCards(harness, 0)).toContain(token);
   });
 
   it('locks staged cards atomically and reveals them in projected order', async () => {
-    let harness!: Harness;
-    const observations: Array<{ phase: string; locked: boolean }> = [];
-    const Probe = () => {
-      const match = useMatchSession();
-      const ui = usePlayUi();
-      onMount(() => { harness = { match, ui }; });
-      createRenderEffect(() => {
+    const harness = mountHarness('provider-lock');
+    const observations: Array<{
+      type: string;
+      token: string | null;
+      phase: string;
+      locked: boolean;
+      revealed: boolean | null;
+    }> = [];
+    await presentOpeningImmediately(harness, {
+      afterFrame: frame => {
+        const token = frame.event?.type === 'CARD_REVEALED'
+          ? frame.event.data.card as string
+          : null;
         observations.push({
-          phase: ui.presentedState().phase,
-          locked: ui.ui.isFlipped,
+          type: frame.event?.type ?? 'REDACTED',
+          token,
+          phase: harness.ui.presentedState().phase,
+          locked: harness.ui.ui.isFlipped,
+          revealed: token === null
+            ? null
+            : harness.ui.presentedState().cards
+              .find(card => card.token === token)?.revealed ?? false,
         });
-      });
-      return null;
-    };
-    const host = document.createElement('div');
-    document.body.append(host);
-    disposers.push(render(
-      () => (
-        <PlayProviders session={debugSession('provider-lock')}>
-          <Probe />
-        </PlayProviders>
-      ),
-      host,
-    ));
-    presentOpeningImmediately(harness);
+      },
+    });
+    observations.length = 0;
     const token = firstPlayableCard(harness);
     await harness.match.actions.stageCardInLane(token, 0);
-    harness.ui.actions.beginTurnPresentation();
-    const timeline = await harness.match.actions.endTurn();
-    if (!timeline) throw new Error('END_TURN did not resolve');
-    const startIndex = timeline.frames.findIndex(
-      frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
+    const timelines: SeatTransactionTimeline[] = [];
+    const unsubscribe = harness.match.subscribeCommittedTransactions(
+      timeline => timelines.push(timeline),
     );
-    const beforeLock = observations.length;
-    harness.ui.actions.presentCommittedFrame(timeline.frames[startIndex]!);
-    expect(observations.slice(beforeLock))
-      .toEqual([{ phase: 'RESOLVING', locked: true }]);
+    await expect(harness.match.actions.endTurn()).resolves.toBe(true);
+    unsubscribe();
+    const timeline = timelines.at(-1);
+    if (!timeline) throw new Error('END_TURN did not publish');
+    await vi.waitFor(() => {
+      expect(harness.ui.presentedState().turn).toBe(2);
+      expect(harness.ui.isResolving()).toBe(false);
+    });
+
+    expect(observations.find(
+      observation => observation.type === 'TURN_RESOLUTION_STARTED',
+    )).toMatchObject({ phase: 'RESOLVING', locked: true });
 
     const revealFrames = timeline.frames
-      .slice(startIndex + 1)
       .filter(frame => frame.event?.type === 'CARD_REVEALED');
     const revealTokens = revealFrames.map(frame =>
       frame.event?.data.card as string);
-    const presented: string[] = [];
-    for (const frame of timeline.frames.slice(startIndex + 1)) {
-      harness.ui.actions.presentCommittedFrame(frame);
-      if (frame.event?.type !== 'CARD_REVEALED') continue;
-      const revealed = frame.event.data.card as string;
-      presented.push(revealed);
-      expect(harness.ui.presentedState().cards
-        .find(card => card.token === revealed)?.revealed).toBe(true);
-    }
-    expect(presented).toEqual(revealTokens);
-    harness.ui.actions.finishTurnPresentation();
+    const presentedRevealTokens = observations
+      .filter(observation => observation.type === 'CARD_REVEALED')
+      .map(observation => observation.token);
+    expect(presentedRevealTokens).toEqual(revealTokens);
+    expect(observations
+      .filter(observation => observation.type === 'CARD_REVEALED')
+      .every(observation => observation.revealed === true)).toBe(true);
     expect(harness.ui.ui.isFlipped).toBe(false);
   });
 
   it('finishes opening without card or zone DOM anchors', async () => {
-    vi.useFakeTimers();
     const harness = mountHarness('provider-anchorless-opening');
-    const boardWrap = document.createElement('div');
-    const boardEl = document.createElement('div');
-    const motionOverlay = document.createElement('div');
-    const toastArea = document.createElement('div');
-    boardWrap.append(boardEl, motionOverlay, toastArea);
-    document.body.append(boardWrap);
-    const cardRefs = new Map<string, HTMLElement>();
-    const zoneRefs = new Map();
-    const motionSurface = createPlayMotionSurface({
-      frame: boardWrap,
-      overlay: motionOverlay,
-      cardRefs,
-      zoneRefs,
-    });
     const presented: Array<{
       type: string;
       handSize: number;
       locationRevealed: boolean;
     }> = [];
-    const context: PlayScriptCtx = {
-      get state() {
-        return harness.ui.presentedState();
-      },
-      ui: harness.ui.ui,
-      setUi: harness.ui.setUi,
-      manifest: harness.match.manifest,
-      localSeat: harness.match.localSeat,
-      remoteSeat: harness.match.remoteSeat,
-      boardEl,
-      motionSurface,
-      toastArea,
-      cardRefs,
-      zoneRefs,
-      cardStatReadModel: harness.match.actions.cardStatReadModel,
-      presentPlayfieldEvent: async () => undefined,
-      presentCommittedFrame: (frame: SeatTransactionFrame) => {
-        harness.ui.actions.presentCommittedFrame(frame);
+    await presentOpeningImmediately(harness, {
+      afterFrame: frame => {
         presented.push({
           type: frame.event?.type ?? 'REDACTED',
           handSize: harness.ui.presentedState()
@@ -353,13 +377,7 @@ describe('split play providers', () => {
           locationRevealed: firstLocationRevealed(harness),
         });
       },
-      finishTurnPresentation: () => undefined,
-    };
-    const step = paceCommittedOpening(harness.match.openingTimeline);
-    if (typeof step !== 'function') throw new Error('opening must be a step');
-    const presentation = Promise.resolve(step(context));
-    await vi.runAllTimersAsync();
-    await presentation;
+    });
 
     expect(harness.ui.presentedState().hands[harness.match.localSeat])
       .toHaveLength(4);

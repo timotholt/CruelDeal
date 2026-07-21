@@ -3,17 +3,21 @@ import {
   createContext,
   createEffect,
   createSignal,
+  onCleanup,
   useContext,
   type Accessor,
   type JSX,
 } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { useMatchSession } from './MatchSessionContext';
-import type { FramePresentationTiming } from '@/services/playgame/runtime/performanceTelemetry';
 import type {
-  SeatTransactionFrame,
+  SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '@/services/playgame/runtime/projection';
+import {
+  PresentationDirector,
+  type MatchPresentationSink,
+} from '@/services/playgame/presentation/presentationDirector';
 import type { UiState } from '@/services/playgame/view';
 import type { VisiblePileZone } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
@@ -44,12 +48,9 @@ export interface PlayUiContextValue {
   readonly replayClientActivity: Accessor<ReplayClientActivity>;
   readonly turnFlowRunning: Accessor<boolean>;
   readonly actions: {
-    beginTurnPresentation: () => void;
-    presentCommittedFrame: (frame: SeatTransactionFrame) => void;
-    recordFramePresentationTiming: (
-      timing: FramePresentationTiming,
-    ) => void;
-    finishTurnPresentation: () => void;
+    bindPresentationSink: (sink: MatchPresentationSink) => () => void;
+    presentOpening: (timeline: SeatTransactionTimeline) => void;
+    requestPresentationFastForward: () => boolean;
     openInspector: (target: InspectTarget) => void;
     closeInspector: () => void;
     setOpenMenuSeat: (seat: Seat | null) => void;
@@ -58,7 +59,6 @@ export interface PlayUiContextValue {
     setReplayCursor: (cursor: number) => void;
     setReplayFollowingLive: (following: boolean) => void;
     setReplayClientActivity: (activity: ReplayClientActivity) => void;
-    setTurnFlowRunning: (running: boolean) => void;
   };
 }
 
@@ -90,6 +90,111 @@ export const PlayUiProvider = (props: {
   const [replayClientActivity, setReplayClientActivity] =
     createSignal<ReplayClientActivity>(null);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
+  let presentationSink: MatchPresentationSink | null = null;
+  const timelineQueue: SeatTransactionTimeline[] = [];
+  let draining = false;
+  let disposed = false;
+
+  const adoptFrame = (
+    frame: SeatTransactionTimeline['frames'][number],
+  ): void => {
+    batch(() => {
+      if (frame.event?.type === 'TURN_RESOLUTION_STARTED') {
+        setUi('isFlipped', true);
+      }
+      setPresentedState(() => match.actions.presentationStateForFrame(frame));
+    });
+  };
+
+  const snapToEnd = (timeline: SeatTransactionTimeline): void => {
+    const finalFrame = timeline.frames.at(-1);
+    setPresentedState(() => finalFrame
+      ? match.actions.presentationStateForFrame(finalFrame)
+      : timeline.finalState);
+  };
+
+  const director = new PresentationDirector({
+    cursor: {
+      advance: adoptFrame,
+      snapToEnd,
+    },
+    onFrameSettled: (frame, timing) => {
+      if (!frame.event) return;
+      match.actions.recordFramePresentationTiming({
+        transactionId: frame.transactionId,
+        frame: frame.frame,
+        eventType: frame.event.type,
+        beatKind: frame.event.type,
+        ...timing,
+      });
+    },
+  });
+
+  const finishPresentationQueue = (): void => {
+    if (disposed || timelineQueue.length > 0 || director.activeGeneration !== null) {
+      return;
+    }
+    batch(() => {
+      setUi('isFlipped', false);
+      setPresentedState(() => match.snapshot().state);
+      setPresentationBusy(false);
+      setTurnFlowRunning(false);
+      setReplayClientActivity(null);
+    });
+  };
+
+  const drainPresentationQueue = async (): Promise<void> => {
+    if (draining || disposed || !presentationSink) return;
+    draining = true;
+    batch(() => {
+      setPresentationBusy(true);
+      setTurnFlowRunning(true);
+      setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
+    });
+    try {
+      while (!disposed && presentationSink && timelineQueue.length > 0) {
+        const timeline = timelineQueue.shift()!;
+        const sink = presentationSink;
+        try {
+          await director.present(timeline, sink);
+        } catch (error) {
+          // Authority is already committed and the director has snapped the
+          // visible cursor. Surface the presentation defect without blocking
+          // later committed transactions.
+          if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+            console.error('Committed timeline presentation failed', error);
+          }
+        }
+      }
+    } finally {
+      draining = false;
+      finishPresentationQueue();
+      if (!disposed && presentationSink && timelineQueue.length > 0) {
+        void drainPresentationQueue();
+      }
+    }
+  };
+
+  const enqueueTimeline = (timeline: SeatTransactionTimeline): void => {
+    if (disposed) return;
+    batch(() => {
+      setPresentationBusy(true);
+      setTurnFlowRunning(true);
+    });
+    timelineQueue.push(timeline);
+    void drainPresentationQueue();
+  };
+
+  const unsubscribeCommitted = match.subscribeCommittedTransactions(
+    enqueueTimeline,
+  );
+  onCleanup(() => {
+    disposed = true;
+    unsubscribeCommitted();
+    timelineQueue.length = 0;
+    presentationSink = null;
+    director.dispose();
+  });
 
   createEffect(() => {
     const next = match.snapshot().state;
@@ -111,27 +216,28 @@ export const PlayUiProvider = (props: {
     replayClientActivity,
     turnFlowRunning,
     actions: {
-      beginTurnPresentation: () => setPresentationBusy(true),
-      presentCommittedFrame: (frame) => {
-        batch(() => {
-          if (frame.event?.type === 'TURN_RESOLUTION_STARTED') {
-            setUi('isFlipped', true);
-          }
-          setPresentedState(() =>
-            match.actions.presentationStateForFrame(frame),
-          );
-        });
+      bindPresentationSink: (sink) => {
+        if (presentationSink && presentationSink !== sink) {
+          director.fastForward();
+        }
+        presentationSink = sink;
+        void drainPresentationQueue();
+        return () => {
+          if (presentationSink !== sink) return;
+          director.cancel();
+          presentationSink = null;
+          finishPresentationQueue();
+        };
       },
-      recordFramePresentationTiming:
-        timing => match.actions.recordFramePresentationTiming(timing),
-      finishTurnPresentation: () => {
-        batch(() => {
-          setUi('isFlipped', false);
-          match.actions.refreshSnapshot();
-          setPresentedState(() => match.snapshot().state);
-          setPresentationBusy(false);
-        });
+      presentOpening: (timeline) => {
+        // The opening transaction committed before this provider subscribed.
+        // Lock presentation first, then promote the authoritative snapshot to
+        // that already-committed end state. The visible cursor remains on the
+        // setup state until the director adopts the opening frames.
+        enqueueTimeline(timeline);
+        match.actions.refreshSnapshot();
       },
+      requestPresentationFastForward: () => director.fastForward(),
       openInspector: target => setInspectorTarget(target),
       closeInspector: () => setInspectorTarget(null),
       setOpenMenuSeat,
@@ -140,7 +246,6 @@ export const PlayUiProvider = (props: {
       setReplayCursor,
       setReplayFollowingLive,
       setReplayClientActivity,
-      setTurnFlowRunning,
     },
   };
 

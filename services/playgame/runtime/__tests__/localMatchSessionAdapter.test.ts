@@ -48,6 +48,17 @@ function firstAffordableToken(
 }
 
 describe('LocalMatchSessionAdapter projected authority boundary', () => {
+  it('exposes transaction publication without a per-frame streaming API', () => {
+    const { adapter, session } = fixture('adapter-atomic-api-surface');
+
+    expect(adapter.subscribeCommittedTransactions).toEqual(expect.any(Function));
+    expect(session.runtime.subscribeCommittedTransactions).toEqual(expect.any(Function));
+    expect(adapter).not.toHaveProperty('subscribeFrames');
+    expect(adapter).not.toHaveProperty('subscribeFrame');
+    expect(session.runtime).not.toHaveProperty('subscribeFrames');
+    expect(session.runtime).not.toHaveProperty('subscribeFrame');
+  });
+
   it('projects bootstrap, setup, and frame-by-frame opening without secrets', () => {
     const { adapter } = fixture('adapter-bootstrap');
     const serializedBootstrap = JSON.stringify(adapter.bootstrap);
@@ -119,13 +130,17 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     const { adapter } = fixture('adapter-published-frames');
     const token = firstAffordableToken(adapter);
     const timelines: SeatTransactionTimeline[] = [];
+    const replayStepsBeforePrivatePlan = adapter.replay().steps.length;
     const unsubscribe = adapter.subscribeCommittedTransactions(
       timeline => timelines.push(timeline),
     );
 
     await expect(adapter.stageCard(token, 0)).resolves.toMatchObject({
       status: 'accepted',
+      commit: 'PRIVATE',
     });
+    expect(timelines).toEqual([]);
+    expect(adapter.replay().steps).toHaveLength(replayStepsBeforePrivatePlan);
     const endTurn = await adapter.endTurn();
     expect(endTurn).toMatchObject({
       status: 'accepted',
@@ -177,8 +192,18 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     expect(enemyStage!.before.hands[opponent]).toContain(token);
     expect(enemyStage!.after.hands[opponent]).not.toContain(token);
     expect(enemyStage!.after.stagedCards).toContain(token);
-    expect(enemyStage!.after.cards.find(card => card.token === token))
+    const stagedCard = enemyStage!.after.cards.find(card => card.token === token);
+    expect(stagedCard)
       .toMatchObject({ owner: opponent, zone: 'LANE', revealed: false });
+    expect(stagedCard).not.toHaveProperty('defId');
+    expect(enemyStage!.event!.data).not.toHaveProperty('defId');
+
+    const committedReveal = timelines[0]!.frames.find(
+      frame => frame.frame > enemyStage!.frame
+        && frame.event?.type === 'CARD_REVEALED'
+        && frame.event.data.card === token,
+    );
+    expect(committedReveal?.event?.data.defId).toEqual(expect.any(String));
 
     const replayStage = adapter.replay().steps.find(
       step => step.frame === enemyStage!.frame,

@@ -2,6 +2,11 @@ import type {
   SeatTransactionFrame,
   SeatTransactionTimeline,
 } from '../runtime/projection';
+import {
+  elapsed,
+  monotonicNow,
+  type PresentationFrameOutcome,
+} from '../runtime/performanceTelemetry';
 
 export interface MatchPresentationSink {
   beforeTransaction?(frames: readonly SeatTransactionFrame[]): void;
@@ -36,6 +41,16 @@ export interface PresentationDirectorOptions {
   readonly cursor: PresentationCursor;
   /** Maximum wait for one asynchronous presentation hook. */
   readonly timeoutMs?: number;
+  /** Optional diagnostic sidecar; it has no influence on run settlement. */
+  readonly onFrameSettled?: (
+    frame: SeatTransactionFrame,
+    timing: {
+      readonly outcome: PresentationFrameOutcome;
+      readonly startedAtMs: number;
+      readonly endedAtMs: number;
+      readonly durationMs: number;
+    },
+  ) => void;
 }
 
 interface ActiveRun {
@@ -111,6 +126,7 @@ function settleWithin(
 export class PresentationDirector {
   readonly #cursor: PresentationCursor;
   readonly #timeoutMs: number;
+  readonly #onFrameSettled: PresentationDirectorOptions['onFrameSettled'];
   #generation = 0;
   #active: ActiveRun | null = null;
   #disposed = false;
@@ -122,6 +138,7 @@ export class PresentationDirector {
     }
     this.#cursor = options.cursor;
     this.#timeoutMs = timeoutMs;
+    this.#onFrameSettled = options.onFrameSettled;
   }
 
   get activeGeneration(): number | null {
@@ -229,12 +246,20 @@ export class PresentationDirector {
         }
 
         this.#cursor.advance(frame);
-        const settlement = await settleWithin(
-          run.sink.afterFrame?.(frame, run.controller.signal),
-          this.#timeoutMs,
-          run.controller.signal,
-        );
+        const startedAtMs = monotonicNow();
+        let settlement: HookSettlement;
+        try {
+          settlement = await settleWithin(
+            run.sink.afterFrame?.(frame, run.controller.signal),
+            this.#timeoutMs,
+            run.controller.signal,
+          );
+        } catch (error) {
+          this.#recordFrameSettlement(frame, 'failed', startedAtMs);
+          throw error;
+        }
         if (settlement === 'timed-out') {
+          this.#recordFrameSettlement(frame, 'timed-out', startedAtMs);
           throw new PresentationTimeoutError(
             run.generation,
             frame.frame,
@@ -247,6 +272,7 @@ export class PresentationDirector {
             status: run.stopReason ?? 'superseded',
           };
         }
+        this.#recordFrameSettlement(frame, 'completed', startedAtMs);
       }
 
       const transactionSettlement = await settleWithin(
@@ -272,6 +298,25 @@ export class PresentationDirector {
       return { generation: run.generation, status: 'completed' };
     } catch (error) {
       return this.#fail(run, error);
+    }
+  }
+
+  #recordFrameSettlement(
+    frame: SeatTransactionFrame,
+    outcome: PresentationFrameOutcome,
+    startedAtMs: number,
+  ): void {
+    if (!this.#onFrameSettled) return;
+    const endedAtMs = monotonicNow();
+    try {
+      this.#onFrameSettled(frame, {
+        outcome,
+        startedAtMs,
+        endedAtMs,
+        durationMs: elapsed(startedAtMs, endedAtMs),
+      });
+    } catch {
+      // Diagnostics cannot change presentation settlement.
     }
   }
 }

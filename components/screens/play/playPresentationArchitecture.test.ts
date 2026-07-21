@@ -35,29 +35,44 @@ describe('Phase 1.21 presentation architecture fences', () => {
   it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
     const playBoard = source('./PlayBoard.tsx');
-    const flows = source('../../../services/playgame/script/flows.ts');
     const css = source('../../../src/styles/playgame.css');
 
     expect(classicPlay).toContain('class="playgame-root playfield-hidden"');
     expect(playBoard).toContain('createPlayfieldEventPresenter(playRoot)');
-    expect(flows).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
-    expect(flows).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
-    expect(flows).not.toContain('fadeInLocationTile');
+    expect(playBoard).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
+    expect(playBoard).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
+    expect(playBoard).not.toContain('fadeInLocationTile');
     expect(css).toContain('.playgame-root.playfield-hidden .board > .board-game-area');
     expect(css).toContain('transition: opacity 2000ms ease');
   });
 
   it('keeps opening on one committed frame walk and derives terminal copy from presented state', () => {
-    const actions = source('../../../services/playgame/script/actions.ts');
-    const flows = source('../../../services/playgame/script/flows.ts');
     const playBoard = source('./PlayBoard.tsx');
+    const uiContext = source('../../../contexts/PlayUiContext.tsx');
 
-    expect(flows).toContain('paceCommittedOpening(timeline)');
-    expect(flows).not.toContain('paceCommittedOpeningDeal');
-    expect(flows).not.toContain('paceCommittedOpeningLocationReveal');
-    expect(actions).not.toContain('openingRevealIndex');
+    expect(playBoard).toContain('uiActions.presentOpening(openingTimeline)');
+    expect(playBoard).toContain('uiActions.bindPresentationSink(sink)');
+    expect(uiContext).toContain('await director.present(timeline, sink)');
+    expect(uiContext).not.toContain('for (const frame of timeline.frames)');
+    expect(playBoard).not.toContain('createScript');
+    expect(playBoard).not.toContain('resolveTurnFlow');
     expect(playBoard).toContain('presentedState().turn');
     expect(playBoard).not.toContain('Turn 6');
+  });
+
+  it('publishes committed turn blocks to one director-owned presentation queue', () => {
+    const matchContext = source('../../../contexts/MatchSessionContext.tsx');
+    const uiContext = source('../../../contexts/PlayUiContext.tsx');
+    const playBoard = source('./PlayBoard.tsx');
+
+    expect(matchContext).toContain('subscribeCommittedTransactions');
+    expect(matchContext).not.toContain('resolutionWaiters');
+    expect(uiContext).toContain('const timelineQueue: SeatTransactionTimeline[] = []');
+    expect(uiContext).toContain('match.subscribeCommittedTransactions');
+    expect(uiContext).toContain('setPresentationBusy(true)');
+    expect(uiContext).not.toContain('director.activeGeneration !== null) director.fastForward()');
+    expect(playBoard).not.toContain('timeline.frames.forEach');
+    expect(playBoard).not.toContain('for (const frame of');
   });
 
   it('keeps opponent telemetry in one fixed header row with visible zone anchors', () => {
