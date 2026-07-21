@@ -2,7 +2,7 @@
 
 ## Status
 
-Phases 1.5, 2, and 3a are implemented and exit-proven. Phase 3b is the next
+Phases 1.5, 2, 3a, and 3b are implemented and exit-proven. Phase 4 is the next
 active phase.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
@@ -16,9 +16,10 @@ transactional-rules-kernel specification wins.
 Final Phase 1.5 evidence is recorded in
 `docs/agent-checkpoints/phase1.5-exit.md`. Final Phase 2 evidence is recorded in
 `docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. Final Phase 3a
-evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. The next
-implementation phase is Phase 3b: finish separating opening cinematics from
-gameplay authority and remove any remaining script-owned event behavior.
+evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. Final Phase
+3b evidence is recorded in `docs/agent-checkpoints/phase3b-exit.md`. The next
+implementation phase is Phase 4: decompose `PlayBoard` while preserving the
+accepted animation choreography.
 
 ## Cost Model
 
@@ -799,7 +800,7 @@ Phase 2 is a consumer migration. It may expose projected committed events, react
 - **[BUILD LAST]** Memory-retention assertions prove old timelines are released.
 - **[BUILD AFTER]** Card-transfer coverage continues to pass.
 
-## Phase 3b: Separate Opening Cinematics and Retire Script Authority
+## Phase 3b: Separate Opening Cinematics and Retire Script Authority — COMPLETE
 
 ### Objective
 
@@ -1123,7 +1124,7 @@ npm run lint
 8. **[BUILD AFTER]** Phase 1.5 remaining operation/built-in conformance, old manual-trigger deletion, architectural enforcement, and full exit gates.
 9. **[BUILD AFTER]** Phase 2 provider split and facade removal.
 10. **[BUILD AFTER — COMPLETE]** Phase 3a animator frame conversion and DOM-ref relocation.
-11. **[BUILD AFTER]** Phase 3b opening separation, script reduction, and slicing removal.
+11. **[BUILD AFTER — COMPLETE]** Phase 3b opening separation, script removal, and slicing removal.
 12. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
 13. **[BUILD LAST]** Phase 5 shared card rendering.
 14. **[BUILD LAST]** Phase 5 board sizing.
