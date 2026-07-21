@@ -1,159 +1,130 @@
-import { Show, onMount, onCleanup, createSignal } from 'solid-js';
+import { Show, onMount, onCleanup, createSignal, createMemo } from 'solid-js';
 import type { ResolvedCard, ResolvedLocation } from '@/services/playgame/view';
 import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
+import {
+  cardSurfaceModel,
+  laneVisualModel,
+} from '@/services/playgame/presentation/appearance';
+import { CardRenderer } from './play/rendering/CardRenderer';
+import { LocationRenderer } from './play/rendering/LocationRenderer';
+import { hitTestCardSurface } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import { LanePowerPanel } from './LanePowerPanel';
 import { StatLogPanel } from './StatLogPanel';
 
+interface CardInspectorTarget {
+  readonly kind: 'card';
+  readonly card: ResolvedCard;
+  readonly zone: 'hand' | 'board';
+  readonly side: 'local' | 'remote' | 'top' | 'bottom';
+  readonly laneIdx?: number;
+  readonly element: HTMLElement;
+}
+
+interface LocationInspectorTarget {
+  readonly kind: 'location';
+  readonly location: ResolvedLocation;
+  readonly laneIdx: number;
+  readonly bottomPower: number;
+  readonly topPower: number;
+  readonly bottomBreakdown: SeatLanePowerReadModel;
+  readonly topBreakdown: SeatLanePowerReadModel;
+  readonly element: HTMLElement;
+}
+
 interface ZoomInspectorProps {
-  target: {
-    kind: 'card';
-    card: ResolvedCard;
-    zone: 'hand' | 'board';
-    side: 'local' | 'remote' | 'top' | 'bottom';
-    laneIdx?: number;
-    element: HTMLElement;
-  } | {
-    kind: 'location';
-    location: ResolvedLocation;
-    laneIdx: number;
-    bottomPower: number;
-    topPower: number;
-    bottomBreakdown: SeatLanePowerReadModel;
-    topBreakdown: SeatLanePowerReadModel;
-    element: HTMLElement;
-  };
-  onClose: () => void;
+  readonly target: CardInspectorTarget | LocationInspectorTarget;
+  readonly onClose: () => void;
 }
 
 export const ZoomInspector = (props: ZoomInspectorProps) => {
   let containerRef: HTMLDivElement | undefined;
-  let cloneRef: HTMLDivElement | undefined;
+  let surfaceRef: HTMLDivElement | undefined;
   const [isClosing, setIsClosing] = createSignal(false);
   const [showCardText, setShowCardText] = createSignal(false);
   const [logKind, setLogKind] = createSignal<'power' | 'cost' | null>(null);
   const [laneLogSide, setLaneLogSide] = createSignal<'top' | 'bottom' | null>(null);
   const [cardTextStyle, setCardTextStyle] = createSignal<Record<string, string>>({});
+  const cardModel = createMemo(() => props.target.kind === 'card'
+    ? cardSurfaceModel(props.target.card)
+    : null);
+  const laneModel = createMemo(() => props.target.kind === 'location'
+    ? laneVisualModel(props.target.location, props.target.topPower, props.target.bottomPower)
+    : null);
 
-  const handleClose = () => {
+  const handleClose = (): void => {
     if (isClosing()) return;
     setIsClosing(true);
     setShowCardText(false);
-
-    const clone = cloneRef?.querySelector('.card-clone') as HTMLElement;
-    if (clone) {
-      // Reverse animation: restore to original position
-      Object.assign(clone.style, {
-        transform: `translate(0, 0) scale(1)`,
-      });
-
-      // Wait for animation to complete, then close
-      setTimeout(() => {
-        props.onClose();
-      }, 200);
-    } else {
+    const surface = surfaceRef;
+    if (!surface) {
       props.onClose();
+      return;
     }
+    surface.style.transform = 'translate(0, 0) scale(1)';
+    window.setTimeout(props.onClose, 200);
+  };
+
+  const handleSurfaceClick = (event: MouseEvent): void => {
+    event.stopPropagation();
+    const target = event.target as HTMLElement;
+    if (props.target.kind === 'location') {
+      const score = target.closest<HTMLElement>('[data-lane-score]')?.dataset.laneScore;
+      if (score === 'top' || score === 'bottom') {
+        setLaneLogSide(current => current === score ? null : score);
+        return;
+      }
+      handleClose();
+      return;
+    }
+
+    const surface = surfaceRef;
+    const model = cardModel();
+    if (!surface || !model) return;
+    const rect = surface.getBoundingClientRect();
+    const hit = hitTestCardSurface(model, {
+      x: (event.clientX - rect.left) * 500 / rect.width,
+      y: (event.clientY - rect.top) * 700 / rect.height,
+    });
+    if (hit?.part === 'power' && props.target.card.type !== 'spell') {
+      setLogKind(current => current === 'power' ? null : 'power');
+      return;
+    }
+    if (hit?.part === 'cost') {
+      setLogKind(current => current === 'cost' ? null : 'cost');
+      return;
+    }
+    handleClose();
   };
 
   onMount(() => {
-    if (!containerRef || !cloneRef) return;
+    const container = containerRef;
+    const surface = surfaceRef;
+    if (!container || !surface) return;
 
-    // Get original element's position and size
     const rect = props.target.element.getBoundingClientRect();
-    const clone = props.target.element.cloneNode(true) as HTMLElement;
-
-    // Position clone absolutely at original location — always full brightness in inspector
-    clone.style.opacity = '1';
-    clone.querySelectorAll('.card').forEach((card) => {
-      (card as HTMLElement).style.opacity = '1';
-    });
-    clone.style.transition = 'none';
-    clone.classList.add('card-clone', 'inspector-clone');
-    clone.draggable = false;
-    clone.querySelectorAll('[draggable="true"]').forEach((el) => {
-      (el as HTMLElement).draggable = false;
-    });
-    cloneRef.appendChild(clone);
-    Object.assign(clone.style, {
-      position: 'absolute',
-      left: rect.left + 'px',
-      top: rect.top + 'px',
-      width: rect.width + 'px',
-      height: rect.height + 'px',
-      margin: '0',
-      zIndex: '1000',
-      transition: 'all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
-      cursor: 'pointer',
-      'pointer-events': 'auto',
+    Object.assign(surface.style, {
+      left: `${rect.left}px`,
+      top: `${rect.top}px`,
+      width: `${rect.width}px`,
+      height: `${rect.height}px`,
     });
 
-    // Click on cloned card/location: score opens logs; anything else closes
-    clone.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (props.target.kind === 'location') {
-        const scoreEl = (e.target as HTMLElement).closest('.lane-score') as HTMLElement | null;
-        if (scoreEl?.classList.contains('enemy-score')) {
-          setLaneLogSide((side) => side === 'top' ? null : 'top');
-          return;
-        }
-        if (scoreEl?.classList.contains('player-score')) {
-          setLaneLogSide((side) => side === 'bottom' ? null : 'bottom');
-          return;
-        }
-        handleClose();
-        return;
-      }
-      const el = e.target as HTMLElement;
-      if (props.target.card.type !== 'spell' && el.classList.contains('power')) {
-        setLogKind(k => k === 'power' ? null : 'power');
-        return;
-      }
-      if (el.classList.contains('cost'))  { setLogKind(k => k === 'cost' ? null : 'cost'); return; }
-      handleClose();
-    });
-    clone.addEventListener('dragstart', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-    });
-
-    // Style power/cost as tappable when card inspector is open
-    if (props.target.kind === 'card') {
-      const powerEl = clone.querySelector('.power') as HTMLElement | null;
-      const costEl  = clone.querySelector('.cost')  as HTMLElement | null;
-      if (powerEl) { powerEl.style.cursor = 'pointer'; powerEl.title = 'Power log'; }
-      if (costEl)  { costEl.style.cursor  = 'pointer'; costEl.title  = 'Cost log'; }
-    } else {
-      const scores = clone.querySelectorAll('.lane-score');
-      scores.forEach((el) => {
-        const scoreEl = el as HTMLElement;
-        scoreEl.style.cursor = 'pointer';
-        scoreEl.title = 'Score breakdown';
-      });
-    }
-
-    // Force layout
-    void clone.offsetHeight;
-
-    // Calculate transform to center and scale up
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
     const centerX = viewportWidth / 2;
-    const centerY = viewportHeight / 2.5; // Shift up to account for text below
-
-    // Different scale for locations vs cards
-    const isLocation = props.target.kind === 'location';
-    const targetHeight = isLocation ? viewportHeight * 0.25 : viewportHeight * 0.45;
-    const scale = Math.min(targetHeight / rect.height, 3); // Cap scale at 3x to prevent huge elements
-
-    // Translate to center
+    const centerY = viewportHeight / 2.5;
+    const targetHeight = props.target.kind === 'location'
+      ? viewportHeight * 0.25
+      : viewportHeight * 0.45;
+    const scale = Math.min(targetHeight / rect.height, 3);
     const translateX = centerX - (rect.left + rect.width / 2);
     const translateY = centerY - (rect.top + rect.height / 2);
-    const finalCardBottom = centerY + (rect.height * scale) / 2;
+    const finalSurfaceBottom = centerY + (rect.height * scale) / 2;
     const safeHeight = Math.min(viewportHeight, viewportWidth * 16 / 9);
     const safeWidth = Math.min(viewportWidth, viewportHeight * 9 / 16);
     const safeTop = (viewportHeight - safeHeight) / 2;
     const safeBottom = safeTop + safeHeight;
-    const textTop = Math.min(finalCardBottom + 24, safeBottom - 112);
+    const textTop = Math.min(finalSurfaceBottom + 24, safeBottom - 112);
     const textMaxHeight = Math.max(56, safeBottom - textTop - 12);
 
     setCardTextStyle({
@@ -161,123 +132,77 @@ export const ZoomInspector = (props: ZoomInspectorProps) => {
       left: '50%',
       transform: 'translateX(-50%)',
       width: `${Math.max(240, safeWidth - 28)}px`,
-      'max-width': `calc(100vw - 28px)`,
+      'max-width': 'calc(100vw - 28px)',
       'max-height': `${textMaxHeight}px`,
     });
 
     requestAnimationFrame(() => {
-      Object.assign(clone.style, {
-        transform: `translate(${translateX}px, ${translateY}px) scale(${scale})`,
-        transformOrigin: 'center center',
-      });
-
-      if (props.target.kind === 'card') {
-        window.setTimeout(() => setShowCardText(true), 210);
-      }
+      surface.style.transform = `translate(${translateX}px, ${translateY}px) scale(${scale})`;
+      if (props.target.kind === 'card') window.setTimeout(() => setShowCardText(true), 210);
     });
 
-    // Dim board
-    const board = document.querySelector('.board') as HTMLElement;
-    if (board) {
-      board.style.filter = 'brightness(0.15)';
-    }
-
-    // Handle escape key
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') handleClose();
+    const board = document.querySelector<HTMLElement>('.board');
+    if (board) board.style.filter = 'brightness(0.15)';
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') handleClose();
     };
-
-    // Container receives clicks that pass through cloneRef (pointer-events:none)
-    const handleClick = () => handleClose();
-
     window.addEventListener('keydown', handleKeyDown);
-    containerRef.addEventListener('click', handleClick);
-
     onCleanup(() => {
       window.removeEventListener('keydown', handleKeyDown);
-      if (containerRef) {
-        containerRef.removeEventListener('click', handleClick);
-      }
-      if (board) {
-        board.style.filter = '';
-      }
+      if (board) board.style.filter = '';
     });
   });
 
   return (
     <div
-      ref={(element) => { containerRef = element; }}
-      style={{
-        position: 'fixed',
-        top: '0',
-        left: '0',
-        width: '100%',
-        height: '100%',
-        'background-color': 'transparent',
-        'z-index': '999',
-      }}
+      ref={containerRef}
+      class="zoom-inspector"
+      onClick={handleClose}
     >
       <div
-        ref={(element) => { cloneRef = element; }}
-        style={{
-          position: 'relative',
-          width: '100%',
-          height: '100%',
-          'pointer-events': 'none',
-        }}
-      />
+        ref={surfaceRef}
+        class={`inspector-surface-host ${props.target.kind === 'card' ? 'card' : 'location'}`}
+        data-card-type={props.target.kind === 'card' ? props.target.card.type : undefined}
+        onClick={handleSurfaceClick}
+      >
+        <Show when={cardModel()} keyed>
+          {(model) => <CardRenderer model={model} />}
+        </Show>
+        <Show when={laneModel()} keyed>
+          {(model) => <LocationRenderer model={model} />}
+        </Show>
+      </div>
 
-      {/* Text below card */}
       <Show when={props.target.kind === 'card' && !isClosing()}>
         <div
+          class="zoom-inspector__card-text"
           style={{
-            position: 'fixed',
             ...cardTextStyle(),
-            'text-align': 'center',
-            color: 'white',
-            'font-size': '0.9rem',
-            'line-height': '1.35',
-            'z-index': '1001',
-            overflow: 'auto',
             opacity: showCardText() ? '1' : '0',
-            transition: 'opacity 120ms ease',
             'pointer-events': showCardText() ? 'auto' : 'none',
-            'text-decoration': (props.target as { kind: 'card'; card: ResolvedCard }).card?.textDisabled ? 'line-through' : 'none',
-            'text-decoration-thickness': '2px',
-            'text-decoration-color': 'rgba(255, 96, 128, 0.9)',
+            'text-decoration': props.target.kind === 'card' && props.target.card.textDisabled
+              ? 'line-through'
+              : 'none',
           }}
+          onClick={(event) => event.stopPropagation()}
         >
-          {(props.target as { kind: 'card'; card: ResolvedCard }).card?.text || '\u00a0'}
+          {props.target.kind === 'card' ? props.target.card.text || '\u00a0' : ''}
         </div>
       </Show>
 
       <Show when={props.target.kind === 'location' && laneLogSide()}>
         <LanePowerPanel
-          breakdown={
-            laneLogSide() === 'top'
-              ? (props.target as {
-                  kind: 'location';
-                  topBreakdown: SeatLanePowerReadModel;
-                  bottomBreakdown: SeatLanePowerReadModel;
-                }).topBreakdown
-              : (props.target as {
-                  kind: 'location';
-                  topBreakdown: SeatLanePowerReadModel;
-                  bottomBreakdown: SeatLanePowerReadModel;
-                }).bottomBreakdown
-          }
+          breakdown={props.target.kind === 'location' && laneLogSide() === 'top'
+            ? props.target.topBreakdown
+            : (props.target as LocationInspectorTarget).bottomBreakdown}
           onClose={() => setLaneLogSide(null)}
         />
       </Show>
 
-      <Show when={
-        props.target.kind === 'card'
-        && props.target.card.stats
-        && logKind()
-      }>
+      <Show when={props.target.kind === 'card' && props.target.card.stats && logKind()}>
         <StatLogPanel
           kind={logKind() as 'power' | 'cost'}
-          stats={(props.target as { kind: 'card'; card: ResolvedCard }).card.stats!}
+          stats={(props.target as CardInspectorTarget).card.stats!}
           onClose={() => setLogKind(null)}
         />
       </Show>

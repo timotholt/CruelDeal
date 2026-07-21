@@ -15,6 +15,56 @@ import {
   type PlayPresentationBrowserPort,
   type PlayPresentationUiPort,
 } from './playPresentationSink';
+import type { CardSurfaceModel, LocationSurfaceModel } from '@/components/game-surfaces/contracts';
+import {
+  identityFreeCardBackModel,
+  mountCardSurface,
+} from '@/components/game-surfaces/card/cardSurfaceRuntime';
+import { mountLocationSurface } from '@/components/game-surfaces/location/locationSurfaceRuntime';
+
+const revealedCardModel = (name: string): CardSurfaceModel => ({
+  kind: 'card',
+  face: {
+    kind: 'front',
+    content: {
+      cacheKey: `card:test:${name}`,
+      layout: 'regular',
+      name,
+      rulesText: 'Rules.',
+      artwork: null,
+      accent: '#123456',
+      contentRevision: 'test',
+    },
+  },
+  chrome: {
+    borderStyle: 'standard',
+    borderTone: 'enemy',
+    backStyle: 'default',
+    chromeRevision: 'test',
+  },
+  cost: { value: 1, tone: 'base' },
+  power: { value: 2, tone: 'base' },
+  statuses: [],
+});
+
+const locationModel = (face: 'front' | 'back'): LocationSurfaceModel => ({
+  kind: 'location',
+  face: face === 'back'
+    ? { kind: 'back', backStyle: 'default' }
+    : {
+        kind: 'front',
+        content: {
+          cacheKey: 'location:test:revealed',
+          name: 'REVEALED LOCATION',
+          rulesText: 'Rules.',
+          artwork: null,
+          accent: '#654321',
+          contentRevision: 'test',
+        },
+      },
+  chrome: { borderStyle: 'standard', chromeRevision: 'test' },
+  statuses: [],
+});
 
 const result = {
   winner: 'P0' as const,
@@ -161,6 +211,7 @@ describe('browser play presentation sink', () => {
       card.className = 'card lane-card facedown';
       card.dataset.cardId = cardId;
       card.getBoundingClientRect = () => new DOMRect(80, 240, 70, 100);
+      const mountedCard = mountCardSurface(card, identityFreeCardBackModel());
       test.root.prepend(card);
       test.cardRefs.set(cardId, card);
       const revealed = frame('CARD_REVEALED', { card: cardId });
@@ -168,10 +219,7 @@ describe('browser play presentation sink', () => {
       test.sink.beforeFrame?.(revealed);
       expect(test.overlay.querySelector('.reveal-flyer')).toBeNull();
 
-      const name = document.createElement('div');
-      name.className = 'name';
-      name.textContent = 'REMOTE IDENTITY';
-      card.append(name);
+      mountedCard.update(revealedCardModel('REMOTE IDENTITY'));
       card.classList.remove('facedown');
       const animation = test.sink.afterFrame?.(revealed, new AbortController().signal);
       const flyer = test.overlay.querySelector<HTMLElement>('.reveal-flyer');
@@ -199,6 +247,8 @@ describe('browser play presentation sink', () => {
       const revealedTile = document.createElement('div');
       hiddenTile.className = 'location hidden';
       revealedTile.className = 'location revealed';
+      mountLocationSurface(hiddenTile, locationModel('back'));
+      mountLocationSurface(revealedTile, locationModel('front'));
       hiddenTile.getBoundingClientRect = () => new DOMRect(40, 330, 120, 80);
       test.root.prepend(map, hiddenTile);
       test.setMap(map);
@@ -212,7 +262,8 @@ describe('browser play presentation sink', () => {
       test.sink.beforeFrame?.(location);
       expect(map.style.opacity).toBe('1');
       expect(map.style.transition).toContain('700ms');
-      expect(hiddenTile.style.visibility).toBe('hidden');
+      expect(hiddenTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
+        .toBe('hidden');
       expect(test.overlay.querySelector('.location')).not.toBeNull();
 
       hiddenTile.remove();
@@ -220,15 +271,15 @@ describe('browser play presentation sink', () => {
       test.setTile(revealedTile);
       const animation = test.sink.afterFrame?.(location, new AbortController().signal);
       await vi.advanceTimersByTimeAsync(350);
-      expect(test.overlay.querySelector('.location')).toBeNull();
-      expect(revealedTile.style.transform).toBe('rotateY(0deg)');
+      expect(test.overlay.querySelector('.location')).not.toBeNull();
+      expect(test.overlay.querySelector('[data-surface-face="front"]')).not.toBeNull();
       await vi.runAllTimersAsync();
       await animation;
 
       expect(map.style.opacity).toBe('');
       expect(map.style.transition).toBe('');
-      expect(revealedTile.style.transform).toBe('');
-      expect(revealedTile.style.transition).toBe('');
+      expect(revealedTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
+        .toBe('');
     } finally {
       vi.useRealTimers();
     }
@@ -241,6 +292,7 @@ describe('browser play presentation sink', () => {
       const map = document.createElement('div');
       const tile = document.createElement('div');
       tile.className = 'location hidden';
+      mountLocationSurface(tile, locationModel('back'));
       tile.getBoundingClientRect = () => new DOMRect(40, 330, 120, 80);
       test.root.prepend(map, tile);
       test.setMap(map);
@@ -257,7 +309,8 @@ describe('browser play presentation sink', () => {
       await animation;
 
       expect(test.overlay.querySelector('.location')).toBeNull();
-      expect(tile.style.visibility).toBe('');
+      expect(tile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
+        .toBe('');
       expect(tile.style.transform).toBe('');
       expect(map.style.opacity).toBe('');
       expect(map.style.transition).toBe('');

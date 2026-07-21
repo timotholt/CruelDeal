@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CardId } from '../../engine/types/ids';
+import type { CardSurfaceModel } from '@/components/game-surfaces/contracts';
+import {
+  identityFreeCardBackModel,
+  mountCardSurface,
+  type MountedCardSurface,
+} from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import { createPlayMotionSurface } from '../playMotionSurface';
 import {
   canonicalCardEndpoint,
@@ -13,6 +19,36 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
+const frontModel = (name = 'MOTION CARD'): CardSurfaceModel => ({
+  kind: 'card',
+  face: {
+    kind: 'front',
+    content: {
+      cacheKey: `card:test:${name}`,
+      layout: 'regular',
+      name,
+      rulesText: 'Rules.',
+      artwork: null,
+      accent: '#123456',
+      contentRevision: 'test',
+    },
+  },
+  chrome: {
+    borderStyle: 'standard',
+    borderTone: 'neutral',
+    backStyle: 'default',
+    chromeRevision: 'test',
+  },
+  cost: { value: 1, tone: 'base' },
+  power: { value: 2, tone: 'base' },
+  statuses: [],
+});
+
+const attachSurface = (
+  host: HTMLElement,
+  model: CardSurfaceModel = frontModel(),
+): MountedCardSurface => mountCardSurface(host, model);
+
 const fixture = () => {
   const frame = document.createElement('div');
   const overlay = document.createElement('div');
@@ -24,6 +60,8 @@ const fixture = () => {
   destination.className = 'card lane-card';
   destination.dataset.cardRestingRotation = '1.75deg';
   destination.getBoundingClientRect = () => new DOMRect(220, 330, 70, 100);
+  const sourceSurface = attachSurface(source);
+  const destinationSurface = attachSurface(destination);
   frame.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
   frame.append(source, destination, overlay);
   document.body.append(frame);
@@ -35,7 +73,17 @@ const fixture = () => {
     cardRefs,
     zoneRefs: new Map(),
   });
-  return { frame, overlay, source, destination, cardId, cardRefs, surface };
+  return {
+    frame,
+    overlay,
+    source,
+    destination,
+    sourceSurface,
+    destinationSurface,
+    cardId,
+    cardRefs,
+    surface,
+  };
 };
 
 describe('governed card motion session', () => {
@@ -46,32 +94,17 @@ describe('governed card motion session', () => {
     source.style.height = '100px';
     source.getBoundingClientRect = () => new DOMRect(20, 30, 63, 90);
 
-    const renderer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    renderer.classList.add('card-renderer');
-    renderer.setAttribute('viewBox', '0 0 500 700');
-    renderer.style.width = '100%';
-    renderer.style.height = '100%';
-    const name = document.createElement('div');
-    name.dataset.gameText = 'container';
-    Object.defineProperty(name, 'clientWidth', { configurable: true, value: 50 });
-    const inner = document.createElement('div');
-    inner.dataset.gameText = 'inner';
-    inner.style.fontSize = '10px';
-    name.append(inner);
-    renderer.append(name);
-    source.append(renderer);
+    attachSurface(source, frontModel('SCALED HAND CARD'));
     document.body.append(source);
 
     const rect = normalizedCardRect(source);
     const snapshot = captureCardVisual('scaled-hand-card', source);
     expect(rect.width).toBe(63);
     expect(rect.height).toBe(90);
-    expect(snapshot.clone.querySelector<HTMLElement>('[data-game-text="inner"]')?.style.fontSize)
-      .toBe('10px');
-    expect(snapshot.clone.querySelector('.card-renderer')?.getAttribute('viewBox'))
-      .toBe('0 0 500 700');
-    expect((snapshot.clone.querySelector('.card-renderer') as SVGElement | null)?.style.width)
-      .toBe('100%');
+    expect(snapshot.model.face.kind).toBe('front');
+    if (snapshot.model.face.kind !== 'front') throw new Error('front expected');
+    expect(snapshot.model.face.content.name).toBe('SCALED HAND CARD');
+    expect(source.querySelector('.card-renderer')?.getAttribute('viewBox')).toBe('0 0 500 700');
   });
 
   it('hands off without a blank representation and cleans up exactly once', async () => {
@@ -113,8 +146,8 @@ describe('governed card motion session', () => {
 
   it('changes face artwork only when a flip reaches edge-on', async () => {
     vi.useFakeTimers();
-    const { source, destination, cardId, surface, overlay } = fixture();
-    destination.classList.add('facedown');
+    const { source, destinationSurface, cardId, surface, overlay } = fixture();
+    destinationSurface.update(identityFreeCardBackModel());
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
       cardId,
@@ -132,13 +165,13 @@ describe('governed card motion session', () => {
       faceAtLanding: 'faceDown',
     });
     expect(visual.dataset.cardMotionFace).toBe('faceUp');
-    expect(visual.classList.contains('facedown')).toBe(false);
+    expect(visual.querySelector('.system-card-back')).toBeNull();
 
     await vi.advanceTimersByTimeAsync(59);
     expect(visual.dataset.cardMotionFace).toBe('faceUp');
     await vi.advanceTimersByTimeAsync(1);
     expect(visual.dataset.cardMotionFace).toBe('faceDown');
-    expect(visual.classList.contains('facedown')).toBe(true);
+    expect(visual.querySelector('.system-card-back')).not.toBeNull();
 
     await vi.runAllTimersAsync();
     expect(await flight).toBeNull();
@@ -164,7 +197,9 @@ describe('governed card motion session', () => {
     await vi.runAllTimersAsync();
     await flight;
 
-    const remounted = destination.cloneNode(true) as HTMLElement;
+    const remounted = document.createElement('div');
+    remounted.className = 'card lane-card';
+    attachSurface(remounted);
     remounted.style.visibility = '';
     remounted.getBoundingClientRect = destination.getBoundingClientRect;
     destination.replaceWith(remounted);
@@ -294,14 +329,13 @@ describe('governed card motion session', () => {
     const session = surface.cardMotion.begin({
       cardId,
       route: 'remote-hand-to-lane',
-      basis: { kind: 'synthetic-back', owner: 'P1' },
+      basis: { kind: 'synthetic-back' },
       startRect: new DOMRect(160, 20, 70, 100),
       face: 'faceDown',
     });
 
     const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
-    expect(surrogate.textContent).toBe('');
-    expect(surrogate.querySelector('.card-motion-synthetic-back')).not.toBeNull();
+    expect(surrogate.querySelector('.system-card-back')).not.toBeNull();
     expect(surrogate.innerHTML).not.toContain(cardId);
     session.dispose();
   });

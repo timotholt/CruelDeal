@@ -6,7 +6,7 @@ import { orderedTestLocationDeck } from '../engine/testkit/runtimeFixture';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import { projectMatchContentCatalog } from '../client/contentCatalog';
 import type { MatchEvent } from '../engine/types/events';
-import type { EventTransition } from '../engine/transactionTimeline';
+import type { CanonicalFrameTransition } from '../engine/transactionTimeline';
 import type { CardId, LaneId } from '../engine/types/ids';
 import {
   projectAnimationEventForSeat,
@@ -17,6 +17,7 @@ import { animatePreparedEvent, fallbackRectForZone, prepareEventAnimation } from
 import { createPlayPresentationHost, type PlayPresentationHost } from './playPresentationHost';
 import { createPlayMotionSurface } from './playMotionSurface';
 import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
+import { attachTestCardSurface } from '@/components/game-surfaces/testing/cardSurfaceFixture';
 
 const drawCause = {
   sourceId: 'system:event-animator-test' as CardId,
@@ -24,7 +25,7 @@ const drawCause = {
   reason: 'TEST_DRAW',
 } as const;
 
-const projectFrame = (frame: EventTransition): SeatTransactionFrame => ({
+const projectFrame = (frame: CanonicalFrameTransition): SeatTransactionFrame => ({
   index: frame.index,
   transactionId: frame.transactionId,
   frame: frame.frame,
@@ -92,7 +93,7 @@ const projectedMoveFrame = (): SeatTransactionFrame => {
   return projectFrame({
     transactionId: 'moved-transfer-cancellation:tx',
     index: 0,
-    framedEvent: {
+    canonicalFrame: {
       frame: after.timeline.frame,
       scope: after.timeline.scope!,
       event,
@@ -174,17 +175,17 @@ describe('event animator transfer origins', () => {
         },
       } as const satisfies MatchEvent;
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
-      const framedEvent = {
+      const canonicalFrame = {
         frame: after.timeline.frame,
         scope: after.timeline.scope!,
         event,
       };
-      const frame: EventTransition = {
+      const frame: CanonicalFrameTransition = {
         transactionId: 'moved-transfer:tx',
         index: 0,
-        framedEvent,
-        frame: framedEvent.frame,
-        scope: framedEvent.scope,
+        canonicalFrame,
+        frame: canonicalFrame.frame,
+        scope: canonicalFrame.scope,
         event,
         before,
         after,
@@ -201,6 +202,7 @@ describe('event animator transfer origins', () => {
       cardEl.dataset.cardId = token;
       cardEl.dataset.cardRestingRotation = '1.7deg';
       cardEl.style.setProperty('--card-tilt', '1.7deg');
+      attachTestCardSurface(cardEl);
       let adopted = false;
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
       boardEl.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
@@ -280,7 +282,7 @@ describe('event animator transfer origins', () => {
     const projectedFrame = projectFrame({
       transactionId: 'private-stage-deduplication:tx',
       index: 0,
-      framedEvent: {
+      canonicalFrame: {
         frame: after.timeline.frame,
         scope: after.timeline.scope!,
         event,
@@ -381,17 +383,17 @@ describe('event animator transfer origins', () => {
         },
       } as const satisfies MatchEvent;
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
-      const framedEvent = {
+      const canonicalFrame = {
         frame: after.timeline.frame,
         scope: after.timeline.scope!,
         event,
       };
-      const frame: EventTransition = {
+      const frame: CanonicalFrameTransition = {
         transactionId: 'leon-return-facing:tx',
         index: 0,
-        framedEvent,
-        frame: framedEvent.frame,
-        scope: framedEvent.scope,
+        canonicalFrame,
+        frame: canonicalFrame.frame,
+        scope: canonicalFrame.scope,
         event,
         before,
         after,
@@ -406,6 +408,7 @@ describe('event animator transfer origins', () => {
       const source = document.createElement('div');
       source.className = 'card lane-card facedown';
       source.dataset.cardId = token;
+      attachTestCardSurface(source);
       source.getBoundingClientRect = () => new DOMRect(80, 280, 70, 100);
       const handWrapper = document.createElement('div');
       handWrapper.className = 'hand-card-motion';
@@ -413,6 +416,7 @@ describe('event animator transfer origins', () => {
       const destination = document.createElement('div');
       destination.className = 'card';
       destination.dataset.cardId = token;
+      attachTestCardSurface(destination);
       destination.getBoundingClientRect = () => new DOMRect(180, 620, 70, 100);
       boardWrap.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
       boardEl.append(source);
@@ -485,17 +489,17 @@ describe('event animator transfer origins', () => {
         },
       };
       const after = apply(before, event, BOOTSTRAP_MANIFEST);
-      const framedEvent = {
+      const canonicalFrame = {
         frame: after.timeline.frame,
         scope: after.timeline.scope!,
         event,
       };
-      const frame: EventTransition = {
+      const frame: CanonicalFrameTransition = {
         transactionId: 'remote-stage-handoff:tx',
         index: 0,
-        framedEvent,
-        frame: framedEvent.frame,
-        scope: framedEvent.scope,
+        canonicalFrame,
+        frame: canonicalFrame.frame,
+        scope: canonicalFrame.scope,
         event,
         before,
         after,
@@ -533,7 +537,7 @@ describe('event animator transfer origins', () => {
       const animation = animatePreparedEvent(prepared, new AbortController().signal);
       const surrogate = overlay.querySelector('[data-card-motion-session]') as HTMLElement;
       expect(surrogate).not.toBeNull();
-      expect(surrogate.querySelector('.card-motion-synthetic-back')).not.toBeNull();
+      expect(surrogate.querySelector('.system-card-back')).not.toBeNull();
       expect(surrogate.textContent).not.toContain('PROTECTED CARD IDENTITY');
       expect(destination.style.visibility).toBe('hidden');
       expect(destination.classList.contains('vfx-pop')).toBe(false);
@@ -564,6 +568,7 @@ describe('event animator transfer origins', () => {
       const card = document.createElement('div');
       card.className = 'card lane-card';
       card.dataset.cardId = token;
+      attachTestCardSurface(card);
       board.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
       card.getBoundingClientRect = () => new DOMRect(60, 220, 70, 100);
       board.append(card, overlay);
@@ -615,7 +620,7 @@ describe('event animator transfer origins', () => {
       const frame = projectFrame({
         transactionId: 'missing-animation-anchors:tx',
         index: 0,
-        framedEvent: {
+        canonicalFrame: {
           frame: after.timeline.frame,
           scope: after.timeline.scope!,
           event,

@@ -348,8 +348,8 @@ const basisForLogicalSource = (
     || (transfer.from.kind === 'DECK' && transfer.from.owner === host.remoteSeat)
     || (transfer.to.kind === 'HAND' && transfer.to.owner === host.remoteSeat);
   return protectedSource
-    ? { kind: 'synthetic-back', owner: transfer.owner }
-    : { kind: 'destination-clone', endpoint };
+    ? { kind: 'synthetic-back' }
+    : { kind: 'destination-surface', endpoint };
 };
 
 const playAnchorPop = async (

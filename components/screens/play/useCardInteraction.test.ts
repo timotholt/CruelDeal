@@ -6,6 +6,7 @@ import { createPlayMotionSurface } from '@/services/playgame/presentation/playMo
 import type { ResolvedCard } from '@/services/playgame/view';
 import { setupCardInteraction } from './useCardInteraction';
 import { projectMatchStateForSeat } from '@/services/playgame/runtime/projection';
+import { attachTestCardSurface } from '@/components/game-surfaces/testing/cardSurfaceFixture';
 
 const pointerEvent = (
   type: string,
@@ -46,6 +47,7 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     lane.className = 'lane-slots bot';
     lane.dataset.dropZone = 'lane';
     lane.dataset.laneId = '0';
@@ -123,6 +125,7 @@ describe('pointer cancellation and threshold', () => {
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     source.append(visual);
     board.append(source);
     frame.append(board, overlay);
@@ -171,6 +174,7 @@ describe('pointer cancellation and threshold', () => {
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     source.append(visual);
     board.append(source);
     frame.append(board, overlay);
@@ -229,12 +233,14 @@ describe('pointer visual handoff', () => {
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     lane.className = 'lane-slots bot';
     lane.dataset.dropZone = 'lane';
     lane.dataset.laneId = '0';
     emptySlot.className = 'slot';
     destination.className = 'card lane-card facedown';
     destination.dataset.cardId = 'pointer-card';
+    attachTestCardSurface(destination);
     source.append(visual);
     lane.append(emptySlot);
     board.append(source, lane);
@@ -315,6 +321,7 @@ describe('tap-first card interaction', () => {
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     source.append(visual);
     board.append(source);
     frame.append(board, overlay);
@@ -358,6 +365,7 @@ describe('tap-first card interaction', () => {
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
+    attachTestCardSurface(visual);
     lane.className = 'lane-slots bot';
     lane.dataset.dropZone = 'lane';
     lane.dataset.laneId = '0';
@@ -418,6 +426,7 @@ describe('tap-first card interaction', () => {
     source.dataset.cardId = 'staged-card';
     source.dataset.dragSource = 'lane';
     source.dataset.dragEnabled = 'true';
+    attachTestCardSurface(source);
     hand.dataset.dropZone = 'hand';
     board.append(source, hand);
     frame.append(board, overlay);

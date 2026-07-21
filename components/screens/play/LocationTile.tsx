@@ -8,6 +8,7 @@
 import type { ResolvedLocation } from '@/services/playgame/view';
 import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import { usePlayUi } from '@/contexts/PlayUiContext';
+import { laneVisualModel } from '@/services/playgame/presentation/appearance';
 import { LocationRenderer } from './rendering/LocationRenderer';
 
 interface LocationTileProps {
@@ -46,9 +47,7 @@ export const LocationTile = (props: LocationTileProps) => {
       style={{ cursor: props.interactive === false ? 'default' : 'pointer' }}
     >
       <LocationRenderer
-        location={props.location}
-        topPower={props.topPower}
-        bottomPower={props.bottomPower}
+        model={laneVisualModel(props.location, props.topPower, props.bottomPower)}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import {
   createCardSurrogate,
   placeSurrogate,
   setSurrogateFace,
+  setSurrogateModel,
   type CardMotionHost,
   type CardMotionSurrogate,
 } from './createCardSurrogate';
@@ -39,6 +40,10 @@ const endpointFace = (
   fallback: CardVisualFace,
 ): CardVisualFace => (
   isCanonicalEndpoint(endpoint) ? endpoint.resolveFace() : endpoint.face ?? fallback
+);
+
+const endpointModel = (endpoint: CardMotionEndpoint) => (
+  isCanonicalEndpoint(endpoint) ? endpoint.resolveModel() : null
 );
 
 export interface BeginCardMotionOptions {
@@ -165,7 +170,15 @@ class MotionSession implements CardMotionSession {
       // change without exposing either image for an extra frame.
       await this.wait(halfDurationMs);
       if (this.terminalResult) return this.terminalResult;
-      setSurrogateFace(this.visual, targetFace);
+      const targetModel = endpointModel(endpoint);
+      if (targetModel && (
+        (targetFace === 'faceDown' && targetModel.face.kind === 'back')
+        || (targetFace === 'faceUp' && targetModel.face.kind === 'front')
+      )) {
+        setSurrogateModel(this.visual, targetModel);
+      } else {
+        setSurrogateFace(this.visual, targetFace);
+      }
       this.currentFace = targetFace;
       this.visual.visual.style.transition = 'none';
       this.visual.visual.style.transform = `rotateY(-90deg) scale(${midpointScale})`;

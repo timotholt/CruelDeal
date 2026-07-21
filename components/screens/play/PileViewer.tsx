@@ -4,6 +4,7 @@ import type {
   VisiblePileZone,
 } from '@/services/playgame/view';
 import { CardRenderer } from './rendering/CardRenderer';
+import { cardSurfaceModel } from '@/services/playgame/presentation/appearance';
 
 interface PileViewerProps {
   ownerName: string;
@@ -42,7 +43,7 @@ export const PileViewer = (props: PileViewerProps) => {
             <For each={props.cards}>
               {(card) => (
                 <div class="card pile-viewer__card" data-card-type={card.type}>
-                  <CardRenderer card={card} />
+                  <CardRenderer model={cardSurfaceModel(card)} />
                 </div>
               )}
             </For>

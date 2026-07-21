@@ -1,4 +1,4 @@
-import type { Owner } from '../../engine/types/ids';
+import type { CardSurfaceModel } from '@/components/game-surfaces/contracts';
 
 export type CardVisualFace = 'faceUp' | 'faceDown';
 
@@ -14,7 +14,7 @@ export interface CardVisualSnapshot {
   readonly rect: DOMRect;
   readonly rotationDegrees: number;
   readonly face: CardVisualFace;
-  readonly clone: HTMLElement;
+  readonly model: CardSurfaceModel;
   readonly sourceKind: CardVisualSourceKind;
 }
 
@@ -24,6 +24,7 @@ export interface CanonicalCardEndpoint {
   resolveRect(): DOMRect | null;
   resolveRotationDegrees(): number;
   resolveFace(): CardVisualFace;
+  resolveModel(): CardSurfaceModel | null;
 }
 
 export interface LogicalCardEndpoint {
@@ -36,9 +37,8 @@ export type CardMotionEndpoint = CanonicalCardEndpoint | LogicalCardEndpoint;
 
 export type SurrogateBasis =
   | { kind: 'clone'; snapshot: CardVisualSnapshot }
-  | { kind: 'destination-clone'; endpoint: CanonicalCardEndpoint }
-  | { kind: 'synthetic-back'; owner: Owner }
-  | { kind: 'adopt-existing'; element: HTMLElement };
+  | { kind: 'destination-surface'; endpoint: CanonicalCardEndpoint }
+  | { kind: 'synthetic-back' };
 
 export type CardMotionPhase =
   | 'captured'

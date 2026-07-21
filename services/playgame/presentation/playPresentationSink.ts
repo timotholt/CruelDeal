@@ -17,6 +17,11 @@ import {
 import type { PlayPresentationHost } from './playPresentationHost';
 import { eventLane, eventNumber, eventString } from './projectedEvent';
 import { REVEAL_CINEMATIC_TIMING } from './timing';
+import { readLocationSurfaceModel } from '@/components/game-surfaces/location/locationSurfaceRegistry';
+import {
+  mountLocationSurface,
+  type MountedLocationSurface,
+} from '@/components/game-surfaces/location/locationSurfaceRuntime';
 
 const LOCATION_REVEAL_DURATION_MS = 700;
 const TURN_RESOLUTION_LOCK_HOLD_MS = 100;
@@ -59,9 +64,10 @@ interface RevealPreparation {
 interface LocationPreparation {
   readonly lane: LaneId;
   readonly mapElement: HTMLElement | null;
-  readonly hiddenTile: HTMLElement | null;
-  readonly tileClone: HTMLElement | null;
-  readonly unmountClone: (() => void) | null;
+  readonly canonicalSurface: HTMLElement | null;
+  readonly temporaryTile: HTMLElement | null;
+  readonly mountedSurface: MountedLocationSurface | null;
+  readonly unmountTemporary: (() => void) | null;
 }
 
 interface FramePreparation {
@@ -94,8 +100,9 @@ const waitFor = (ms: number, signal: AbortSignal): Promise<boolean> => {
 };
 
 const resetLocationStyles = (preparation: LocationPreparation): void => {
-  preparation.unmountClone?.();
-  for (const tile of [preparation.hiddenTile, preparation.tileClone]) {
+  preparation.mountedSurface?.dispose();
+  preparation.unmountTemporary?.();
+  for (const tile of [preparation.canonicalSurface, preparation.temporaryTile]) {
     tile?.style.removeProperty('visibility');
     tile?.style.removeProperty('opacity');
     tile?.style.removeProperty('transition');
@@ -105,15 +112,6 @@ const resetLocationStyles = (preparation: LocationPreparation): void => {
   }
   preparation.mapElement?.style.removeProperty('opacity');
   preparation.mapElement?.style.removeProperty('transition');
-};
-
-const sanitizeClone = (element: HTMLElement): void => {
-  element.removeAttribute('id');
-  for (const child of element.querySelectorAll<HTMLElement>('[id]')) {
-    child.removeAttribute('id');
-  }
-  element.setAttribute('aria-hidden', 'true');
-  element.style.pointerEvents = 'none';
 };
 
 const prepareLocationReveal = (
@@ -126,6 +124,9 @@ const prepareLocationReveal = (
   if (lane === null) return null;
   const mapElement = browser.locationMap(lane);
   const hiddenTile = browser.locationTile(lane);
+  const canonicalSurface = hiddenTile?.querySelector<HTMLElement>(
+    '[data-surface-kind="location"]',
+  ) ?? null;
   if (mapElement) {
     mapElement.style.transition = 'none';
     mapElement.style.opacity = '0';
@@ -134,36 +135,42 @@ const prepareLocationReveal = (
     mapElement.style.opacity = '1';
   }
 
-  let tileClone: HTMLElement | null = null;
-  let unmountClone: (() => void) | null = null;
-  if (hiddenTile?.isConnected) {
+  let temporaryTile: HTMLElement | null = null;
+  let mountedSurface: MountedLocationSurface | null = null;
+  let unmountTemporary: (() => void) | null = null;
+  const hiddenModel = canonicalSurface ? readLocationSurfaceModel(canonicalSurface) : null;
+  if (hiddenTile?.isConnected && canonicalSurface && hiddenModel) {
     const viewportRect = hiddenTile.getBoundingClientRect();
     const localRect = host.motionSurface.toLocalRect(viewportRect);
-    tileClone = hiddenTile.cloneNode(true) as HTMLElement;
-    sanitizeClone(tileClone);
-    tileClone.style.position = 'absolute';
-    tileClone.style.left = `${localRect.left}px`;
-    tileClone.style.top = `${localRect.top}px`;
-    tileClone.style.width = `${localRect.width}px`;
-    tileClone.style.height = `${localRect.height}px`;
-    tileClone.style.margin = '0';
-    tileClone.style.opacity = '1';
-    tileClone.style.transformOrigin = '50% 50%';
-    tileClone.style.willChange = 'transform';
-    tileClone.style.transform = 'rotateY(0deg)';
-    unmountClone = host.motionSurface.mountTemporary(tileClone);
-    hiddenTile.style.visibility = 'hidden';
-    void tileClone.offsetWidth;
-    tileClone.style.transition = `transform ${LOCATION_REVEAL_DURATION_MS / 2}ms cubic-bezier(.4,0,.7,1)`;
-    tileClone.style.transform = 'rotateY(90deg)';
+    temporaryTile = document.createElement('div');
+    temporaryTile.className = 'location location-motion-surrogate';
+    temporaryTile.setAttribute('aria-hidden', 'true');
+    temporaryTile.style.position = 'absolute';
+    temporaryTile.style.left = `${localRect.left}px`;
+    temporaryTile.style.top = `${localRect.top}px`;
+    temporaryTile.style.width = `${localRect.width}px`;
+    temporaryTile.style.height = `${localRect.height}px`;
+    temporaryTile.style.margin = '0';
+    temporaryTile.style.opacity = '1';
+    temporaryTile.style.pointerEvents = 'none';
+    temporaryTile.style.transformOrigin = '50% 50%';
+    temporaryTile.style.willChange = 'transform';
+    temporaryTile.style.transform = 'rotateY(0deg)';
+    mountedSurface = mountLocationSurface(temporaryTile, hiddenModel);
+    unmountTemporary = host.motionSurface.mountTemporary(temporaryTile);
+    canonicalSurface.style.visibility = 'hidden';
+    void temporaryTile.offsetWidth;
+    temporaryTile.style.transition = `transform ${LOCATION_REVEAL_DURATION_MS / 2}ms cubic-bezier(.4,0,.7,1)`;
+    temporaryTile.style.transform = 'rotateY(90deg)';
   }
 
   return {
     lane,
     mapElement,
-    hiddenTile,
-    tileClone,
-    unmountClone,
+    canonicalSurface,
+    temporaryTile,
+    mountedSurface,
+    unmountTemporary,
   };
 };
 
@@ -250,32 +257,28 @@ const animateLocationReveal = async (
   preparation: LocationPreparation,
   signal: AbortSignal,
 ): Promise<void> => {
-  if (!preparation.mapElement && !preparation.tileClone) return;
+  if (!preparation.mapElement && !preparation.temporaryTile) return;
   const halfDuration = LOCATION_REVEAL_DURATION_MS / 2;
   if (!await waitFor(halfDuration, signal)) return;
-  preparation.unmountClone?.();
 
   const revealedTile = browser.locationTile(preparation.lane);
-  if (revealedTile) {
-    revealedTile.style.transition = 'none';
-    revealedTile.style.opacity = '1';
-    revealedTile.style.visibility = 'visible';
-    revealedTile.style.transformOrigin = '50% 50%';
-    revealedTile.style.willChange = 'transform';
-    revealedTile.style.transform = 'rotateY(-90deg)';
-    void revealedTile.offsetWidth;
-    revealedTile.style.transition = `transform ${halfDuration}ms cubic-bezier(.3,0,.2,1)`;
-    revealedTile.style.transform = 'rotateY(0deg)';
+  const revealedSurface = revealedTile?.querySelector<HTMLElement>(
+    '[data-surface-kind="location"]',
+  ) ?? null;
+  const revealedModel = revealedSurface ? readLocationSurfaceModel(revealedSurface) : null;
+  const temporaryTile = preparation.temporaryTile;
+  if (temporaryTile && revealedModel && preparation.mountedSurface) {
+    preparation.mountedSurface.update(revealedModel);
+    temporaryTile.style.transition = 'none';
+    temporaryTile.style.transform = 'rotateY(-90deg)';
+    void temporaryTile.offsetWidth;
+    temporaryTile.style.transition = `transform ${halfDuration}ms cubic-bezier(.3,0,.2,1)`;
+    temporaryTile.style.transform = 'rotateY(0deg)';
   }
   if (!await waitFor(halfDuration, signal)) return;
-  if (revealedTile) {
-    revealedTile.style.removeProperty('visibility');
-    revealedTile.style.removeProperty('opacity');
-    revealedTile.style.removeProperty('transition');
-    revealedTile.style.removeProperty('transform');
-    revealedTile.style.removeProperty('transform-origin');
-    revealedTile.style.removeProperty('will-change');
-  }
+  revealedSurface?.style.removeProperty('visibility');
+  preparation.mountedSurface?.dispose();
+  preparation.unmountTemporary?.();
 };
 
 export interface PlayPresentationSink extends MatchPresentationSink {

@@ -291,10 +291,10 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('uses one full-surface purple card back without a split gold overlay', () => {
     const css = source('../../../src/styles/playgame.css');
-    const facedownRule = css.match(/\.card\.facedown \.card-renderer__canvas\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
-    expect(facedownRule).toContain('repeating-linear-gradient');
-    expect(facedownRule).toContain('#1a1f3a');
-    expect(facedownRule).toContain('#12172a');
+    const backRule = css.match(/\.system-card-back\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(backRule).toContain('repeating-linear-gradient');
+    expect(backRule).toContain('#1a1f3a');
+    expect(backRule).toContain('#12172a');
     expect(css).not.toContain('.card.facedown::before');
   });
 
@@ -307,11 +307,11 @@ describe('Phase 1.21 presentation architecture fences', () => {
       expect(cardSource).not.toContain('onDragStart');
       expect(cardSource).not.toContain('onDragEnd');
       expect(cardSource).toContain('data-drag-source');
-      expect(cardSource).toContain('vfxRegistry={cardVfxRegistry}');
-      expect(cardSource).not.toContain('<CardVfxStack');
+      expect(cardSource).toContain('registry={cardVfxRegistry}');
+      expect(cardSource).toContain('<CardVfxStack');
       expect(cardSource).not.toContain("class={'cost '");
     }
-    expect(cardRenderer).toContain('registry={registry}');
+    expect(cardRenderer).toContain('<CardSurface model={props.model} />');
     expect(cardRenderer).not.toContain('data-drag-source');
   });
 
@@ -322,29 +322,24 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const locationTile = source('./LocationTile.tsx');
     const cardRenderer = source('./rendering/CardRenderer.tsx');
     const locationRenderer = source('./rendering/LocationRenderer.tsx');
-    const renderCache = source('./rendering/renderCache.ts');
-    const regularFace = source('./card-faces/RegularCardFace.tsx');
-    const spellFace = source('./card-faces/SpellCardFace.tsx');
-    const cardName = source('./card-faces/CardName.tsx');
+    const cardSurface = source('../../../components/game-surfaces/card/CardSurface.tsx');
+    const locationSurface = source('../../../components/game-surfaces/location/LocationSurface.tsx');
+    const cardCache = source('../../../components/game-surfaces/card/cardBitmapCache.ts');
+    const locationCache = source('../../../components/game-surfaces/location/locationBitmapCache.ts');
     expect(boardCard).toContain("'card lane-card'");
     expect(handCard).toContain("class={'hand-card-motion'");
     expect(handCard).toContain("class={'card'");
-    expect(pileViewer).toContain('<CardRenderer card={card} />');
-    expect(cardRenderer).toContain('viewBox="0 0 500 700"');
-    expect(cardRenderer).toContain('<SpellCardFace');
-    expect(cardRenderer).toContain('<RegularCardFace');
+    expect(pileViewer).toContain('<CardRenderer model={cardSurfaceModel(card)} />');
+    expect(cardSurface).toContain('viewBox="0 0 500 700"');
+    expect(cardSurface).toContain('<StaticBitmapLayer');
+    expect(cardSurface).toContain('<StatLayer');
+    expect(cardSurface).toContain('<SystemBorderLayer');
     expect(locationTile).toContain('<LocationRenderer');
-    expect(locationRenderer).toContain('viewBox="0 0 700 525"');
-    expect(renderCache).toContain('const cardPlans = new Map');
-    expect(renderCache).toContain('const locationPlans = new Map');
-    expect(regularFace).toContain('class="portrait"');
-    expect(spellFace).toContain('class="spell-card-surface"');
-    expect(spellFace).toContain('class="spell-card__base"');
-    expect(spellFace).not.toContain('class={\'power ');
-    expect(regularFace).not.toContain('pile-card');
-    expect(spellFace).not.toContain('pile-card');
-    expect(cardName).toContain('<GameTextV3');
-    expect(cardName).toContain('maxLines={3}');
+    expect(locationSurface).toContain('viewBox="0 0 700 525"');
+    expect(locationRenderer).toContain('<LocationSurface model={props.model.location} />');
+    expect(locationRenderer).toContain('data-lane-score="top"');
+    expect(cardCache).toContain('new RasterArtifactCache');
+    expect(locationCache).toContain('new RasterArtifactCache');
   });
 
   it('scopes card effects to each mounted VFX host', () => {
@@ -387,18 +382,14 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const css = source('../../../src/styles/playgame.css');
     expect(boardCard).toContain('data-card-type={props.card.type}');
     expect(handCard).toContain('data-card-type={props.card.type}');
-    const spellRule =
-      css.match(/\.card\[data-card-type="spell"\]:not\(\.facedown\)\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
-    const spellSurfaceRule =
-      css.match(/\.spell-card-surface\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
-    expect(spellRule).not.toContain('clip-path:');
-    expect(spellRule).not.toContain('width:');
-    expect(spellRule).not.toContain('height:');
-    expect(spellRule).not.toContain('transform:');
-    expect(spellRule).not.toContain('transition:');
-    expect(spellSurfaceRule).toContain('aspect-ratio: 1');
-    expect(spellSurfaceRule).toContain('border-radius: 50%');
-    expect(css).toContain('.card[data-card-type="spell"].facedown .spell-card-surface');
+    const spellBorderRule =
+      css.match(/\.system-border--card\.system-border--spell\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const cardRasterizer = source('../../../components/game-surfaces/card/CardContentRasterizer.ts');
+    expect(spellBorderRule).toContain('height: 500px');
+    expect(spellBorderRule).toContain('border-radius: 50%');
+    expect(spellBorderRule).not.toContain('transform:');
+    expect(cardRasterizer).toContain('context.arc(250, 250, 246');
+    expect(css).not.toContain('.spell-card-surface');
   });
 
   it('animates lane position without animating lane dimensions', () => {

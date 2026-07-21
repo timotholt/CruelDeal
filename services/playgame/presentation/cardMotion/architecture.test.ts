@@ -13,7 +13,7 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
     expect(animator).toContain('motionSurface.cardMotion.begin');
   });
 
-  it('centralizes structural cloning and canonical visibility ownership', () => {
+  it('mounts governed surface instances and centralizes canonical visibility ownership', () => {
     const animator = source('../eventAnimator.ts');
     const drag = source('../../../../components/screens/play/useCardInteraction.ts');
     const reveal = source('../../../../services/vfx/animations/reveal-cinematic.ts');
@@ -22,7 +22,10 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
       expect(livePath).not.toContain('.style.visibility');
       expect(livePath).not.toContain('mountTemporary(');
     }
-    expect(source('./createCardSurrogate.ts')).toContain('cloneNode(');
+    const surrogate = source('./createCardSurrogate.ts');
+    expect(surrogate).not.toContain('cloneNode(');
+    expect(surrogate).toContain('mountCardSurface(visual, initialModel)');
+    expect(surrogate).toContain('readCardSurfaceModel');
     expect(source('./canonicalVisibility.ts')).toContain("element.style.visibility = 'hidden'");
   });
 

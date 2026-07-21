@@ -37,14 +37,13 @@
     position: relative;
     width: 500px;
     height: 700px;
-    display: grid;
-    grid-template-rows: 165px minmax(0, 1fr) 165px;
-    padding: 38px;
+    display: block;
+    padding: 0;
     color: var(--text);
-    background: var(--card-bg);
-    border: 6px solid var(--card-edge);
-    border-radius: 50px;
-    box-shadow: 0 80px 170px rgba(0,0,0,0.42), inset 0 6px 0 rgba(255,255,255,0.1);
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     overflow: visible;
     box-sizing: border-box;
   }
@@ -52,22 +51,82 @@
     transform: translateY(-6px);
     filter: drop-shadow(0 14px 22px rgba(166,109,255,0.25));
   }
-  .inspector-clone.card:hover,
-  .inspector-clone .card:hover {
-    border-color: var(--card-edge);
-    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
-  }
-  .inspector-clone .card:hover {
-    transform: scale(var(--hand-scale, 1));
-  }
   .card.selected { filter: drop-shadow(0 0 3px var(--accent)); }
   .card.target-valid {
     outline: 2px dashed var(--accent-2);
     outline-offset: 4px;
   }
-  .card.enemy .card-renderer__canvas {
+  .card-content-bitmap,
+  .location-content-bitmap {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  .system-border {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    box-sizing: border-box;
+    pointer-events: none;
+  }
+  .system-border--card {
+    border: 6px solid var(--card-edge);
+    border-radius: 50px;
+    box-shadow: 0 80px 170px rgba(0,0,0,0.42), inset 0 6px 0 rgba(255,255,255,0.1);
+  }
+  .system-border--card.system-border--enemy {
     border-color: rgba(255, 111, 97, 0.3);
-    background: var(--enemy-card-bg);
+  }
+  .system-border--card.system-border--friendly {
+    border-color: rgba(146, 164, 190, 0.34);
+  }
+  .system-card-back {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50px;
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 40px, #12172a 40px 80px);
+  }
+  .system-card-back__mark {
+    color: rgba(166, 109, 255, 0.3);
+    font: 400 70px/1 var(--font-display);
+    letter-spacing: 0.18em;
+    transform: rotate(-45deg);
+  }
+  .card-content-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50px;
+    background: linear-gradient(#202b38, #0d141d);
+  }
+  .card-content-fallback__accent {
+    position: absolute;
+    top: 174px;
+    left: 38px;
+    right: 38px;
+    height: 30px;
+    opacity: 0.74;
+    border-radius: 10px;
+  }
+  .card-content-fallback__name {
+    position: absolute;
+    left: 48px;
+    right: 48px;
+    bottom: 70px;
+    color: #f7f7f4;
+    font: 400 78px/0.96 var(--font-display);
+    text-align: center;
+    text-transform: uppercase;
   }
 
   /* Cost badge (top-left circle) */
@@ -80,6 +139,7 @@
     color: #061024; font-weight: 700; font-size: 88px;
     display: flex; align-items: center; justify-content: center;
     border: 12px solid #061024;
+    z-index: 3;
   }
   .card-renderer__canvas .cost.buffed { background: #2dd4a7; color: #052e22; }
   .card-renderer__canvas .cost.debuffed { background: #ff6080; color: #3a0616; }
@@ -95,25 +155,24 @@
     padding: 0 36px;
     border: 12px solid #061024;
     font-family: var(--font-mono);
+    z-index: 3;
   }
+  .card-surface__stats,
+  .surface-statuses {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .card-surface__stats { z-index: 3; }
+  .surface-statuses { z-index: 4; }
+  [data-surface-hit] { pointer-events: auto; }
   .card-renderer__canvas .power.buffed  { background: #2dd4a7; color: #052e22; }
   .card-renderer__canvas .power.debuffed { background: #ff6080; color: #3a0616; }
 
-  .card-renderer__canvas .name {
-    width: 100%;
-    height: 100%;
-    min-width: 0;
-    min-height: 0;
-    align-self: stretch;
-    overflow: hidden;
-  }
-  .card-renderer__canvas .bar {
-    height: 31px; border-radius: 10px; margin: 10px 0;
-  }
-  .card.text-disabled .card-renderer__canvas {
+  .card.text-disabled .system-border--card {
     border-color: rgba(255, 96, 128, 0.55);
   }
-  .card-renderer__canvas .text-disabled-mark {
+  .surface-status--disabled {
     position: absolute;
     left: 10%;
     right: 10%;
@@ -123,19 +182,6 @@
     box-shadow: 0 0 40px rgba(255, 96, 128, 0.55);
     transform: rotate(-7deg);
     pointer-events: none;
-  }
-
-  /* Facedown cards */
-  .card.facedown .card-renderer__canvas {
-    background: repeating-linear-gradient(45deg, #1a1f3a 0 40px, #12172a 40px 80px);
-    border-color: var(--card-edge);
-  }
-  .card.facedown .card-renderer__canvas .name,
-  .card.facedown .card-renderer__canvas .cost,
-  .card.facedown .card-renderer__canvas .power,
-  .card.facedown .card-renderer__canvas .bar,
-  .card.facedown .card-renderer__canvas .portrait {
-    visibility: hidden;
   }
 
   /* Lane cards only own host geometry. Their painted renderer is identical. */
@@ -149,78 +195,29 @@
   .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
   /* Spells keep the canonical 5:7 interaction/animation box. Their renderer
      owns a genuinely circular painted surface inside that stable geometry. */
-  .card[data-card-type="spell"]:not(.facedown) .card-renderer__canvas {
-    display: block;
-    padding: 0;
-    background: transparent;
-    border-color: transparent;
-    border-radius: 0;
-    box-shadow: none;
-    overflow: visible;
-  }
-  .spell-card__base {
-    position: absolute;
-    z-index: 0;
-    top: 48%;
-    right: 16%;
-    bottom: 0;
-    left: 16%;
-    border: 6px solid rgba(180, 126, 255, 0.48);
-    border-radius: 0 0 12% 12%;
-    background:
-      linear-gradient(90deg, rgba(255,255,255,0.025), transparent 20% 80%, rgba(255,255,255,0.025)),
-      linear-gradient(180deg, #25203a, #11101e);
-    box-shadow:
-      0 50px 110px rgba(0,0,0,0.38),
-      inset 0 0 70px rgba(166,109,255,0.12);
-  }
-  .spell-card-surface {
-    position: absolute;
-    top: 0;
-    left: 0;
+  .system-border--card.system-border--spell {
     width: 100%;
-    aspect-ratio: 1;
-    display: grid;
-    grid-template-rows: 30% minmax(0, 1fr);
-    place-items: center;
-    padding: 12% 10% 8%;
-    border: 6px solid rgba(180, 126, 255, 0.58);
+    height: 500px;
+    border-color: rgba(180, 126, 255, 0.58);
     border-radius: 50%;
-    background:
-      radial-gradient(circle at 50% 38%, rgba(142, 86, 220, 0.36), transparent 46%),
-      radial-gradient(circle at 50% 50%, #25203a 0 56%, #100f1d 76% 100%);
-    box-shadow:
-      0 50px 120px rgba(0,0,0,0.42),
-      inset 0 0 0 10px rgba(255,255,255,0.035),
-      inset 0 0 90px rgba(166,109,255,0.18);
-    overflow: visible;
+    box-shadow: 0 50px 120px rgba(0,0,0,0.42), inset 0 0 0 10px rgba(255,255,255,0.035);
   }
-  .spell-card-surface::before {
+  .system-border--card.system-border--spell::after {
     content: '';
     position: absolute;
-    inset: 8%;
-    border: 6px solid rgba(255,255,255,0.08);
-    border-radius: 50%;
-    pointer-events: none;
-  }
-  .spell-card__sigil {
-    color: rgba(215, 187, 255, 0.82);
-    font-size: 110px;
-    line-height: 1;
-    text-shadow: 0 0 50px rgba(166,109,255,0.58);
-  }
-  .spell-card__name {
-    width: 78% !important;
-    height: 100% !important;
+    z-index: -1;
+    top: 335px;
+    right: 80px;
+    bottom: -200px;
+    left: 80px;
+    border: 6px solid rgba(180, 126, 255, 0.48);
+    border-top: 0;
+    border-radius: 0 0 50px 50px;
   }
   .card-renderer__canvas[data-card-type="spell"] .cost {
     top: -2%;
     left: 4%;
-    z-index: 2;
-  }
-  .card[data-card-type="spell"].facedown .spell-card-surface,
-  .card[data-card-type="spell"].facedown .spell-card__base {
-    visibility: hidden;
+    z-index: 3;
   }
 
   /* ── Location cards ─────────────────────────────────────────────── */
@@ -237,33 +234,77 @@
     overflow: visible;
     pointer-events: auto;
   }
-  .location-renderer__canvas {
-    /* Keep this as one reversible tuning knob: scores intentionally sit
-       farther outside the card to give the centered copy more breathing room. */
+  .lane-surface-composition {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+  .lane-surface__canvas {
+    /* One reversible tuning knob: scores intentionally sit farther outside
+       the location surface to reserve the center for location copy. */
     --location-score-outset: 32px;
-    /* The score plates still reserve three numeric columns, but carry 0.2rem
-       less internal breathing room on every side. */
     --location-score-padding-trim: 0.2rem;
+    position: relative;
+    width: 700px;
+    height: 525px;
+    overflow: visible;
+  }
+  .location-renderer__canvas {
     /* 73px is two thirds of the previous implicit 109.5px block padding. */
     --location-copy-block-padding: 73px;
     position: relative;
     width: 700px;
     height: 525px;
     padding: 0;
-    background:
-      linear-gradient(
-        180deg,
-        rgba(5, 8, 12, 0.68) 0%,
-        rgba(5, 8, 12, 0.28) 38%,
-        rgba(5, 8, 12, 0.72) 100%
-      ),
-      var(--location-art, linear-gradient(145deg, rgba(81, 66, 48, 0.72), rgba(18, 22, 28, 0.92)));
-    background-position: center;
-    background-size: cover;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+  .system-border--location {
     border: 6px solid rgba(255, 207, 91, 0.44);
     border-radius: 50px;
     box-shadow: 0 80px 170px rgba(0,0,0,0.22), inset 0 6px 0 rgba(255,255,255,0.08);
+  }
+  .system-location-back {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 50px;
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 30px, #12172a 30px 60px);
+    color: var(--muted);
+    font: 400 70px/1 var(--font-display);
+    letter-spacing: 0.2em;
+  }
+  .location-content-fallback {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: 118px minmax(0, 1fr);
+    gap: 15px;
+    padding: 73px 76px;
+    overflow: hidden;
+    border-radius: 50px;
+    color: #f6f3e8;
+    text-align: center;
     box-sizing: border-box;
+  }
+  .location-content-fallback__name {
+    align-self: end;
+    font: 400 70px/1 var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-shadow: 0 5px 0 rgba(0,0,0,.9), 0 9px 22px rgba(0,0,0,.98);
+  }
+  .location-content-fallback__rules {
+    font: 600 42px/1.3 var(--font-body);
+    text-shadow: 0 3px 0 rgba(0,0,0,.94), 0 6px 16px rgba(0,0,0,.98);
   }
   .lane-score {
     position: absolute;
@@ -334,17 +375,6 @@
       0 6px 16px rgba(0, 0, 0, 0.98),
       0 -1px 0 rgba(255, 255, 255, 0.16);
   }
-  /* Face-down location tile — shows a "???" placeholder before reveal */
-  .location-renderer__canvas--hidden {
-    background:
-      repeating-linear-gradient(45deg, #1a1f3a 0 30px, #12172a 30px 60px);
-    border-color: rgba(146,164,190,0.15);
-  }
-  .location-renderer__canvas--hidden .loc-name {
-    color: var(--muted);
-    letter-spacing: 0.2em;
-  }
-
   /* Hand */
   .hand {
     display: flex;
@@ -444,33 +474,6 @@
       width: var(--hand-card-w);
       margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
     }
-  }
-
-  /* Flying card used during play animation */
-  .flying-card {
-    position: absolute;
-    z-index: 180;
-    pointer-events: none;
-    transform-style: preserve-3d;
-    perspective: 1200px;
-    aspect-ratio: 5 / 7;
-    will-change: transform, left, top, width, height;
-  }
-  .flying-card .face {
-    position: absolute; inset: 0;
-    backface-visibility: hidden;
-    border-radius: 8px;
-    transition: transform 0s;
-  }
-  .flying-card .face.back {
-    transform: rotateY(180deg);
-    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
-    border: 1px solid var(--card-edge);
-    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
-  }
-  .flying-card .face.back::after {
-    content: ''; position: absolute; inset: 20% 15%;
-    background: radial-gradient(ellipse, rgba(166,109,255,0.6), transparent 70%);
   }
 
 }

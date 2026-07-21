@@ -7,12 +7,15 @@
  * delayed cards remain face-down after their staging order is cleared.
  */
 
+import { createEffect, createMemo } from 'solid-js';
+import { CardVfxStack } from '@/components/card/CardVfxStack';
 import { useVfx } from '../../game/VfxHost';
 import { useMatchSession } from '@/contexts/MatchSessionContext';
 import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
+import { cardSurfaceModel } from '@/services/playgame/presentation/appearance';
 import { CardRenderer } from './rendering/CardRenderer';
 
 interface BoardCardProps {
@@ -62,6 +65,20 @@ export const BoardCard = (props: BoardCardProps) => {
     });
   };
   const isPending = isFaceDown;
+  const surfaceModel = createMemo(() => cardSurfaceModel(props.card, {
+    face: isFaceDown() ? 'back' : 'front',
+    borderTone: props.side === 'top' ? 'enemy' : 'friendly',
+  }));
+
+  createEffect(() => {
+    cardVfxRegistry.reconcilePersistent(props.card.id, props.card.textDisabled ? [{
+      id: `${props.card.id}-glitch`,
+      sourceId: props.card.id,
+      kind: 'glitch',
+      intensity: 1,
+      priority: 5,
+    }] : []);
+  });
 
   // Deterministic tilt per id so cards don't jitter between re-renders.
   const tilt = (): string => {
@@ -110,7 +127,9 @@ export const BoardCard = (props: BoardCardProps) => {
       }}
       onClick={onClick}
     >
-      <CardRenderer card={props.card} vfxRegistry={cardVfxRegistry} />
+      <CardVfxStack cardId={props.card.id} registry={cardVfxRegistry}>
+        <CardRenderer model={surfaceModel()} />
+      </CardVfxStack>
     </div>
   );
 };
