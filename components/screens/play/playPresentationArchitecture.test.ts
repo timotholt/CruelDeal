@@ -26,10 +26,13 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('renders stable vertical LaneColumn ownership instead of three sibling lane rows', () => {
     const playBoard = source('./PlayBoard.tsx');
-    expect(playBoard).toContain('<LaneColumn');
-    expect(playBoard).not.toContain('setupLaneMaps');
-    expect(playBoard).not.toContain('enemy-row');
-    expect(playBoard).not.toContain('player-row');
+    const laneGrid = source('./LaneGrid.tsx');
+    expect(playBoard).toContain('<LaneGrid');
+    expect(laneGrid).toContain('<For each={props.laneIds}>');
+    expect(laneGrid).toContain('<LaneColumn');
+    expect(laneGrid).not.toContain('setupLaneMaps');
+    expect(laneGrid).not.toContain('enemy-row');
+    expect(laneGrid).not.toContain('player-row');
   });
 
   it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
@@ -82,6 +85,26 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(handPresentation).toContain('playCardLayoutSlide(oldRects, cardRefs)');
   });
 
+  it('composes the stable header and action bar instead of owning their markup', () => {
+    const playBoard = source('./PlayBoard.tsx');
+    const viewModel = source('./usePlayBoardViewModel.ts');
+    expect(playBoard).toContain('<MatchHud');
+    expect(playBoard).toContain('<MatchActionBar');
+    expect(playBoard).toContain('<LaneGrid');
+    expect(playBoard).toContain('<PlayOverlays');
+    expect(playBoard).not.toContain('<header class="hud-top opponent-header match-hud">');
+    expect(playBoard).not.toContain('<div class="action-bar">');
+    expect(playBoard).not.toContain('<div class="lane-track"');
+    expect(playBoard).not.toContain('<ReplayDrawer');
+    expect(playBoard).not.toContain('<ZoomInspector');
+    expect(playBoard).not.toContain('<PileViewer');
+    expect(playBoard).toContain('usePlayBoardViewModel({');
+    expect(playBoard).not.toContain('getHandForSeat(');
+    expect(playBoard).not.toContain('getLaneCardsForSeat(');
+    expect(viewModel).toContain('getHandForSeat(');
+    expect(viewModel).toContain('getLaneCardsForSeat(');
+  });
+
   it('publishes committed turn blocks to one director-owned presentation queue', () => {
     const matchContext = source('../../../contexts/MatchSessionContext.tsx');
     const uiContext = source('../../../contexts/PlayUiContext.tsx');
@@ -99,19 +122,21 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('keeps opponent telemetry in one fixed header row with visible zone anchors', () => {
     const playBoard = source('./PlayBoard.tsx');
+    const matchHud = source('./MatchHud.tsx');
     const css = source('../../../src/styles/playgame.css');
-    expect(playBoard).toContain('match-hud__opponent-resources');
-    expect(playBoard).not.toContain('match-hud__identity-row');
-    expect(playBoard).not.toContain('match-hud__resource-row');
-    expect(playBoard).toContain('anchorRef={bindZoneRef(`${remoteSeat}:hand`)}');
-    expect(playBoard).toContain('anchorRef={bindZoneRef(`${remoteSeat}:deck`)}');
-    expect(playBoard).not.toContain('hand-anchor--remote');
-    expect(playBoard).not.toContain('deck-anchor--remote');
+    expect(playBoard).toContain('<MatchHud');
+    expect(matchHud).toContain('match-hud__opponent-resources');
+    expect(matchHud).not.toContain('match-hud__identity-row');
+    expect(matchHud).not.toContain('match-hud__resource-row');
+    expect(matchHud).toContain('anchorRef={props.remoteHandAnchorRef}');
+    expect(matchHud).toContain('anchorRef={props.remoteDeckAnchorRef}');
+    expect(matchHud).not.toContain('hand-anchor--remote');
+    expect(matchHud).not.toContain('deck-anchor--remote');
     const matchHudRule = css.match(/\.play-frame > \.match-hud\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
     expect(matchHudRule).toContain('grid-template-columns: var(--match-hud-control) minmax(0, 1fr) var(--match-hud-control)');
     expect(matchHudRule).toContain('grid-template-rows: var(--match-hud-control)');
     expect(matchHudRule).toContain('justify-content: stretch');
-    const resources = playBoard.match(/<div class="match-hud__opponent-resources"[\s\S]*?<\/div>\n\s*<\/header>/)?.[0] ?? '';
+    const resources = matchHud.match(/<div class="match-hud__opponent-resources"[\s\S]*?<\/div>\n\s*<\/header>/)?.[0] ?? '';
     expect(resources.indexOf('match-hud__resource--deck')).toBeLessThan(resources.indexOf('match-hud__resource--hand'));
     expect(resources.indexOf('match-hud__resource--hand')).toBeLessThan(resources.indexOf('match-hud__resource--energy'));
     expect(css).toContain('grid-template-columns: repeat(3, 62px)');
@@ -133,18 +158,20 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('orders the player footer as retreat, turn, deck, undo-energy, end turn', () => {
     const playBoard = source('./PlayBoard.tsx');
-    expect(playBoard).toContain('count={localDeckSize()}');
-    expect(playBoard).toContain('label="Your deck"');
-    expect(playBoard).toContain('bindZoneRef(`${localSeat}:deck`)(element)');
-    expect(playBoard).not.toContain('class="deck-anchor"');
-    const actionBar = playBoard.match(/<div class="action-bar">([\s\S]*?)<\/div>\n\s*<\/footer>/)?.[1] ?? '';
+    const matchActionBar = source('./MatchActionBar.tsx');
+    const viewModel = source('./usePlayBoardViewModel.ts');
+    expect(playBoard).toContain('deckSize={localDeckSize()}');
+    expect(matchActionBar).toContain('label="Your deck"');
+    expect(playBoard).toContain('deckAnchorRef={bindZoneRef(`${localSeat}:deck`)}');
+    expect(matchActionBar).not.toContain('class="deck-anchor"');
+    const actionBar = matchActionBar.match(/<div class="action-bar">([\s\S]*?)<\/div>/)?.[1] ?? '';
     expect(actionBar.indexOf('retreat-btn')).toBeLessThan(actionBar.indexOf('<TurnOrb'));
     expect(actionBar.indexOf('<TurnOrb')).toBeLessThan(actionBar.indexOf('<MiniDeckIndicator'));
     expect(actionBar.indexOf('<MiniDeckIndicator')).toBeLessThan(actionBar.indexOf('energy-button'));
     expect(actionBar.indexOf('energy-button')).toBeLessThan(actionBar.indexOf('end-turn'));
-    expect(actionBar).toContain('`CLOSE (${recordedOutcomeLabel()})`');
-    expect(playBoard).toContain("result.winner === remoteSeat ? 'LOSE'");
-    expect(playBoard).toContain("recordedOutcomeLabel() === 'LOSE'");
+    expect(actionBar).toContain('`CLOSE (${props.outcomeLabel})`');
+    expect(viewModel).toContain("result.winner === options.remoteSeat) return 'LOSE'");
+    expect(playBoard).toContain('outcomeLabel={recordedOutcomeLabel()}');
     expect(actionBar).not.toContain('RETREAT (');
   });
 

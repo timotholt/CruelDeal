@@ -2,8 +2,8 @@
 
 ## Status
 
-Phases 1.5, 2, 3a, and 3b are implemented and exit-proven. Phase 4 is the next
-active phase.
+Phases 1.5, 2, 3a, 3b, and 4 are implemented and exit-proven. Phase 5 is the
+next active phase.
 
 This plan covers the active `/play` card-game surface. It is intentionally not an implementation change.
 
@@ -17,9 +17,9 @@ Final Phase 1.5 evidence is recorded in
 `docs/agent-checkpoints/phase1.5-exit.md`. Final Phase 2 evidence is recorded in
 `docs/agent-checkpoints/phase2-p2c-ownership-completion.md`. Final Phase 3a
 evidence is recorded in `docs/agent-checkpoints/phase3a-exit.md`. Final Phase
-3b evidence is recorded in `docs/agent-checkpoints/phase3b-exit.md`. The next
-implementation phase is Phase 4: decompose `PlayBoard` while preserving the
-accepted animation choreography.
+3b evidence is recorded in `docs/agent-checkpoints/phase3b-exit.md`. Final
+Phase 4 evidence is recorded in `docs/agent-checkpoints/phase4-exit.md`. The
+next implementation phase is Phase 5: component and layout refactors.
 
 ## Cost Model
 
@@ -823,7 +823,7 @@ Phase 2 is a consumer migration. It may expose projected committed events, react
 - **[BUILD AFTER]** `PlayScriptCtx` has no engine setter/dispatch/cursor/DOM registry.
 - **[BUILD AFTER]** Opening and turn presentation consume the same committed-frame model.
 
-## Phase 4: Decompose `PlayBoard`
+## Phase 4: Decompose `PlayBoard` — COMPLETE
 
 ### Objective
 
@@ -1125,7 +1125,7 @@ npm run lint
 9. **[BUILD AFTER]** Phase 2 provider split and facade removal.
 10. **[BUILD AFTER — COMPLETE]** Phase 3a animator frame conversion and DOM-ref relocation.
 11. **[BUILD AFTER — COMPLETE]** Phase 3b opening separation, script removal, and slicing removal.
-12. **[BUILD AFTER]** Phase 4 `PlayBoard` decomposition.
+12. **[BUILD AFTER — COMPLETE]** Phase 4 `PlayBoard` decomposition.
 13. **[BUILD LAST]** Phase 5 shared card rendering.
 14. **[BUILD LAST]** Phase 5 board sizing.
 15. **[BUILD LAST]** Phase 5 declarative lane maps.
