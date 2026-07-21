@@ -15,8 +15,10 @@ import {
 } from './PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
-import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
-import { MatchSession } from '@/services/playgame/runtime/matchSession';
+import type { MatchClient } from '@/services/playgame/client/matchClient';
+import type { ParticipantController } from '@/services/playgame/runtime/contracts';
+import type { MatchAuthorityTestDriver } from '@/services/playgame/testing/authorityTestDriver';
+import { MATCH_AUTHORITY_TEST_DRIVERS } from '@/services/playgame/testing/authorityRegistry';
 import type {
   SeatCardToken,
   SeatTransactionTimeline,
@@ -31,30 +33,25 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function debugSession(seed = 'split-provider-1') {
-  return MatchSession.fromBootstrap(buildDebugMatchBootstrap(
-    DEBUG_DECKS[0],
-    DEBUG_DECKS[7],
-    seed,
-  ));
-}
-
-function remoteHumanSession(seed: string) {
+function debugBootstrap(
+  seed = 'split-provider-1',
+  opponentController: ParticipantController = 'LOCAL_AI',
+) {
   const bootstrap = buildDebugMatchBootstrap(
     DEBUG_DECKS[0],
     DEBUG_DECKS[7],
     seed,
   );
-  return MatchSession.fromBootstrap({
+  return {
     ...bootstrap,
     participants: {
       ...bootstrap.participants,
       P1: {
         ...bootstrap.participants.P1,
-        controller: 'REMOTE_PLAYER',
+        controller: opponentController,
       },
     },
-  });
+  };
 }
 
 interface Harness {
@@ -62,7 +59,7 @@ interface Harness {
   ui: PlayUiContextValue;
 }
 
-function mountSession(session: MatchSession): Harness {
+function mountSession(client: MatchClient): Harness {
   let harness!: Harness;
   const Probe = () => {
     const match = useMatchSession();
@@ -74,7 +71,7 @@ function mountSession(session: MatchSession): Harness {
   document.body.append(host);
   disposers.push(render(
     () => (
-      <PlayProviders client={new LocalMatchSessionAdapter(session)}>
+      <PlayProviders client={client}>
         <Probe />
       </PlayProviders>
     ),
@@ -83,8 +80,14 @@ function mountSession(session: MatchSession): Harness {
   return harness;
 }
 
-function mountHarness(seed = 'split-provider-1'): Harness {
-  return mountSession(debugSession(seed));
+async function mountHarness(
+  driver: MatchAuthorityTestDriver,
+  seed = 'split-provider-1',
+): Promise<Harness> {
+  return mountSession(await driver.createClient(
+    debugBootstrap(seed),
+    { developerAccess: true },
+  ));
 }
 
 function firstPlayableCard(harness: Harness): SeatCardToken {
@@ -132,20 +135,36 @@ function firstLocationRevealed(harness: Harness): boolean {
   return harness.ui.presentedState().lanes[0]?.location?.face === 'FACE_UP';
 }
 
-describe('split play providers', () => {
+for (const authorityDriver of MATCH_AUTHORITY_TEST_DRIVERS) {
+describe(`${authorityDriver.id} split play providers`, () => {
   it('accepts a private turn lock without waiting for presentation', async () => {
-    const harness = mountSession(remoteHumanSession('provider-private-lock'));
+    const harness = mountSession(await authorityDriver.createClient(
+      debugBootstrap(
+        'provider-private-lock',
+        'REMOTE_PLAYER',
+      ),
+      { developerAccess: true },
+    ));
     await presentOpeningImmediately(harness);
-    const waitingForSeat = vi.fn();
+    const replayFrameCount = harness.match.debug!.replay().steps.length;
+    const submitted = harness.match.actions.endTurn();
+    expect(harness.match.intentActivity()).toEqual({
+      kind: 'PROCESSING_INTENT',
+      intent: 'END_TURN',
+    });
+    expect(harness.match.debug!.replay().steps).toHaveLength(replayFrameCount);
 
-    await expect(harness.match.actions.endTurn(waitingForSeat))
-      .resolves.toBe(true);
-    expect(waitingForSeat).toHaveBeenCalledOnce();
-    expect(waitingForSeat).toHaveBeenCalledWith(harness.match.remoteSeat);
+    await expect(submitted).resolves.toBe(true);
+    expect(harness.match.intentActivity()).toEqual({
+      kind: 'WAITING_FOR_PLAYER',
+      intent: 'END_TURN',
+      seat: harness.match.remoteSeat,
+    });
+    expect(harness.match.debug!.replay().steps).toHaveLength(replayFrameCount);
   });
 
   it('publishes committed transactions after the authoritative snapshot', async () => {
-    const harness = mountHarness('provider-transaction-publication');
+    const harness = await mountHarness(authorityDriver, 'provider-transaction-publication');
     const observed: Array<{
       timeline: SeatTransactionTimeline;
       snapshotRevision: number;
@@ -175,25 +194,22 @@ describe('split play providers', () => {
   });
 
   it('stops publishing to context subscribers after disposal', async () => {
-    const session = debugSession('provider-publication-disposal');
-    const harness = mountSession(session);
+    const client = await authorityDriver.createClient(
+      debugBootstrap('provider-publication-disposal'),
+      { developerAccess: true },
+    );
+    const harness = mountSession(client);
     const subscriber = vi.fn();
     harness.match.subscribeCommittedTransactions(subscriber);
 
     disposers.pop()?.();
-    await session.runtime.submitIntent({
-      matchId: session.bootstrap.matchId,
-      seat: session.bootstrap.viewerSeat,
-      intentId: 'commit-after-provider-disposal',
-      expectedRevision: session.runtime.revision(),
-      intent: { type: 'CONCEDE' },
-    });
+    await client.endTurn();
 
     expect(subscriber).not.toHaveBeenCalled();
   });
 
-  it('owns overlays per mount and resets them on remount', () => {
-    const first = mountHarness('provider-overlay-lifetime');
+  it('owns overlays per mount and resets them on remount', async () => {
+    const first = await mountHarness(authorityDriver, 'provider-overlay-lifetime');
     first.ui.actions.setOpenMenuSeat('P0');
     first.ui.actions.setOpenPile({ owner: 'P0', zone: 'DESTROYED' });
     first.ui.actions.setReplayOpen(true);
@@ -207,7 +223,7 @@ describe('split play providers', () => {
     disposers.pop()?.();
     document.body.replaceChildren();
 
-    const remounted = mountHarness('provider-overlay-lifetime');
+    const remounted = await mountHarness(authorityDriver, 'provider-overlay-lifetime');
     expect(remounted.ui.openMenuSeat()).toBeNull();
     expect(remounted.ui.openPile()).toBeNull();
     expect(remounted.ui.replayOpen()).toBe(false);
@@ -219,7 +235,7 @@ describe('split play providers', () => {
   });
 
   it('mounts projected setup and presents the committed opening', async () => {
-    const harness = mountHarness('provider-opening-boundary');
+    const harness = await mountHarness(authorityDriver, 'provider-opening-boundary');
     const setup = harness.ui.presentedState();
     expect(setup.lanes.map(lane => lane.id)).toEqual([0, 1, 2]);
     expect(setup.hands[harness.match.localSeat]).toHaveLength(0);
@@ -256,9 +272,13 @@ describe('split play providers', () => {
     };
     const host = document.createElement('div');
     document.body.append(host);
+    const client = await authorityDriver.createClient(
+      debugBootstrap('provider-reactivity'),
+      { developerAccess: true },
+    );
     disposers.push(render(
       () => (
-        <PlayProviders client={new LocalMatchSessionAdapter(debugSession('provider-reactivity'))}>
+        <PlayProviders client={client}>
           <Probe />
         </PlayProviders>
       ),
@@ -292,7 +312,7 @@ describe('split play providers', () => {
   });
 
   it('keeps a private staged card when the authoritative snapshot refreshes', async () => {
-    const harness = mountHarness('provider-private-plan');
+    const harness = await mountHarness(authorityDriver, 'provider-private-plan');
     await presentOpeningImmediately(harness);
     const token = firstPlayableCard(harness);
     await harness.match.actions.stageCardInLane(token, 0);
@@ -303,7 +323,7 @@ describe('split play providers', () => {
   });
 
   it('locks staged cards atomically and reveals them in projected order', async () => {
-    const harness = mountHarness('provider-lock');
+    const harness = await mountHarness(authorityDriver, 'provider-lock');
     const observations: Array<{
       type: string;
       token: string | null;
@@ -378,7 +398,7 @@ describe('split play providers', () => {
   });
 
   it('finishes opening without card or zone DOM anchors', async () => {
-    const harness = mountHarness('provider-anchorless-opening');
+    const harness = await mountHarness(authorityDriver, 'provider-anchorless-opening');
     const presented: Array<{
       type: string;
       handSize: number;
@@ -405,3 +425,4 @@ describe('split play providers', () => {
     expect(harness.ui.ui.handReservations).toEqual([]);
   });
 });
+}

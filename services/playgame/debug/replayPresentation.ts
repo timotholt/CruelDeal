@@ -198,7 +198,6 @@ export function describeReplayStep(
   const event = step.event;
   const cardName = (id: CardId): string => names.cardName(step.state, id);
   const cardPlayer = (id: CardId): string => actors.playerLabel(names.cardOwner(step.state, id));
-  const cardOwner = (id: CardId): string => names.cardOwner(step.state, id) ?? actor;
   const player = (owner: string | undefined): string => actors.playerLabel(owner);
   const locationName = (id: LocationCardInstanceId): string => names.locationName(step.state, id);
   const cardSlot = (cardId: CardId, lane: number, owner: string): string => {
@@ -245,13 +244,13 @@ export function describeReplayStep(
       break;
     case 'CARD_POWER_CHANGED':
       summary = event.mutation.kind === 'ADD'
-        ? `${cardName(event.cardId)} ${signedChange(event.mutation.delta, 'gained', 'lost')} power.`
+        ? `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} ${signedChange(event.mutation.delta, 'gained', 'lost')} power.`
         : event.mutation.kind === 'SET'
-          ? `${cardName(event.cardId)}'s power was set to ${event.mutation.value}.`
-          : `${cardName(event.cardId)}'s permanent power was reset.`;
+          ? `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} had its power set to ${event.mutation.value}.`
+          : `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} had its permanent power reset.`;
       break;
     case 'CARD_COST_CHANGED':
-      summary = `${cardOwner(event.cardId)} - ${cardName(event.cardId)}'s cost ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
+      summary = `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} cost ${signedChange(event.delta, 'increased by', 'decreased by')}.`;
       break;
     case 'CARD_DESTROYED':
       summary = `${cardPlayer(event.cardId)}'s ${cardName(event.cardId)} was destroyed.`;

@@ -1,7 +1,7 @@
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import type { MatchPerformanceProfile } from '@/services/playgame/runtime/performanceTelemetry';
-import type { SeatReplayStep } from '@/services/playgame/runtime/projection';
+import type { DebugReplayStep } from '@/services/playgame/debug/replayContracts';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 
 interface ReplayDrawerProps {
@@ -9,9 +9,9 @@ interface ReplayDrawerProps {
   followingLive: boolean;
   cursor: number;
   stepCount: number;
-  steps: readonly SeatReplayStep[];
+  steps: readonly DebugReplayStep[];
   performanceProfile: MatchPerformanceProfile;
-  selectedStep: SeatReplayStep | null;
+  selectedStep: DebugReplayStep | null;
   seatNames: Readonly<Record<Seat, string>>;
   clientStatus: string;
   onCursorChange: (cursor: number) => void;
@@ -23,22 +23,12 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   let drawerEl: HTMLDivElement | undefined;
   let stopDrag: (() => void) | null = null;
   const [position, setPosition] = createSignal<{ x: number; y: number } | null>(null);
-  const selectedDescription = createMemo(() => {
-    const step = props.selectedStep;
-    if (!step?.event) return { actor: 'Game', summary: 'Initial state' };
-    const owner = step.event.data.owner;
-    return {
-      actor: owner === 'P0' || owner === 'P1'
-        ? props.seatNames[owner]
-        : 'Game',
-      summary: step.event.type
-        .toLowerCase()
-        .replaceAll('_', ' ')
-        .replace(/^\w/, letter => letter.toUpperCase()),
-    };
-  });
+  const selectedDescription = createMemo(() => (
+    props.selectedStep?.description
+      ?? { actor: 'Game', summary: 'Initial game state.', cause: null }
+  ));
   const eventJson = createMemo(() =>
-    JSON.stringify(props.selectedStep?.event ?? null, null, 2));
+    props.selectedStep?.annotatedEventJson ?? '');
   const selectedTiming = createMemo(() => {
     const step = props.selectedStep;
     if (!step?.transactionId) return null;

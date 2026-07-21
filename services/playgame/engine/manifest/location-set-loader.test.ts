@@ -69,7 +69,7 @@ describe('location-set loader', () => {
     expect(locations.map((location) => location.defId)).toEqual(EXPECTED_LOCATION_ORDER);
     expect(loaded.disabledLocationIds).toEqual([]);
     expect(createHash('sha256').update(normalized).digest('hex')).toBe(
-      'f20210c929ad488c4f052a0ebda7c480d56bf3dd22dfcb91db073901a126d745',
+      '1ef559b83782ea15609805d1559f436b7e859f90ec79fe172e0a90cb9cb4271b',
     );
   });
 
@@ -94,6 +94,15 @@ describe('location-set loader', () => {
       .sort((a, b) => a - b);
 
     expect(poolOrders).toEqual(Array.from({ length: EXPECTED_LOCATION_ORDER.length }, (_, index) => index));
+  });
+
+  it('omits reveal timing from copy because location reveal already communicates it', () => {
+    const locations = Object.values(loadLocationsFromSets(['core-v1']).locations);
+    for (const location of locations) {
+      expect(location.cosmetic.description).not.toMatch(/^when revealed\b/i);
+    }
+    expect(locations.find(location => location.defId === 'chip-tune')?.cosmetic.description)
+      .toBe("Reduce the cost of a random card in each player's hand by 1.");
   });
 
   it.each([

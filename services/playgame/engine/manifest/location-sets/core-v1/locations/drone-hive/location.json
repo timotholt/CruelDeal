@@ -48,7 +48,7 @@
   },
   "cosmetic": {
     "displayName": "DRONE HIVE",
-    "description": "When revealed, add a 1-Power Drone here for each player.",
+    "description": "Add a 1-Power Drone here for each player.",
     "accent": "#adb5bd",
     "art": {
       "map": {

@@ -13,7 +13,7 @@ import { createMemo } from 'solid-js';
 import { useVfx } from '../../game/VfxHost';
 import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { CardFace } from './CardFace';
+import { CardRenderer } from './rendering/CardRenderer';
 
 interface HandCardProps {
   card: ResolvedCard;
@@ -65,7 +65,7 @@ export const HandCard = (props: HandCardProps) => {
           cursor: isInspectable() ? 'pointer' : 'default',
         }}
       >
-        <CardFace card={props.card} variant="play" vfxRegistry={cardVfxRegistry} />
+        <CardRenderer card={props.card} vfxRegistry={cardVfxRegistry} />
       </div>
     </div>
   );

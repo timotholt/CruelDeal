@@ -12,6 +12,7 @@
     "services/playgame/engine/**/*.ts",
     "services/playgame/protocol/**/*.ts",
     "services/playgame/runtime/**/*.ts",
+    "services/playgame/testing/**/*.ts",
     "services/playgame/view.ts",
     "protocol/**/*.ts"
   ],

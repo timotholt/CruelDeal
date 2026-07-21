@@ -48,7 +48,7 @@
   },
   "cosmetic": {
     "displayName": "CHIP TUNE",
-    "description": "When revealed, reduce a random card in each player hand by 1 Cost.",
+    "description": "Reduce the cost of a random card in each player's hand by 1.",
     "accent": "#59ffa8",
     "art": {
       "map": {

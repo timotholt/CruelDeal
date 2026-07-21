@@ -48,7 +48,7 @@
   },
   "cosmetic": {
     "displayName": "CRYO-STORAGE",
-    "description": "When revealed, a random card in each player hand costs 1 more.",
+    "description": "A random card in each player's hand costs 1 more.",
     "accent": "#31d28a",
     "art": {
       "map": {

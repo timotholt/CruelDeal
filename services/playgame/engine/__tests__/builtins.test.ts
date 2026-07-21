@@ -6,8 +6,12 @@ import { getCardState } from '../projections/cardRuntime';
  */
 
 import { describe, it, expect } from 'vitest';
-import { executeEffectForTest } from '../testkit/rulesExecution';
+import {
+  executeEffectForTest,
+} from '../testkit/rulesExecution';
+import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { getCardPower } from '../projections/power';
+import { getCardCost } from '../projections/cost';
 import { getStoredCardPowerDelta } from '../powerLedger';
 import { EMPTY_CARD_LIFECYCLE, EMPTY_TRACKED_VARIABLES } from '../types/state';
 import { createRng } from '../rng';
@@ -16,6 +20,8 @@ import type { CardId, LaneId, Owner } from '../types/ids';
 import type { CardDef, LocationCardDef, Manifest } from '../manifest/types';
 import type { EffectCtx } from '../effects/rulesInterpreter';
 import type { EffectExpr } from '../types/ability';
+import { asFrame } from '../types/timeline';
+import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import {
   emptyTestMatchState,
   replaceTestCardRecords,
@@ -35,6 +41,25 @@ function mkDef(defId: string, basePower: number, cost: number): CardDef {
     cardType: 'character',
     abilities: {},
     cosmetic: { displayName: defId, flavorText: '', rulesText: '', art: { portrait: { path: '' } } },
+  };
+}
+
+function mkSpellDef(defId: string, cost: number): CardDef {
+  return {
+    defId,
+    version: 1,
+    name: defId,
+    cost,
+    acquisitionPool: 'tbd',
+    traits: [],
+    cardType: 'spell',
+    abilities: {},
+    cosmetic: {
+      displayName: defId,
+      flavorText: '',
+      rulesText: '',
+      art: { portrait: { path: '' } },
+    },
   };
 }
 
@@ -145,6 +170,154 @@ function runBuiltin(
   const ctx = makeCtx(state, manifest, selfId, selfOwner, selfLane);
   return executeEffectForTest(state, effect, ctx, manifest);
 }
+
+function consumePending(
+  state: MatchState,
+  manifest: Manifest,
+  pendingEffectId: MatchState['pendingEffects'][number]['id'],
+) {
+  const pending = state.pendingEffects.find(effect => effect.id === pendingEffectId)!;
+  return executeRulesCommands(state, [{
+    type: 'CONSUME_PENDING_EFFECT',
+    pendingEffectId,
+    mode: 'EXECUTE',
+    cause: {
+      sourceId: pending.sourceId,
+      effectKind: 'SYSTEM',
+      reason: 'TEST_PENDING_EFFECT_DUE',
+    },
+  }], { rng: createRng(`consume:${pendingEffectId}`) }, manifest);
+}
+
+// ---- COPY_CARDS_TO_ZONE ---------------------------------------------------
+
+describe('COPY_CARDS_TO_ZONE', () => {
+  it('drives Illegal Clone through its authored on-destroyed definition', () => {
+    const source = mkCard('illegal-clone-source', 'illegal-clone', 'P0', 'LANE', 0, {
+      powerLedger: [
+        {
+          id: 'illegal-clone:buff',
+          frame: asFrame(1),
+          turn: 1,
+          mutation: { kind: 'ADD', delta: 3 },
+          cause: { sourceId: 'buff-source' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST_BUFF' },
+        },
+        {
+          id: 'illegal-clone:penalty',
+          frame: asFrame(2),
+          turn: 2,
+          mutation: { kind: 'ADD', delta: -1 },
+          cause: { sourceId: 'penalty-source' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST_PENALTY' },
+        },
+      ],
+    });
+    const state = buildState({ P0: [source], P1: [] });
+    const result = executeRulesCommands(state, [{
+      type: 'DESTROY_CARD',
+      cardId: source.id,
+      cause: { sourceId: 'destroy-source' as CardId, effectKind: 'SYSTEM', reason: 'TEST_DESTROY' },
+    }], { rng: createRng('authored-illegal-clone') }, BOOTSTRAP_MANIFEST);
+    const copyId = result.state.hand.P0[0]!;
+
+    expect(getCardState(result.state, source.id)?.zone).toBe('DESTROYED');
+    expect(getCardState(result.state, copyId)).toMatchObject({
+      defId: 'illegal-clone',
+      spawnSource: { kind: 'COPY_OF', sourceCardId: source.id },
+    });
+    expect(getCardState(result.state, copyId)?.powerLedger.map(entry => entry.mutation))
+      .toEqual([{ kind: 'ADD', delta: 3 }, { kind: 'ADD', delta: -1 }]);
+    expect(getCardCost(result.state, copyId, BOOTSTRAP_MANIFEST)).toBe(0);
+  });
+
+  it('copies active buffs, penalties, tags, counters, and text onto a fresh identity', () => {
+    const source = mkCard('source', 'cloneable', 'P0', 'LANE', 0, {
+      lifecycle: {
+        framePlayed: asFrame(4),
+        turnPlayed: 2,
+        lanePlayed: 0,
+        frameLastMoved: asFrame(7),
+        turnLastMoved: 3,
+      },
+      powerLedger: [
+        {
+          id: 'power:buff',
+          frame: asFrame(5),
+          turn: 2,
+          mutation: { kind: 'ADD', delta: 4 },
+          cause: { sourceId: 'buff-source' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST_BUFF' },
+        },
+        {
+          id: 'power:penalty',
+          frame: asFrame(6),
+          turn: 2,
+          mutation: { kind: 'ADD', delta: -2 },
+          cause: { sourceId: 'penalty-source' as CardId, effectKind: 'ON_REVEAL', reason: 'TEST_PENALTY' },
+        },
+      ],
+      costDelta: 2,
+      tags: [{ kind: 'DESTROY_IMMUNE' }],
+      textOverride: {
+        kind: 'BLANKED_TEXT',
+        abilities: {},
+        rulesText: '',
+        copiedFrom: null,
+      },
+      counters: { scars: 2 },
+    });
+    const manifest = buildManifest([mkDef('cloneable', 3, 1)]);
+    const state = buildState({ P0: [source], P1: [] });
+    const effect: EffectExpr = {
+      kind: 'COPY_CARDS_TO_ZONE',
+      target: { kind: 'SELF' },
+      owner: 'SELF_OWNER',
+      destination: { kind: 'HAND' },
+      setCost: { kind: 'LIT', n: 0 },
+    };
+
+    const result = executeEffectForTest(
+      state,
+      effect,
+      makeCtx(state, manifest, source.id, 'P0'),
+      manifest,
+    );
+    const copyId = result.state.hand.P0[0]!;
+    const copy = getCardState(result.state, copyId)!;
+
+    expect(copyId).not.toBe(source.id);
+    expect(copy.spawnSource).toEqual({ kind: 'COPY_OF', sourceCardId: source.id });
+    expect(copy.powerLedger.map(entry => entry.mutation)).toEqual([
+      { kind: 'ADD', delta: 4 },
+      { kind: 'ADD', delta: -2 },
+    ]);
+    expect(getStoredCardPowerDelta(result.state, copyId, manifest)).toBe(2);
+    expect(copy.tags).toEqual([{ kind: 'DESTROY_IMMUNE' }]);
+    expect(copy.counters).toEqual({ scars: 2 });
+    expect(copy.textOverride).toEqual(source.textOverride);
+    expect(copy.lifecycle).toEqual({});
+    expect(getCardCost(result.state, copyId, manifest)).toBe(0);
+    expect(result.events.every(event => !(
+      event.type === 'CARD_COST_CHANGED'
+      && event.cardId === copyId
+      && event.delta > 0
+    ))).toBe(true);
+  });
+
+  it('copies the permanent Cost delta when no final Cost override is authored', () => {
+    const source = mkCard('source', 'cloneable', 'P0', 'LANE', 0, { costDelta: -1 });
+    const manifest = buildManifest([mkDef('cloneable', 3, 3)]);
+    const state = buildState({ P0: [source], P1: [] });
+    const result = executeEffectForTest(state, {
+      kind: 'COPY_CARDS_TO_ZONE',
+      target: { kind: 'SELF' },
+      owner: 'SELF_OWNER',
+      destination: { kind: 'HAND' },
+    }, makeCtx(state, manifest, source.id, 'P0'), manifest);
+    const copyId = result.state.hand.P0[0]!;
+
+    expect(getCardState(result.state, copyId)?.costDelta).toBe(-1);
+    expect(getCardCost(result.state, copyId, manifest)).toBe(2);
+  });
+});
 
 // ---- POWER_TO_DESTROYER ----------------------------------------------------
 
@@ -262,11 +435,9 @@ describe('CALL_BUILTIN: MOVE_LOWEST_POWER_ENEMY_TO_OTHER_LANE', () => {
     const self = mkCard('self', 'mover', 'P0', 'LANE', 0);
     const spell = mkCard('spell', 'spell', 'P1', 'LANE', 0, { revealed: true });
     const operative = mkCard('operative', 'operative', 'P1', 'LANE', 0);
-    const { basePower: _basePower, ...spellBase } = mkDef('spell', 0, 1);
-    const spellDef: CardDef = { ...spellBase, cardType: 'spell' };
     const manifest = buildManifest([
       mkDef('mover', 2, 2),
-      spellDef,
+      mkSpellDef('spell', 1),
       mkDef('operative', 3, 2),
     ]);
     const state = buildState({ P0: [self], P1: [spell, operative] });
@@ -355,6 +526,87 @@ describe('CALL_BUILTIN: ADD_DISCARDED_CARD_TO_HAND', () => {
     const state = buildState({ P0: [self], P1: [] });
     const { events } = runBuiltin('ADD_DISCARDED_CARD_TO_HAND', {}, state, manifest, 'self' as CardId, 'P0', 0);
     expect(events).toHaveLength(0);
+  });
+});
+
+// ---- ADD_DISCOUNTED_CARD_TO_HAND ------------------------------------------
+
+describe('CALL_BUILTIN: ADD_DISCOUNTED_CARD_TO_HAND', () => {
+  it('restores only the generated card when its temporary discount expires', () => {
+    const self = mkCard('self', 'source', 'P0', 'LANE', 0);
+    const firstBystander = mkCard('hand-1', 'cost3', 'P0', 'HAND', null);
+    const secondBystander = mkCard('hand-2', 'cost4', 'P0', 'HAND', null);
+    const manifest = buildManifest([
+      mkDef('source', 2, 2),
+      mkDef('cost2', 2, 2),
+      mkDef('cost3', 3, 3),
+      mkDef('cost4', 4, 4),
+    ]);
+    const state = buildState(
+      { P0: [self], P1: [] },
+      { P0: [firstBystander, secondBystander], P1: [] },
+    );
+    const result = runBuiltin(
+      'ADD_DISCOUNTED_CARD_TO_HAND',
+      { costDelta: -2 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+    );
+    const generatedId = result.state.hand.P0.find(id => (
+      id !== firstBystander.id && id !== secondBystander.id
+    ))!;
+    const generated = getCardState(result.state, generatedId)!;
+    const printedCost = manifest.cards[generated.defId]!.cost;
+    const pending = result.state.pendingEffects.find(effect => (
+      effect.sourceId === generatedId
+      && effect.when === 'END_OF_NEXT_TURN'
+    ))!;
+
+    expect(getCardCost(result.state, generatedId, manifest)).toBe(printedCost - 2);
+    expect(pending.effect).toMatchObject({
+      kind: 'ADJUST_COST',
+      target: { kind: 'SELF' },
+      delta: { kind: 'LIT', n: 2 },
+    });
+
+    const expired = consumePending(result.state, manifest, pending.id);
+    expect(getCardCost(expired.state, generatedId, manifest)).toBe(printedCost);
+    expect(getCardCost(expired.state, firstBystander.id, manifest)).toBe(3);
+    expect(getCardCost(expired.state, secondBystander.id, manifest)).toBe(4);
+    expect(expired.events.filter(event => event.type === 'CARD_COST_CHANGED'))
+      .toEqual([expect.objectContaining({ cardId: generatedId, delta: 2 })]);
+  });
+
+  it('still restores the generated identity after it leaves hand', () => {
+    const self = mkCard('self', 'source', 'P0', 'LANE', 0);
+    const manifest = buildManifest([
+      mkDef('source', 2, 2),
+      mkDef('generated', 3, 3),
+    ]);
+    const state = buildState({ P0: [self], P1: [] });
+    const result = runBuiltin(
+      'ADD_DISCOUNTED_CARD_TO_HAND',
+      { costDelta: -2 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+    );
+    const generatedId = result.state.hand.P0[0]!;
+    const pending = result.state.pendingEffects[0]!;
+    const moved = executeRulesCommands(result.state, [{
+      type: 'CHANGE_CARD_ZONE',
+      cardId: generatedId,
+      destination: { kind: 'LANE', lane: 1, revealed: true },
+      cause: { sourceId: self.id, effectKind: 'SYSTEM', reason: 'TEST_MOVE_DISCOUNTED_CARD' },
+    }], { rng: createRng('move-discounted-card') }, manifest);
+    const expired = consumePending(moved.state, manifest, pending.id);
+
+    expect(getCardState(expired.state, generatedId)?.zone).toBe('LANE');
+    expect(getCardCost(expired.state, generatedId, manifest))
+      .toBe(manifest.cards[getCardState(expired.state, generatedId)!.defId]!.cost);
   });
 });
 
@@ -454,6 +706,32 @@ describe('CALL_BUILTIN: OVERCLOCK_CHIP', () => {
     expect(getStoredCardPowerDelta(after, targetAfter.id, manifest)).toBe(5);
     // Should have a SCHEDULED pending effect for end-of-next-turn destruction
     expect(after.pendingEffects.some(pe => pe.kind === 'SCHEDULED' && pe.when === 'END_OF_NEXT_TURN')).toBe(true);
+  });
+
+  it('destroys only the selected boosted card when the delayed effect fires', () => {
+    const self = mkCard('self', 'a', 'P0', 'LANE', 0);
+    const selected = mkCard('selected', 'a', 'P0', 'LANE', 0);
+    const bystander = mkCard('bystander', 'a', 'P0', 'LANE', 0);
+    const manifest = buildManifest([mkDef('a', 3, 2)]);
+    const state = buildState({ P0: [self, selected, bystander], P1: [] });
+    const result = runBuiltin(
+      'OVERCLOCK_CHIP',
+      { delta: 5 },
+      state,
+      manifest,
+      self.id,
+      'P0',
+      0,
+    );
+    const pending = result.state.pendingEffects[0]!;
+    const selectedId = pending.sourceId as CardId;
+    const untouchedId = selectedId === selected.id ? bystander.id : selected.id;
+    const expired = consumePending(result.state, manifest, pending.id);
+
+    expect(getCardState(expired.state, selectedId)?.zone).toBe('DESTROYED');
+    expect(getCardState(expired.state, untouchedId)?.zone).toBe('LANE');
+    expect(expired.events.filter(event => event.type === 'CARD_DESTROYED'))
+      .toEqual([expect.objectContaining({ cardId: selectedId })]);
   });
 });
 

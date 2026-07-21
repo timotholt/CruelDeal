@@ -15,8 +15,9 @@ import {
 } from './PlayUiContext';
 import { DEBUG_DECKS } from '@/services/playgame/debug/debugDecks';
 import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBootstrap';
-import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
-import { MatchSession } from '@/services/playgame/runtime/matchSession';
+import type { MatchClient } from '@/services/playgame/client/matchClient';
+import type { MatchAuthorityTestDriver } from '@/services/playgame/testing/authorityTestDriver';
+import { MATCH_AUTHORITY_TEST_DRIVERS } from '@/services/playgame/testing/authorityRegistry';
 import type { SeatTransactionTimeline } from '@/services/playgame/runtime/projection';
 
 interface Harness {
@@ -49,15 +50,15 @@ function deferred(): Deferred {
   return { promise, resolve, reject };
 }
 
-function debugSession(seed: string): MatchSession {
-  return MatchSession.fromBootstrap(buildDebugMatchBootstrap(
+function debugBootstrap(seed: string) {
+  return buildDebugMatchBootstrap(
     DEBUG_DECKS[0],
     DEBUG_DECKS[7],
     seed,
-  ));
+  );
 }
 
-function mountSession(session: MatchSession): Harness {
+function mountSession(client: MatchClient): Harness {
   let harness!: Harness;
   const Probe = () => {
     const match = useMatchSession();
@@ -69,13 +70,20 @@ function mountSession(session: MatchSession): Harness {
   document.body.append(host);
   disposers.push(render(
     () => (
-      <PlayProviders client={new LocalMatchSessionAdapter(session)}>
+      <PlayProviders client={client}>
         <Probe />
       </PlayProviders>
     ),
     host,
   ));
   return harness;
+}
+
+async function createClient(
+  driver: MatchAuthorityTestDriver,
+  seed: string,
+): Promise<MatchClient> {
+  return driver.createClient(debugBootstrap(seed), { developerAccess: true });
 }
 
 async function waitForIdle(harness: Harness): Promise<void> {
@@ -86,13 +94,26 @@ async function waitForIdle(harness: Harness): Promise<void> {
 }
 
 async function commitTwoTurns(harness: Harness): Promise<void> {
-  await expect(harness.match.actions.endTurn()).resolves.toBe(true);
-  await expect(harness.match.actions.endTurn()).resolves.toBe(true);
+  const submitEndTurn = async (): Promise<void> => {
+    const submitted = harness.match.actions.endTurn();
+    if (vi.isFakeTimers()) {
+      vi.advanceTimersToNextFrame();
+      await vi.advanceTimersToNextTimerAsync();
+    }
+    await expect(submitted).resolves.toBe(true);
+  };
+
+  await submitEndTurn();
+  await submitEndTurn();
 }
 
-describe('PlayUi committed-transaction interleavings', () => {
+for (const authorityDriver of MATCH_AUTHORITY_TEST_DRIVERS) {
+describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () => {
   it('H1/H6 completely blocks transaction two and keeps the UI locked between queued runs', async () => {
-    const harness = mountSession(debugSession('interleave-complete-block'));
+    const harness = mountSession(await createClient(
+      authorityDriver,
+      'interleave-complete-block',
+    ));
     const gate = deferred();
     const order: string[] = [];
     const lockSamples: Array<{
@@ -157,7 +178,10 @@ describe('PlayUi committed-transaction interleavings', () => {
   });
 
   it('H3 snaps a failed transaction and continues the already-queued transaction', async () => {
-    const harness = mountSession(debugSession('interleave-failure-snap'));
+    const harness = mountSession(await createClient(
+      authorityDriver,
+      'interleave-failure-snap',
+    ));
     const gate = deferred();
     const transactions: string[] = [];
     let firstTransaction = '';
@@ -189,7 +213,10 @@ describe('PlayUi committed-transaction interleavings', () => {
 
   it('H3 times out a hung transaction, snaps it, and drains the next transaction', async () => {
     vi.useFakeTimers();
-    const harness = mountSession(debugSession('interleave-timeout-snap'));
+    const harness = mountSession(await createClient(
+      authorityDriver,
+      'interleave-timeout-snap',
+    ));
     const never = new Promise<void>(() => undefined);
     const transactions: string[] = [];
     let firstTransaction = '';
@@ -218,7 +245,10 @@ describe('PlayUi committed-transaction interleavings', () => {
   });
 
   it('H4 fast-forwards once, drains the queue, and ignores stale hook completion', async () => {
-    const harness = mountSession(debugSession('interleave-fast-forward'));
+    const harness = mountSession(await createClient(
+      authorityDriver,
+      'interleave-fast-forward',
+    ));
     const gate = deferred();
     const transactions: string[] = [];
     let blocked = false;
@@ -250,7 +280,10 @@ describe('PlayUi committed-transaction interleavings', () => {
   });
 
   it('H5 disposal invalidates a pending hook and remount adopts current authority', async () => {
-    const session = debugSession('interleave-dispose-remount');
+    const client = await createClient(
+      authorityDriver,
+      'interleave-dispose-remount',
+    );
     const gate = deferred();
     let match!: MatchSessionContextValue;
     let currentUi!: PlayUiContextValue;
@@ -269,7 +302,7 @@ describe('PlayUi committed-transaction interleavings', () => {
       const [uiMounted, setMounted] = createSignal(true);
       setUiMounted = setMounted;
       return (
-        <MatchSessionProvider client={new LocalMatchSessionAdapter(session)}>
+        <MatchSessionProvider client={client}>
           <MatchProbe />
           <Show when={uiMounted()}>
             <PlayUiProvider><UiProbe /></PlayUiProvider>
@@ -302,7 +335,10 @@ describe('PlayUi committed-transaction interleavings', () => {
   });
 
   it('H7 runtime and local-AI publication complete while presentation is blocked', async () => {
-    const harness = mountSession(debugSession('interleave-ai-independent'));
+    const harness = mountSession(await createClient(
+      authorityDriver,
+      'interleave-ai-independent',
+    ));
     const gate = deferred();
     const published: SeatTransactionTimeline[] = [];
     let hookStarted = false;
@@ -332,3 +368,4 @@ describe('PlayUi committed-transaction interleavings', () => {
     gate.resolve();
   });
 });
+}

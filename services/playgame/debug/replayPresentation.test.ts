@@ -103,7 +103,7 @@ describe('replay debug presentation', () => {
     const snapshot = structuredClone(event);
 
     expect(describeReplayStep(step(event), names, actors).summary)
-      .toBe('Bone Market gained 2 power - caused by Bone Market (P0).');
+      .toBe("Player 1's Bone Market gained 2 power - caused by Bone Market (P0).");
     expect(annotateReplayEventJson(step(event), names)).toContain(`// Bone Market (P0)`);
     expect(event).toEqual(snapshot);
   });
@@ -138,6 +138,14 @@ describe('replay debug presentation', () => {
       cardId,
       cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', reason: 'ROUND_CLEANUP' },
     }), names)).toBe('caused by game rules: Round cleanup');
+    expect(describeReplayStep(step({
+      type: 'CARD_BANISHED',
+      cardId,
+      cause: { sourceId: 'rules' as CardId, effectKind: 'SYSTEM', reason: 'ROUND_CLEANUP' },
+    }), names, actors)).toMatchObject({
+      actor: 'Player 1 (YOU)',
+      summary: "Player 1's Bone Market was banished - caused by game rules: Round cleanup.",
+    });
 
     const locationJson = annotateReplayEventJson(step({
       type: 'CARD_COST_CHANGED',
@@ -152,7 +160,7 @@ describe('replay debug presentation', () => {
       delta: -1,
       cause: { sourceId: location.id, effectKind: 'LOCATION', reason: 'TEST' },
     }), names, actors).summary).toBe(
-      `P0 - Bone Market's cost decreased by 1 - caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}.`,
+      `Player 1's Bone Market cost decreased by 1 - caused by left lane location ${BOOTSTRAP_MANIFEST.locations[location.defId].name}.`,
     );
   });
 

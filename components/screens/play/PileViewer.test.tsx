@@ -55,8 +55,9 @@ describe('PileViewer spell presentation', () => {
 
     const spell = container.querySelector('[data-card-type="spell"]');
     const character = container.querySelector('[data-card-type="character"]');
-    expect(spell?.querySelector('.pile-card__cost')?.textContent).toBe('3');
-    expect(spell?.querySelector('.pile-card__power')).toBeNull();
-    expect(character?.querySelector('.pile-card__power')?.textContent).toBe('4');
+    expect(spell?.querySelector('.cost')?.textContent).toBe('3');
+    expect(spell?.querySelector('.power')).toBeNull();
+    expect(character?.querySelector('.power')?.textContent).toBe('4');
+    expect(spell?.querySelector('.card-renderer')?.getAttribute('viewBox')).toBe('0 0 500 700');
   });
 });

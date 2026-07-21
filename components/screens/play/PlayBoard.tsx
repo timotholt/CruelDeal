@@ -52,7 +52,14 @@ interface PlayBoardProps {
 export const PlayBoard = (props: PlayBoardProps) => {
   const match = useMatchSession();
   const playUi = usePlayUi();
-  const { content, localSeat, remoteSeat, bootstrap, openingTimeline } = match;
+  const {
+    content,
+    localSeat,
+    remoteSeat,
+    bootstrap,
+    openingTimeline,
+    intentActivity,
+  } = match;
   const {
     presentedState: engineState,
     ui,
@@ -92,6 +99,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     ui,
     isResolving,
     turnFlowRunning,
+    intentActivity,
     replayTimeline,
     replayCursor,
     openPile,
@@ -130,6 +138,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
     recordedOutcomeLabel,
   } = view;
   const replayClientStatus = createMemo(() => {
+    const intent = intentActivity();
+    if (intent?.kind === 'PROCESSING_INTENT') return 'Processing intent';
+    if (intent?.kind === 'WAITING_FOR_PLAYER') {
+      return `Waiting for Player ${intent.seat === 'P0' ? 1 : 2}`;
+    }
     const activity = replayClientActivity();
     if (activity?.kind === 'PROCESSING_EVENTS') return 'Processing events';
     if (activity?.kind === 'PLAYING_ANIMATIONS') return 'Playing animations';
@@ -318,16 +331,8 @@ export const PlayBoard = (props: PlayBoardProps) => {
   };
 
   const handleEndTurn = (): void => {
-    if (!boardInteractive() || turnFlowRunning()) return;
-    setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
-    void actions
-      .endTurn(seat => {
-        setReplayClientActivity({ kind: 'WAITING_FOR_PLAYER', seat });
-      })
-      .then(accepted => {
-        if (!accepted) setReplayClientActivity(null);
-      })
-      .catch(() => setReplayClientActivity(null));
+    if (!boardInteractive() || intentActivity() !== null) return;
+    void actions.endTurn();
   };
 
   return (
@@ -398,6 +403,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
           <MatchActionBar
             interactive={boardInteractive()}
             resolving={isResolving()}
+            intentActivity={intentActivity()}
             resultLocked={ui.lockedResult !== null}
             outcomeLabel={recordedOutcomeLabel()}
             turn={presentedState().turn}

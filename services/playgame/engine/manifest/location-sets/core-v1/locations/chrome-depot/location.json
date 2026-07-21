@@ -42,7 +42,7 @@
   },
   "cosmetic": {
     "displayName": "CHROME DEPOT",
-    "description": "When revealed, each player adds a random 1-Cost card to their hand.",
+    "description": "Each player adds a random 1-Cost card to their hand.",
     "accent": "#d96c3c",
     "art": {
       "map": {

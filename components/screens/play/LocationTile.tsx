@@ -8,6 +8,7 @@
 import type { ResolvedLocation } from '@/services/playgame/view';
 import type { SeatLanePowerReadModel } from '@/services/playgame/runtime/seatReadModels';
 import { usePlayUi } from '@/contexts/PlayUiContext';
+import { LocationRenderer } from './rendering/LocationRenderer';
 
 interface LocationTileProps {
   location: ResolvedLocation;
@@ -39,15 +40,16 @@ export const LocationTile = (props: LocationTileProps) => {
   return (
     <div
       ref={(element) => props.elementRef?.(element)}
-      class={'location' + (props.location.revealed ? '' : ' location--hidden')}
+      class="location"
       data-lane={props.laneIdx}
       onClick={onClick}
       style={{ cursor: props.interactive === false ? 'default' : 'pointer' }}
     >
-      <div class="lane-score enemy-score">{props.topPower}</div>
-      <div class="loc-name">{props.location.revealed ? props.location.name : '???'}</div>
-      <div class="loc-desc">{props.location.revealed ? props.location.desc : ''}</div>
-      <div class="lane-score player-score">{props.bottomPower}</div>
+      <LocationRenderer
+        location={props.location}
+        topPower={props.topPower}
+        bottomPower={props.bottomPower}
+      />
     </div>
   );
 };

@@ -4,7 +4,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import type { CardVfxRegistry } from '@/services/vfx/card-effects/types';
-import { CardFace } from './CardFace';
+import { CardRenderer } from './CardRenderer';
+import { clearRenderPlanCachesForTests, resolveCardRenderPlan } from './renderCache';
 
 class ResizeObserverStub {
   observe() {}
@@ -42,74 +43,55 @@ afterEach(() => {
   dispose?.();
   registry?.dispose();
   container?.remove();
+  clearRenderPlanCachesForTests();
   dispose = undefined;
   registry = undefined;
   container = undefined;
 });
 
-describe('canonical card face', () => {
-  it('renders the play face without adding a geometry wrapper', () => {
+describe('canonical card renderer', () => {
+  it('uses one fixed inspector-resolution coordinate system', () => {
     container = document.createElement('div');
     const cardVfxRegistry = createCardVfxRegistry();
     registry = cardVfxRegistry;
     document.body.appendChild(container);
     dispose = render(
-      () => (
-        <div class="card">
-          <CardFace
-            card={card({ textDisabled: true })}
-            variant="play"
-            vfxRegistry={cardVfxRegistry}
-          />
-        </div>
-      ),
+      () => <CardRenderer card={card({ textDisabled: true })} vfxRegistry={cardVfxRegistry} />,
       container,
     );
 
-    const surface = container.querySelector('.card');
-    expect(surface?.querySelector(':scope > [data-card-face]')).toBeNull();
+    const renderer = container.querySelector('.card-renderer');
+    const surface = container.querySelector('.card-renderer__canvas');
+    expect(renderer?.getAttribute('viewBox')).toBe('0 0 500 700');
     expect(surface?.querySelector(':scope > .cost')?.classList).toContain('debuffed');
     expect(surface?.querySelector(':scope > .power')?.classList).toContain('buffed');
     expect(surface?.querySelector(':scope > .bar')).not.toBeNull();
     expect(surface?.querySelector(':scope > .name')?.textContent).toBe('Operative');
-    expect(surface?.querySelector(':scope > .name')?.getAttribute('data-game-text-version')).toBe('3');
-    expect(surface?.querySelector(':scope > .type')).toBeNull();
+    expect(
+      surface?.querySelector(':scope > .name [data-game-text="inner"]')?.getAttribute('style'),
+    ).toContain('font-size: 100px');
     expect(surface?.querySelector(':scope > .text-disabled-mark')).not.toBeNull();
   });
 
-  it('applies the same spell stat rule to play and pile faces', () => {
+  it('renders spells through the same fixed renderer without a power element', () => {
     container = document.createElement('div');
-    const cardVfxRegistry = createCardVfxRegistry();
-    registry = cardVfxRegistry;
     document.body.appendChild(container);
-    const spell = card({
-      id: 'spell-1',
-      type: 'spell',
-      power: 99,
-      basePower: 99,
-    });
     dispose = render(
-      () => (
-        <>
-          <div class="card" data-testid="play">
-            <CardFace card={spell} variant="play" vfxRegistry={cardVfxRegistry} />
-          </div>
-          <CardFace card={spell} variant="pile" />
-        </>
-      ),
+      () => <CardRenderer card={card({ id: 'spell-1', type: 'spell' })} />,
       container,
     );
 
-    expect(container.querySelector('[data-testid="play"] > .spell-card-surface > .cost')?.textContent).toBe('3');
-    expect(container.querySelector('[data-testid="play"] > .power')).toBeNull();
-    expect(container.querySelector('[data-testid="play"] > .spell-card__base')).not.toBeNull();
-    expect(container.querySelector('.spell-card-surface')).not.toBeNull();
-    expect(container.querySelector('.spell-card__name')?.getAttribute('data-game-text-version')).toBe('3');
+    expect(container.querySelector('.card-renderer')?.getAttribute('viewBox')).toBe('0 0 500 700');
+    expect(container.querySelector('.spell-card-surface > .cost')?.textContent).toBe('3');
+    expect(container.querySelector('.power')).toBeNull();
+    expect(container.querySelector('.spell-card__base')).not.toBeNull();
     expect(
       container.querySelector('.spell-card__name [data-game-text="inner"]')?.getAttribute('style'),
-    ).toContain('font-size: 62.5cqw');
-    expect(container.querySelector('.pile-card__cost')?.textContent).toBe('3');
-    expect(container.querySelector('.pile-card__power')).toBeNull();
-    expect(container.querySelector('.pile-card__type')).toBeNull();
+    ).toContain('font-size: 125px');
+  });
+
+  it('reuses an immutable visual plan for an unchanged card', () => {
+    const value = card();
+    expect(resolveCardRenderPlan(value)).toBe(resolveCardRenderPlan({ ...value, id: 'another-copy' }));
   });
 });

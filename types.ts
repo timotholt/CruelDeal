@@ -40,6 +40,8 @@ export interface SeasonProgressData {
 
 export interface UserProfile {
     id: string;
+    email: string;
+    isDeveloper: boolean;
     username: string;
     level: number; 
     seasonProgress: Record<string, SeasonProgressData>; 

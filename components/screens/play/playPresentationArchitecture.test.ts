@@ -291,7 +291,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('uses one full-surface purple card back without a split gold overlay', () => {
     const css = source('../../../src/styles/playgame.css');
-    const facedownRule = css.match(/\.card\.facedown\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    const facedownRule = css.match(/\.card\.facedown \.card-renderer__canvas\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
     expect(facedownRule).toContain('repeating-linear-gradient');
     expect(facedownRule).toContain('#1a1f3a');
     expect(facedownRule).toContain('#12172a');
@@ -301,7 +301,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
   it('keeps native HTML drag-and-drop out of canonical card components', () => {
     const handCard = source('./HandCard.tsx');
     const boardCard = source('./BoardCard.tsx');
-    const cardFace = source('./CardFace.tsx');
+    const cardRenderer = source('./rendering/CardRenderer.tsx');
     for (const cardSource of [handCard, boardCard]) {
       expect(cardSource).not.toContain('draggable=');
       expect(cardSource).not.toContain('onDragStart');
@@ -311,32 +311,38 @@ describe('Phase 1.21 presentation architecture fences', () => {
       expect(cardSource).not.toContain('<CardVfxStack');
       expect(cardSource).not.toContain("class={'cost '");
     }
-    expect(cardFace).toContain('registry={registry}');
-    expect(cardFace).not.toContain('data-drag-source');
+    expect(cardRenderer).toContain('registry={registry}');
+    expect(cardRenderer).not.toContain('data-drag-source');
   });
 
-  it('uses one card-face renderer without changing zone-owned geometry', () => {
+  it('uses fixed canonical card and location renderers while zones own geometry', () => {
     const boardCard = source('./BoardCard.tsx');
     const handCard = source('./HandCard.tsx');
     const pileViewer = source('./PileViewer.tsx');
-    const cardFace = source('./CardFace.tsx');
+    const locationTile = source('./LocationTile.tsx');
+    const cardRenderer = source('./rendering/CardRenderer.tsx');
+    const locationRenderer = source('./rendering/LocationRenderer.tsx');
+    const renderCache = source('./rendering/renderCache.ts');
     const regularFace = source('./card-faces/RegularCardFace.tsx');
     const spellFace = source('./card-faces/SpellCardFace.tsx');
     const cardName = source('./card-faces/CardName.tsx');
     expect(boardCard).toContain("'card lane-card'");
     expect(handCard).toContain("class={'hand-card-motion'");
     expect(handCard).toContain("class={'card'");
-    expect(pileViewer).toContain('<CardFace card={card} variant="pile" />');
-    expect(cardFace).toContain('<SpellCardFace');
-    expect(cardFace).toContain('<RegularCardFace');
-    expect(cardFace).not.toContain('class="pile-card"');
-    expect(regularFace).toContain('class="pile-card pile-card--regular"');
+    expect(pileViewer).toContain('<CardRenderer card={card} />');
+    expect(cardRenderer).toContain('viewBox="0 0 500 700"');
+    expect(cardRenderer).toContain('<SpellCardFace');
+    expect(cardRenderer).toContain('<RegularCardFace');
+    expect(locationTile).toContain('<LocationRenderer');
+    expect(locationRenderer).toContain('viewBox="0 0 700 525"');
+    expect(renderCache).toContain('const cardPlans = new Map');
+    expect(renderCache).toContain('const locationPlans = new Map');
     expect(regularFace).toContain('class="portrait"');
     expect(spellFace).toContain('class="spell-card-surface"');
     expect(spellFace).toContain('class="spell-card__base"');
     expect(spellFace).not.toContain('class={\'power ');
-    expect(regularFace).not.toContain('pile-card__type');
-    expect(spellFace).not.toContain('pile-card__type');
+    expect(regularFace).not.toContain('pile-card');
+    expect(spellFace).not.toContain('pile-card');
     expect(cardName).toContain('<GameTextV3');
     expect(cardName).toContain('maxLines={3}');
   });
@@ -347,7 +353,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const presentationHost = source(
       '../../../services/playgame/presentation/playPresentationHost.ts',
     );
-    const cardFace = source('./CardFace.tsx');
+    const cardRenderer = source('./rendering/CardRenderer.tsx');
     const cardVfxStack = source('../../card/CardVfxStack.tsx');
 
     expect(vfxHost).toContain('const cardVfxRegistry = createCardVfxRegistry()');
@@ -358,7 +364,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(presentationHost).toContain('readonly cardVfxRegistry: CardVfxRegistry');
     expect(presentationHost).toContain('zoneElement(key: ZoneAnchorKey)');
     expect(presentationHost).not.toContain('import { cardVfxRegistry }');
-    expect(cardFace).not.toContain('import { cardVfxRegistry }');
+    expect(cardRenderer).not.toContain('import { cardVfxRegistry }');
     expect(cardVfxStack).not.toContain('import { cardVfxRegistry }');
   });
 

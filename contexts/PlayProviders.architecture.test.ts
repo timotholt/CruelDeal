@@ -57,7 +57,7 @@ describe('Phase 2 provider boundary architecture', () => {
     }
   });
 
-  it('keeps overlays provider-scoped and replay behind development authority', () => {
+  it('keeps overlays provider-scoped and replay behind developer authority', () => {
     const uiContext = readFileSync(resolve(
       repositoryRoot,
       'contexts/PlayUiContext.tsx',
@@ -78,7 +78,7 @@ describe('Phase 2 provider boundary architecture', () => {
     expect(uiContext).toContain('createSignal<OpenPile | null>');
     expect(inspector).not.toContain('createSignal');
     expect(matchContext).toContain('readonly debug:');
-    expect(matchContext).toContain('debug: debugEnabled && client.debug');
+    expect(matchContext).toContain('debug: client.debug');
     expect(playBoard).not.toContain('createSignal');
   });
 

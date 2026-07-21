@@ -20,6 +20,7 @@ const commands = [
   ['npm', ['run', 'lint:playgame:phase15']],
   ['npm', ['run', 'lint:playgame:phase7']],
   ['npm', ['run', 'test:architecture']],
+  ['npm', ['run', 'test:engine:authorities']],
   ['npm', ['run', 'test:playgame:phase7']],
   ['npm', ['run', 'protocol:test:ts']],
   ['npm', ['run', 'protocol:test:rust']],

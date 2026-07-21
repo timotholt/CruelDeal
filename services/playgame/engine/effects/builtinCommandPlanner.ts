@@ -329,11 +329,10 @@ export function planBuiltinCommands(
             fireTurn: state.turn + 1,
             effect: {
               kind: 'ADJUST_COST',
-              target: {
-                kind: 'ALL_CARDS',
-                ownerFilter: 'SELF_OWNER',
-                zoneFilter: 'HAND',
-              },
+              // The pending effect's frozen SELF is the generated card.
+              // Restoring a broad hand selector would increase every card
+              // that happens to be in hand when the discount expires.
+              target: { kind: 'SELF' },
               delta: { kind: 'LIT', n: -costDelta },
             },
           },
@@ -387,11 +386,9 @@ export function planBuiltinCommands(
             fireTurn: state.turn + 1,
             effect: {
               kind: 'DESTROY',
-              target: {
-                kind: 'ALL_CARDS',
-                ownerFilter: 'SELF_OWNER',
-                zoneFilter: 'LANE',
-              },
+              // Frozen SELF is the one card Overclock selected. Never widen
+              // delayed single-card work to every friendly card in the lane.
+              target: { kind: 'SELF' },
             },
           },
           cause: { ...ctx.source },

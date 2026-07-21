@@ -7,53 +7,50 @@
      Fractions below are tuned to that baseline.
      ---------------------------------------------------------------- */
 
-  /* Derived typographic / badge scale tokens — computed once from --card-w. */
-  :scope {
-    --card-font-name:  calc(var(--card-w) * 0.20);   /* ~11.6px at 58px */
-    --card-font-badge: calc(var(--card-w) * 0.175);  /* ~10px   */
-    --card-badge-size: calc(var(--card-w) * 0.33);   /* ~19px   */
-    --card-badge-off:  calc(var(--card-w) * -0.08);  /* -8% bleed (middle ground to prevent overlap) */
-    --card-pad:        calc(var(--card-w) * 0.075);  /* ~4.4px  */
-    --card-bar-h:      calc(var(--card-w) * 0.062);  /* ~3.6px  */
-    --card-radius:     calc(var(--card-w) * 0.10);   /* ~5.8px  */
-
-    /* Hand cards use the same tokens scaled by 1.18 */
-    --hcard-font-name:  calc(var(--hand-card-w) * 0.20);
-    --hcard-font-badge: calc(var(--hand-card-w) * 0.175);
-    --hcard-badge-size: calc(var(--hand-card-w) * 0.33);
-    --hcard-badge-off:  calc(var(--hand-card-w) * -0.08);
-    --hcard-pad:        calc(var(--hand-card-w) * 0.075);
-    --hcard-bar-h:      calc(var(--hand-card-w) * 0.062);
-    --hcard-radius:     calc(var(--hand-card-w) * 0.10);
-  }
-
   /* ── Cards ─────────────────────────────────────────────────────────
-     CardFace renders badges, optional art, and a fitted name.
-     All sizing tokens come from --hcard-* (hand) or --card-* (lane).
-     DO NOT add wrapper elements here — the renderer doesn't output them.
+     CardRenderer lays out exactly once in a 500x700 inspector coordinate
+     system. The SVG viewport scales that finished visual for every zone.
      ----------------------------------------------------------------- */
   .card {
     position: relative;
     width: var(--hand-card-w); height: var(--hand-card-h);
     aspect-ratio: 5 / 7;
-    background: var(--card-bg);
-    border: 1px solid var(--card-edge);
-    border-radius: var(--hcard-radius);
-    display: grid;
-    grid-template-rows: var(--hcard-badge-size) 1fr var(--hcard-badge-size);
-    padding: var(--hcard-pad);
+    display: block;
+    padding: 0;
+    background: transparent;
+    border: 0;
     color: var(--text);
     font-family: var(--font-body);
     cursor: pointer;
     user-select: none;
     transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
-    box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
     overflow: visible;
+  }
+  .card-renderer {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: auto;
+  }
+  .card-renderer__canvas {
+    position: relative;
+    width: 500px;
+    height: 700px;
+    display: grid;
+    grid-template-rows: 165px minmax(0, 1fr) 165px;
+    padding: 38px;
+    color: var(--text);
+    background: var(--card-bg);
+    border: 6px solid var(--card-edge);
+    border-radius: 50px;
+    box-shadow: 0 80px 170px rgba(0,0,0,0.42), inset 0 6px 0 rgba(255,255,255,0.1);
+    overflow: visible;
+    box-sizing: border-box;
   }
   .card:hover {
     transform: translateY(-6px);
-    border-color: rgba(166, 109, 255, 0.6);
-    box-shadow: 0 14px 30px rgba(166,109,255,0.25), 0 6px 14px rgba(0,0,0,0.4);
+    filter: drop-shadow(0 14px 22px rgba(166,109,255,0.25));
   }
   .inspector-clone.card:hover,
   .inspector-clone .card:hover {
@@ -63,46 +60,46 @@
   .inspector-clone .card:hover {
     transform: scale(var(--hand-scale, 1));
   }
-  .card.selected {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 2px var(--accent), 0 14px 30px rgba(166,109,255,0.4);
-  }
+  .card.selected { filter: drop-shadow(0 0 3px var(--accent)); }
   .card.target-valid {
     outline: 2px dashed var(--accent-2);
     outline-offset: 4px;
   }
-  .card.enemy { border-color: rgba(255, 111, 97, 0.3); background: var(--enemy-card-bg); }
+  .card.enemy .card-renderer__canvas {
+    border-color: rgba(255, 111, 97, 0.3);
+    background: var(--enemy-card-bg);
+  }
 
   /* Cost badge (top-left circle) */
-  .card .cost {
+  .card-renderer__canvas .cost {
     position: absolute;
-    top: var(--hcard-badge-off); left: var(--hcard-badge-off);
-    width: var(--hcard-badge-size); height: var(--hcard-badge-size);
+    top: -40px; left: -40px;
+    width: 165px; height: 165px;
     border-radius: 50%;
     background: #60a5fa;
-    color: #061024; font-weight: 700; font-size: var(--hcard-font-badge);
+    color: #061024; font-weight: 700; font-size: 88px;
     display: flex; align-items: center; justify-content: center;
-    border: 2px solid #061024;
+    border: 12px solid #061024;
   }
-  .card .cost.buffed { background: #2dd4a7; color: #052e22; }
-  .card .cost.debuffed { background: #ff6080; color: #3a0616; }
+  .card-renderer__canvas .cost.buffed { background: #2dd4a7; color: #052e22; }
+  .card-renderer__canvas .cost.debuffed { background: #ff6080; color: #3a0616; }
 
   /* Power badge (top-right pill) */
-  .card .power {
+  .card-renderer__canvas .power {
     position: absolute;
-    top: var(--hcard-badge-off); right: var(--hcard-badge-off);
-    min-width: var(--hcard-badge-size); height: var(--hcard-badge-size);
-    border-radius: calc(var(--hcard-badge-size) * 0.3);
-    background: #f0d060; color: #2a1a00; font-weight: 800; font-size: var(--hcard-font-badge);
+    top: -40px; right: -40px;
+    min-width: 165px; height: 165px;
+    border-radius: 50px;
+    background: #f0d060; color: #2a1a00; font-weight: 800; font-size: 88px;
     display: flex; align-items: center; justify-content: center;
-    padding: 0 calc(var(--hcard-badge-size) * 0.22);
-    border: 2px solid #061024;
+    padding: 0 36px;
+    border: 12px solid #061024;
     font-family: var(--font-mono);
   }
-  .card .power.buffed  { background: #2dd4a7; color: #052e22; }
-  .card .power.debuffed { background: #ff6080; color: #3a0616; }
+  .card-renderer__canvas .power.buffed  { background: #2dd4a7; color: #052e22; }
+  .card-renderer__canvas .power.debuffed { background: #ff6080; color: #3a0616; }
 
-  .card .name {
+  .card-renderer__canvas .name {
     width: 100%;
     height: 100%;
     min-width: 0;
@@ -110,68 +107,49 @@
     align-self: stretch;
     overflow: hidden;
   }
-  .card .bar {
-    height: var(--hcard-bar-h); border-radius: 2px; margin: 2px 0;
+  .card-renderer__canvas .bar {
+    height: 31px; border-radius: 10px; margin: 10px 0;
   }
-  .card.text-disabled {
+  .card.text-disabled .card-renderer__canvas {
     border-color: rgba(255, 96, 128, 0.55);
   }
-  .card .text-disabled-mark {
+  .card-renderer__canvas .text-disabled-mark {
     position: absolute;
     left: 10%;
     right: 10%;
     bottom: 18%;
-    height: 2px;
+    height: 10px;
     background: rgba(255, 96, 128, 0.95);
-    box-shadow: 0 0 8px rgba(255, 96, 128, 0.55);
+    box-shadow: 0 0 40px rgba(255, 96, 128, 0.55);
     transform: rotate(-7deg);
     pointer-events: none;
   }
 
   /* Facedown cards */
-  .card.facedown {
-    background: repeating-linear-gradient(45deg, #1a1f3a 0 8px, #12172a 8px 16px);
+  .card.facedown .card-renderer__canvas {
+    background: repeating-linear-gradient(45deg, #1a1f3a 0 40px, #12172a 40px 80px);
     border-color: var(--card-edge);
   }
-  .card.facedown .name,
-  .card.facedown .cost, .card.facedown .power, .card.facedown .bar,
-  .card.facedown .portrait {
+  .card.facedown .card-renderer__canvas .name,
+  .card.facedown .card-renderer__canvas .cost,
+  .card.facedown .card-renderer__canvas .power,
+  .card.facedown .card-renderer__canvas .bar,
+  .card.facedown .card-renderer__canvas .portrait {
     visibility: hidden;
   }
 
-  /* Lane cards — smaller tokens, same structure. The explicit class travels
-     with zoom-inspector clones after they leave the .lane-slots subtree. */
+  /* Lane cards only own host geometry. Their painted renderer is identical. */
   .card.lane-card,
   .lane-slots .card {
     width: var(--card-w); height: var(--card-h);
-    padding: var(--card-pad);
-    border-radius: var(--card-radius);
-    grid-template-rows: var(--card-badge-size) 1fr var(--card-badge-size);
   }
   .card.lane-card:not(.facedown),
   .lane-slots .card:not(.facedown) { transform: rotate(var(--card-tilt, 0deg)); }
   .card.lane-card.facedown,
   .lane-slots .card.facedown       { transform: rotate(var(--card-tilt, 0deg)); }
-  .card.lane-card .bar,
-  .lane-slots .card .bar  { height: var(--card-bar-h); }
-  .card.lane-card .cost,
-  .lane-slots .card .cost {
-    top: var(--card-badge-off); left: var(--card-badge-off);
-    width: var(--card-badge-size); height: var(--card-badge-size);
-    font-size: var(--card-font-badge);
-  }
-  .card.lane-card .power,
-  .lane-slots .card .power {
-    top: var(--card-badge-off); right: var(--card-badge-off);
-    min-width: var(--card-badge-size); height: var(--card-badge-size);
-    font-size: var(--card-font-badge);
-    padding: 0 calc(var(--card-badge-size) * 0.22);
-    border-radius: calc(var(--card-badge-size) * 0.3);
-  }
-
   /* Spells keep the canonical 5:7 interaction/animation box. Their renderer
      owns a genuinely circular painted surface inside that stable geometry. */
-  .card[data-card-type="spell"]:not(.facedown) {
+  .card[data-card-type="spell"]:not(.facedown) .card-renderer__canvas {
     display: block;
     padding: 0;
     background: transparent;
@@ -180,11 +158,6 @@
     box-shadow: none;
     overflow: visible;
   }
-  .card[data-card-type="spell"]:not(.facedown):hover,
-  .inspector-clone .card[data-card-type="spell"]:not(.facedown):hover {
-    border-color: transparent;
-    box-shadow: none;
-  }
   .spell-card__base {
     position: absolute;
     z-index: 0;
@@ -192,14 +165,14 @@
     right: 16%;
     bottom: 0;
     left: 16%;
-    border: 1px solid rgba(180, 126, 255, 0.48);
+    border: 6px solid rgba(180, 126, 255, 0.48);
     border-radius: 0 0 12% 12%;
     background:
       linear-gradient(90deg, rgba(255,255,255,0.025), transparent 20% 80%, rgba(255,255,255,0.025)),
       linear-gradient(180deg, #25203a, #11101e);
     box-shadow:
-      0 10px 22px rgba(0,0,0,0.38),
-      inset 0 0 14px rgba(166,109,255,0.12);
+      0 50px 110px rgba(0,0,0,0.38),
+      inset 0 0 70px rgba(166,109,255,0.12);
   }
   .spell-card-surface {
     position: absolute;
@@ -211,43 +184,39 @@
     grid-template-rows: 30% minmax(0, 1fr);
     place-items: center;
     padding: 12% 10% 8%;
-    border: 1px solid rgba(180, 126, 255, 0.58);
+    border: 6px solid rgba(180, 126, 255, 0.58);
     border-radius: 50%;
     background:
       radial-gradient(circle at 50% 38%, rgba(142, 86, 220, 0.36), transparent 46%),
       radial-gradient(circle at 50% 50%, #25203a 0 56%, #100f1d 76% 100%);
     box-shadow:
-      0 10px 24px rgba(0,0,0,0.42),
-      inset 0 0 0 2px rgba(255,255,255,0.035),
-      inset 0 0 18px rgba(166,109,255,0.18);
+      0 50px 120px rgba(0,0,0,0.42),
+      inset 0 0 0 10px rgba(255,255,255,0.035),
+      inset 0 0 90px rgba(166,109,255,0.18);
     overflow: visible;
   }
   .spell-card-surface::before {
     content: '';
     position: absolute;
     inset: 8%;
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 6px solid rgba(255,255,255,0.08);
     border-radius: 50%;
     pointer-events: none;
   }
   .spell-card__sigil {
     color: rgba(215, 187, 255, 0.82);
-    font-size: calc(var(--hcard-font-name) * 1.1);
+    font-size: 110px;
     line-height: 1;
-    text-shadow: 0 0 10px rgba(166,109,255,0.58);
+    text-shadow: 0 0 50px rgba(166,109,255,0.58);
   }
   .spell-card__name {
     width: 78% !important;
     height: 100% !important;
   }
-  .card[data-card-type="spell"] .cost {
+  .card-renderer__canvas[data-card-type="spell"] .cost {
     top: -2%;
     left: 4%;
     z-index: 2;
-  }
-  .card.lane-card[data-card-type="spell"] .spell-card__sigil,
-  .lane-slots .card[data-card-type="spell"] .spell-card__sigil {
-    font-size: calc(var(--card-font-name) * 1.1);
   }
   .card[data-card-type="spell"].facedown .spell-card-surface,
   .card[data-card-type="spell"].facedown .spell-card__base {
@@ -256,65 +225,122 @@
 
   /* ── Location cards ─────────────────────────────────────────────── */
   .location {
-    background:
-      linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025)),
-      linear-gradient(145deg, rgba(81, 66, 48, 0.72), rgba(18, 22, 28, 0.92));
-    border: 1px solid rgba(255, 207, 91, 0.44);
-    border-radius: calc(var(--card-w) * 0.10);
-    padding: calc(var(--card-w) * 0.10) calc(var(--card-w) * 0.18);
-    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px;
     position: relative;
-    box-shadow: 0 16px 34px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.08);
     min-width: 0;
     overflow: visible;
     cursor: pointer;
   }
+  .location-renderer {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: auto;
+  }
+  .location-renderer__canvas {
+    /* Keep this as one reversible tuning knob: scores intentionally sit
+       farther outside the card to give the centered copy more breathing room. */
+    --location-score-outset: 32px;
+    /* The score plates still reserve three numeric columns, but carry 0.2rem
+       less internal breathing room on every side. */
+    --location-score-padding-trim: 0.2rem;
+    /* 73px is two thirds of the previous implicit 109.5px block padding. */
+    --location-copy-block-padding: 73px;
+    position: relative;
+    width: 700px;
+    height: 525px;
+    padding: 0;
+    background:
+      linear-gradient(
+        180deg,
+        rgba(5, 8, 12, 0.68) 0%,
+        rgba(5, 8, 12, 0.28) 38%,
+        rgba(5, 8, 12, 0.72) 100%
+      ),
+      var(--location-art, linear-gradient(145deg, rgba(81, 66, 48, 0.72), rgba(18, 22, 28, 0.92)));
+    background-position: center;
+    background-size: cover;
+    border: 6px solid rgba(255, 207, 91, 0.44);
+    border-radius: 50px;
+    box-shadow: 0 80px 170px rgba(0,0,0,0.22), inset 0 6px 0 rgba(255,255,255,0.08);
+    box-sizing: border-box;
+  }
   .lane-score {
     position: absolute;
-    width:  calc(var(--card-w) * 0.40);
-    height: calc(var(--card-w) * 0.40);
+    width: calc(260px - var(--location-score-padding-trim) - var(--location-score-padding-trim));
+    height: calc(140px - var(--location-score-padding-trim) - var(--location-score-padding-trim));
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: calc(var(--card-w) * 0.08);
+    border-radius: 28px;
     font-family: var(--font-mono);
     font-weight: 700;
-    font-size: calc(var(--card-w) * 0.20);
-    border: 1px solid rgba(255,255,255,0.15);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.08);
+    font-size: 70px;
+    font-variant-numeric: tabular-nums;
+    border: 6px solid rgba(255,255,255,0.15);
+    box-shadow: inset 0 6px 0 rgba(255,255,255,0.08);
     z-index: 2;
   }
   .lane-score.enemy-score {
-    top: calc(var(--card-w) * -0.20);
+    top: calc(-70px + var(--location-score-padding-trim) - var(--location-score-outset));
     left: 50%;
     transform: translateX(-50%);
     background: #7f382f;
     color: #ffe8e4;
   }
   .lane-score.player-score {
-    bottom: calc(var(--card-w) * -0.20);
+    bottom: calc(-70px + var(--location-score-padding-trim) - var(--location-score-outset));
     left: 50%;
     transform: translateX(-50%);
     background: #2b5f91;
     color: #e5f3ff;
   }
-  .location .loc-name {
-    font-family: var(--font-display); font-size: calc(var(--card-w) * 0.20);
-    letter-spacing: 0.10em; text-align: center; color: var(--text); line-height: 1;
-    max-width: 100%; overflow: hidden;
+  .location-renderer__text {
+    position: absolute;
+    top: var(--location-copy-block-padding);
+    bottom: var(--location-copy-block-padding);
+    left: 76px;
+    right: 76px;
+    display: grid;
+    grid-template-rows: 104px minmax(0, 1fr);
+    /* Add about 0.2rem between the title and rules copy. */
+    row-gap: calc(12px + 0.2rem);
   }
-  .location .loc-desc {
-    font-size: calc(var(--card-w) * 0.125); color: var(--muted); text-align: center;
-    line-height: 1.3; font-family: var(--font-mono);
-    max-width: 100%; overflow: hidden;
+  .location-renderer__canvas .loc-name {
+    width: 100%;
+    height: 100%;
+    color: #f6f3e8;
+    overflow: hidden;
+  }
+  .location-renderer__canvas .loc-name [data-game-text="inner"] {
+    -webkit-text-stroke: 2px rgba(0, 0, 0, 0.68);
+    paint-order: stroke fill;
+    text-shadow:
+      0 5px 0 rgba(0, 0, 0, 0.9),
+      0 9px 22px rgba(0, 0, 0, 0.98),
+      0 -2px 0 rgba(255, 255, 255, 0.22);
+  }
+  .location-renderer__canvas .loc-desc {
+    width: 100%;
+    height: 100%;
+    color: #f1f4f2;
+    overflow: hidden;
+  }
+  .location-renderer__canvas .loc-desc [data-game-text="inner"] {
+    -webkit-text-stroke: 1.5px rgba(0, 0, 0, 0.7);
+    paint-order: stroke fill;
+    text-shadow:
+      0 3px 0 rgba(0, 0, 0, 0.94),
+      0 6px 16px rgba(0, 0, 0, 0.98),
+      0 -1px 0 rgba(255, 255, 255, 0.16);
   }
   /* Face-down location tile — shows a "???" placeholder before reveal */
-  .location--hidden {
+  .location-renderer__canvas--hidden {
     background:
-      repeating-linear-gradient(45deg, #1a1f3a 0 6px, #12172a 6px 12px);
+      repeating-linear-gradient(45deg, #1a1f3a 0 30px, #12172a 30px 60px);
     border-color: rgba(146,164,190,0.15);
   }
-  .location--hidden .loc-name {
+  .location-renderer__canvas--hidden .loc-name {
     color: var(--muted);
     letter-spacing: 0.2em;
   }
@@ -375,6 +401,9 @@
     transform: none;
     transform-origin: center center;
     pointer-events: none;
+  }
+  .card-motion-surrogate * {
+    pointer-events: none !important;
   }
   .card-motion-resting-shell,
   .card-motion-visual {

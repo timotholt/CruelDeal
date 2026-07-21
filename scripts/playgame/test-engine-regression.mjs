@@ -13,6 +13,7 @@ import path from 'node:path';
 const commands = [
   ['Engine kernel and architecture', ['npm', ['run', 'test:engine:kernel']]],
   ['Engine runtime and deterministic properties', ['npm', ['run', 'test:engine:runtime']]],
+  ['Registered authority conformance matrix', ['npm', ['run', 'test:engine:authorities']]],
   ['TypeScript protocol contract', ['npm', ['run', 'protocol:test:ts']]],
   ['Rust protocol contract', ['npm', ['run', 'protocol:test:rust']]],
   ['Card generated-module drift', ['npm', ['run', 'cards:generate:check']]],

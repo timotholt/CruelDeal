@@ -9,15 +9,8 @@
   "abilities": {
     "onDestroyed": [
       {
-        "kind": "CREATE_CARDS_IN_ZONE",
-        "count": { "kind": "LIT", "n": 1 },
-        "replacement": "WITH_REPLACEMENT",
-        "pool": {
-          "kind": "DEF_ID_LIST",
-          "ids": [
-            "illegal-clone"
-          ]
-        },
+        "kind": "COPY_CARDS_TO_ZONE",
+        "target": { "kind": "SELF" },
         "owner": "SELF_OWNER",
         "destination": {
           "kind": "HAND"

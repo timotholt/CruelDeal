@@ -232,20 +232,6 @@ export interface SeatTransactionTimeline {
   readonly finalState: SeatVisibleMatchState;
 }
 
-export interface SeatReplayStep {
-  readonly cursor: number;
-  readonly transactionId?: string;
-  readonly frame: Frame;
-  readonly scope: TemporalScope | null;
-  readonly event: SeatAnimationEvent | null;
-  readonly state: SeatVisibleMatchState;
-}
-
-export interface SeatReplayTimeline {
-  readonly steps: readonly SeatReplayStep[];
-  readonly finalState: SeatVisibleMatchState;
-}
-
 export interface SeatResyncRequest {
   readonly version: 1;
   readonly matchId: string;

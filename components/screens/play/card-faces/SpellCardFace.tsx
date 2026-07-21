@@ -1,13 +1,12 @@
-import type { CardFaceModel } from './cardFaceModel';
+import type { CardRenderModel } from '../rendering/renderModels';
 import { CardName } from './CardName';
 
 interface SpellCardFaceProps {
-  readonly card: CardFaceModel;
-  readonly variant: 'play' | 'pile';
+  readonly card: CardRenderModel;
 }
 
 export const SpellCardFace = (props: SpellCardFaceProps) => {
-  const playFace = () => (
+  return (
     <>
       <div class="spell-card__base" aria-hidden="true" />
       <div class="spell-card-surface">
@@ -16,20 +15,10 @@ export const SpellCardFace = (props: SpellCardFaceProps) => {
         <CardName
           name={props.card.name}
           class="name card-name spell-card__name"
-          baseFontSize="62.5cqw"
+          baseFontSize="125px"
         />
         {props.card.textDisabled ? <div class="text-disabled-mark" aria-hidden="true" /> : null}
       </div>
     </>
   );
-
-  const pileFace = () => (
-    <div class="pile-card pile-card--spell" data-card-type="spell">
-      <span class="pile-card__cost">{props.card.cost}</span>
-      <div class="spell-card__sigil" aria-hidden="true">✦</div>
-      <CardName name={props.card.name} class="pile-card__name" />
-    </div>
-  );
-
-  return <>{props.variant === 'play' ? playFace() : pileFace()}</>;
 };

@@ -4,7 +4,6 @@ import type {
   SeatBootstrap,
   SeatCardToken,
   SeatMatchSnapshot,
-  SeatReplayTimeline,
   SeatTransactionFrame,
   SeatTransactionTimeline,
 } from '../runtime/projection';
@@ -13,6 +12,7 @@ import type {
   SeatLanePowerReadModel,
 } from '../runtime/seatReadModels';
 import type { MatchContentCatalog } from './contentCatalog';
+import type { DebugReplayTimeline } from '../debug/replayContracts';
 
 export interface SeatMatchInitialization {
   readonly setup: SeatMatchSnapshot;
@@ -56,7 +56,8 @@ export type SeatCommandResult =
     });
 
 export interface MatchClientDebug {
-  replay(): SeatReplayTimeline;
+  /** Canonical authority events, available only after developer authorization. */
+  replay(): DebugReplayTimeline;
   performanceProfile(): MatchPerformanceProfile;
   recordFramePresentationTiming(timing: FramePresentationTiming): void;
   installBrowserDebug?(): Promise<() => void>;

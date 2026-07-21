@@ -5,9 +5,9 @@ import { ZoomInspector } from '../ZoomInspector';
 import type { OpenPile } from '@/contexts/PlayUiContext';
 import type { MatchPerformanceProfile } from '@/services/playgame/runtime/performanceTelemetry';
 import type {
-  SeatReplayStep,
-  SeatReplayTimeline,
-} from '@/services/playgame/runtime/projection';
+  DebugReplayStep,
+  DebugReplayTimeline,
+} from '@/services/playgame/debug/replayContracts';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { InspectTarget } from './inspector';
@@ -15,11 +15,11 @@ import { PileViewer } from './PileViewer';
 import { ReplayDrawer } from './ReplayDrawer';
 
 interface PlayOverlaysProps {
-  readonly replayTimeline: SeatReplayTimeline | null;
+  readonly replayTimeline: DebugReplayTimeline | null;
   readonly replayOpen: boolean;
   readonly replayFollowingLive: boolean;
   readonly replayCursor: number;
-  readonly replayStep: SeatReplayStep | null;
+  readonly replayStep: DebugReplayStep | null;
   readonly performanceProfile: MatchPerformanceProfile | null;
   readonly replayClientStatus: string;
   readonly seatNames: Readonly<Record<Seat, string>>;

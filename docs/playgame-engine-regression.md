@@ -18,7 +18,8 @@ Each log ends with a per-gate duration and total wall-clock time.
 | --- | --- | --- |
 | `npm run test:engine:kernel` | Fast kernel/rules confidence | The permanent Phase 1.5 kernel and architecture contract: 33 files / 281 tests at its recorded baseline. |
 | `npm run test:engine:runtime` | Runtime and replay confidence | The complete runtime suite plus the deterministic property corpus at 200 cases per property. |
-| `npm run test:engine:regression` | Before handing off engine work or returning after a feature rebuild | Kernel, runtime, protocol conformance in TypeScript and Rust, generated-content drift, manifest validation, and the engine type boundary. |
+| `npm run test:engine:authorities` | Match-client or authority work | The complete player-facing contract against every registered authority test driver. |
+| `npm run test:engine:regression` | Before handing off engine work or returning after a feature rebuild | Kernel, runtime, registered authority conformance, protocol conformance in TypeScript and Rust, generated-content drift, manifest validation, and the engine type boundary. |
 
 To see every individual Vitest test name while investigating a failure, append
 Vitest's verbose reporter to either focused suite:
@@ -38,6 +39,7 @@ npm run test:engine:runtime -- --reporter=verbose
 | Rules and reactions | `lifecycle-reaction-characterization`, `match-lifecycle-architecture-fences`, `power-ledger`, `power-restrictions` | Lifecycle/reaction ordering, match terminal handling, semantic power, and restricted location power remain governed. |
 | Runtime properties | `runtime/__tests__/properties/engine-properties.test.ts` | At 200 cases per property: replay equality, exactly-once application, card provenance, per-commit fold equality, and independence from wall-clock/random sources. |
 | Runtime authority | `runtime/__tests__/*.test.ts`, `characterization/*`, `contracts/*` | Bootstrap validation, session/runtime ownership, local adapter access control, projected publication, opening behavior, and reconciliation remain intact. |
+| Authority independence | `client/matchClient.contract.test.ts`, `testing/authorityTestingArchitecture.test.ts` | The same player-facing behaviors pass through every registered authority; no shared contract selects or imports a local implementation. |
 | Content and protocol | `protocol/*.test.ts`, Rust `cruel-protocol`, manifest generators and validators | TypeScript/Rust schema agreement, generated-module freshness, and every active card/location definition remain valid. |
 
 The permanent kernel suite and the runtime suite report their actual file/test

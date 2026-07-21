@@ -56,6 +56,7 @@ describe('PlayBoard view model', () => {
         ui,
         isResolving: resolving,
         turnFlowRunning: () => false,
+        intentActivity: () => null,
         replayTimeline: () => null,
         replayCursor: () => 0,
         openPile: () => null,

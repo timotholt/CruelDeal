@@ -20,7 +20,7 @@ function fixture(seed: string) {
   ));
   return {
     session,
-    adapter: new LocalMatchSessionAdapter(session),
+    adapter: new LocalMatchSessionAdapter(session, { developerAccess: true }),
   };
 }
 
@@ -48,6 +48,29 @@ function firstAffordableToken(
 }
 
 describe('LocalMatchSessionAdapter projected authority boundary', () => {
+  it('exposes canonical replay only through an authorized developer capability', () => {
+    const { session } = fixture('adapter-debug-authorization');
+    const player = new LocalMatchSessionAdapter(
+      session,
+      { developerAccess: false },
+    );
+    expect(player.debug).toBeNull();
+    expect(player).not.toHaveProperty('replay');
+
+    const developerSession = fixture('adapter-debug-authorized').session;
+    const developer = new LocalMatchSessionAdapter(
+      developerSession,
+      { developerAccess: true },
+    );
+    const replay = developer.debug!.replay();
+    const eventStep = replay.steps.find(step => step.event !== null)!;
+
+    expect(eventStep.event).toHaveProperty('type');
+    expect(eventStep).toHaveProperty('description.summary');
+    expect(eventStep).toHaveProperty('annotatedEventJson');
+    assertProjectedState(eventStep.state);
+  });
+
   it('exposes transaction publication without a per-frame streaming API', () => {
     const { adapter, session } = fixture('adapter-atomic-api-surface');
 
@@ -130,7 +153,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     const { adapter } = fixture('adapter-published-frames');
     const token = firstAffordableToken(adapter);
     const timelines: SeatTransactionTimeline[] = [];
-    const replayStepsBeforePrivatePlan = adapter.replay().steps.length;
+    const replayStepsBeforePrivatePlan = adapter.debug!.replay().steps.length;
     const unsubscribe = adapter.subscribeCommittedTransactions(
       timeline => timelines.push(timeline),
     );
@@ -140,7 +163,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
       commit: 'PRIVATE',
     });
     expect(timelines).toEqual([]);
-    expect(adapter.replay().steps).toHaveLength(replayStepsBeforePrivatePlan);
+    expect(adapter.debug!.replay().steps).toHaveLength(replayStepsBeforePrivatePlan);
     const endTurn = await adapter.endTurn();
     expect(endTurn).toMatchObject({
       status: 'accepted',
@@ -205,10 +228,16 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     );
     expect(committedReveal?.event?.data.defId).toEqual(expect.any(String));
 
-    const replayStage = adapter.replay().steps.find(
+    const replayStage = adapter.debug!.replay().steps.find(
       step => step.frame === enemyStage!.frame,
     );
-    expect(replayStage?.event).toEqual(enemyStage!.event);
+    expect(replayStage?.event).toMatchObject({
+      type: 'CARD_STAGED',
+      owner: opponent,
+      lane: enemyStage!.event!.data.lane,
+      cardId: expect.any(String),
+    });
+    expect(replayStage?.description.summary).toContain('played');
     expect(replayStage?.state.stagedCards).toContain(token);
     const lane = enemyStage!.event!.data.lane;
     expect(typeof lane).toBe('number');

@@ -35,10 +35,10 @@ describe('Phase 3b opening authority', () => {
       DEBUG_DECKS[7],
       'phase3b-0',
     ));
-    const adapter = new LocalMatchSessionAdapter(session);
+    const adapter = new LocalMatchSessionAdapter(session, { developerAccess: true });
     const canonical = session.runtime.initialization().opening;
     const live = adapter.initialization().opening;
-    const replayFrames = adapter.replay().steps.filter(
+    const replayFrames = adapter.debug!.replay().steps.filter(
       step => step.transactionId === live.transactionId,
     );
 
@@ -46,7 +46,8 @@ describe('Phase 3b opening authority', () => {
       transition => transition.event.type === 'LOCATION_REVEALED',
     );
     const reactionIndex = canonical.transitions.findIndex(
-      transition => transition.event.cause?.effectKind === 'LOCATION'
+      transition => 'cause' in transition.event
+        && transition.event.cause.effectKind === 'LOCATION'
         && transition.event.cause.reason === 'onReveal',
     );
     expect(revealIndex).toBeGreaterThanOrEqual(0);
@@ -62,12 +63,12 @@ describe('Phase 3b opening authority', () => {
     expect(replayFrames.map(step => ({
       frame: step.frame,
       event: step.event,
-      state: step.state,
-    }))).toEqual(live.frames.map(frame => ({
-      frame: frame.frame,
-      event: frame.event,
-      state: frame.after,
+    }))).toEqual(canonical.transitions.map(transition => ({
+      frame: transition.frame,
+      event: transition.event,
     })));
+    expect(replayFrames.map(step => step.state))
+      .toEqual(live.frames.map(frame => frame.after));
     expect(replayFrames.at(-1)?.state).toEqual(live.finalState);
   });
 });

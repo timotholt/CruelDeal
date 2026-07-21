@@ -123,7 +123,10 @@ const CityGameBoard = (props: CityMapScreenProps) => {
 
 export const CityMapScreen = (props: CityMapScreenProps) => {
   const candidate = buildDebugMatchBootstrap(DEBUG_DECKS[0], DEBUG_DECKS[1], makeMatchSeed());
-  const client = new LocalMatchSessionAdapter(MatchSession.fromBootstrap(candidate));
+  const client = new LocalMatchSessionAdapter(
+    MatchSession.fromBootstrap(candidate),
+    { developerAccess: false },
+  );
 
   return (
     <div class="playgame-root city-play-root">

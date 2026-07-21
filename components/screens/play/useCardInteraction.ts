@@ -201,8 +201,12 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
 
   const validTargetAt = (clientX: number, clientY: number): DropTarget | null => {
     if (!active || isResolving() || typeof document.elementFromPoint !== 'function') return null;
-    const hit = document.elementFromPoint(clientX, clientY);
-    const zone = hit?.closest<HTMLElement>('[data-drop-zone]');
+    const hits = typeof document.elementsFromPoint === 'function'
+      ? document.elementsFromPoint(clientX, clientY)
+      : [document.elementFromPoint(clientX, clientY)].filter((hit): hit is Element => hit !== null);
+    const zone = hits
+      .map(hit => hit.closest<HTMLElement>('[data-drop-zone]'))
+      .find(candidate => candidate && boardEl.contains(candidate)) ?? null;
     if (!zone || !boardEl.contains(zone)) return null;
 
     if (active.origin === 'lane') {

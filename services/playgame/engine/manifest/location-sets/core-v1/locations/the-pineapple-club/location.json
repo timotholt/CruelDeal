@@ -66,7 +66,7 @@
   },
   "cosmetic": {
     "displayName": "THE PINEAPPLE CLUB",
-    "description": "When revealed, each player discards a card, then adds a random card to their hand.",
+    "description": "Each player discards a card, then adds a random card to their hand.",
     "accent": "#ff9f43",
     "art": {
       "map": {

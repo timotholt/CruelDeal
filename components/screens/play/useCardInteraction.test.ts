@@ -28,6 +28,7 @@ afterEach(() => {
   vi.useRealTimers();
   document.body.replaceChildren();
   Reflect.deleteProperty(document, 'elementFromPoint');
+  Reflect.deleteProperty(document, 'elementsFromPoint');
   vi.restoreAllMocks();
 });
 
@@ -51,7 +52,10 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     emptySlot.className = 'slot';
     source.append(visual);
     lane.append(emptySlot);
+    const obstructingRenderer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    obstructingRenderer.classList.add('card-renderer');
     board.append(source, lane);
+    overlay.append(obstructingRenderer);
     frame.append(board, overlay);
     document.body.append(frame);
 
@@ -59,7 +63,11 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     visual.getBoundingClientRect = () => new DOMRect(120, 620, 70, 98);
     Object.defineProperty(document, 'elementFromPoint', {
       configurable: true,
-      value: vi.fn(() => lane),
+      value: vi.fn(() => obstructingRenderer),
+    });
+    Object.defineProperty(document, 'elementsFromPoint', {
+      configurable: true,
+      value: vi.fn(() => [obstructingRenderer, lane]),
     });
 
     const state = createInitialMatchState(
@@ -96,6 +104,8 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
 
     expect(stageCardInLane).toHaveBeenCalledWith('pointer-card', 0);
     expect(board.classList.contains('dragging-card')).toBe(true);
+    expect(lane.classList.contains('drop-target')).toBe(true);
+    expect(emptySlot.classList.contains('next-drop')).toBe(true);
     expect(overlay.querySelector('.pointer-drag-ghost')).not.toBeNull();
     interaction.dispose();
   });

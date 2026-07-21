@@ -223,6 +223,20 @@ export type EffectExpr =
       /** Permanently add this signed delta to the created card's printed cost. */
       adjustCost?: NumExpr;
     }
+  /**
+   * Mint new card identities from the selected cards' current intrinsic
+   * runtime state. Definition identity, active stored Power contributions,
+   * tags, counters, and any text override are copied. Placement, lifecycle
+   * timestamps, pending effects, and live lane/location modifiers are not.
+   */
+  | {
+      kind: 'COPY_CARDS_TO_ZONE';
+      target: Selector;
+      owner: OwnerRef;
+      destination: CardDestination;
+      /** Override the copied card's final Cost after copying. */
+      setCost?: NumExpr;
+    }
   | { kind: 'MOVE_CARD_TO_ZONE'; target: Selector; destination: CardDestination }
   | { kind: 'RETURN_TO_LANE'; target: Selector; to: Selector; revealed?: boolean }
   | {

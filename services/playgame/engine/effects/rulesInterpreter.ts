@@ -19,6 +19,8 @@ import { type EvalCtx } from '../projections/context';
 import { findLanes } from '../projections/query';
 import { isPowerBearingCard } from '../projections/power-bearing';
 import { getCardPower } from '../projections/power';
+import { getCardTemplate } from '../projections/cardTemplate';
+import { activePowerContributions } from '../powerLedger';
 import {
   listDefIdsFromPool,
   pickDefIdFromPool,
@@ -546,6 +548,119 @@ function expandCanonicalAuthoredEffect(
             kind: 'ADD',
             delta: Math.trunc(evalNum(effect.adjustCost, liveContext)),
           },
+          cause: { ...context.source },
+        });
+      }
+    }
+    return commandWork(commands);
+  }
+
+  if (effect.kind === 'COPY_CARDS_TO_ZONE') {
+    const owner = resolveOwnerRef(
+      effect.owner,
+      liveContext.selfOwner,
+      liveContext.eventOwner ?? null,
+    );
+    if (!owner) return kernelStepSuccess({ work: [] });
+
+    let destination: Extract<
+      RulesCommand,
+      { type: 'CREATE_CARD' }
+    >['destination'];
+    if (effect.destination.kind === 'LANE') {
+      const lanes = selectLanes(effect.destination.lane, liveContext);
+      if (lanes.length === 0) return kernelStepSuccess({ work: [] });
+      const lane = lanes.length === 1
+        ? lanes[0]
+        : liveContext.rng.scope('copy-lane').pick(lanes);
+      destination = {
+        kind: 'LANE',
+        lane,
+        revealed: effect.destination.revealed ?? true,
+      };
+    } else {
+      destination = effect.destination;
+    }
+
+    const commands: RulesCommand[] = [];
+    for (const [index, sourceId] of select(effect.target, liveContext).entries()) {
+      const sourceCard = getCardRuntime(state, sourceId, manifest);
+      const template = sourceCard
+        ? getCardTemplate(manifest, sourceCard.defId)
+        : null;
+      if (!sourceCard || !template) continue;
+
+      const cardId = mintCardId(liveContext.rng.scope(`copy-id:${index}`));
+      commands.push({
+        type: 'CREATE_CARD',
+        owner,
+        cardId,
+        defId: sourceCard.defId,
+        depth: context.depth,
+        spawnSource: { kind: 'COPY_OF', sourceCardId: sourceId },
+        destination,
+        cause: { ...context.source },
+      });
+
+      if (template.basePower !== null) {
+        for (const contribution of activePowerContributions(
+          sourceCard,
+          template.basePower,
+        )) {
+          commands.push({
+            type: 'CHANGE_STORED_POWER',
+            cardId,
+            mutation: { kind: 'ADD', delta: contribution.delta },
+            cause: { ...context.source },
+          });
+        }
+      }
+
+      if (effect.setCost) {
+        commands.push({
+          type: 'CHANGE_COST',
+          cardId,
+          mutation: {
+            kind: 'SET',
+            value: Math.max(
+              0,
+              Math.floor(evalNum(effect.setCost, liveContext)),
+            ),
+          },
+          cause: { ...context.source },
+        });
+      } else if (sourceCard.costDelta !== 0) {
+        commands.push({
+          type: 'CHANGE_COST',
+          cardId,
+          mutation: { kind: 'ADD', delta: sourceCard.costDelta },
+          cause: { ...context.source },
+        });
+      }
+
+      for (const tag of sourceCard.tags) {
+        commands.push({
+          type: 'CHANGE_CARD_TAG',
+          cardId,
+          mutation: { kind: 'ADD', tag: structuredClone(tag) },
+          cause: { ...context.source },
+        });
+      }
+      if (sourceCard.text.override !== null) {
+        commands.push({
+          type: 'OVERRIDE_CARD_TEXT',
+          cardId,
+          override: structuredClone(sourceCard.text.override),
+          cause: { ...context.source },
+        });
+      }
+      for (const [name, value] of Object.entries(sourceCard.counters)) {
+        if (value === 0) continue;
+        commands.push({
+          type: 'CHANGE_CARD_COUNTER',
+          cardId,
+          name,
+          delta: value,
           cause: { ...context.source },
         });
       }

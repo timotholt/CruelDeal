@@ -30,6 +30,9 @@ export const canonicalVisualElement = (element: HTMLElement | null): HTMLElement
 export const normalizedCardRect = (element: HTMLElement): DOMRect => {
   const visual = canonicalVisualElement(element) ?? element;
   const rect = visual.getBoundingClientRect();
+  const rotationDegrees = cardRestingRotationDegrees(visual);
+  if (Math.abs(rotationDegrees) < 0.0001) return rect;
+
   const computed = getComputedStyle(visual);
   const computedWidth = Number.parseFloat(computed.width);
   const computedHeight = Number.parseFloat(computed.height);

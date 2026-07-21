@@ -5,8 +5,11 @@ import { simulateNetwork, verifySession, ApiError, lockedMutation } from './apiU
 import { getPersistedProfile, persistUserProfile, progressionStore } from './mockDb';
 import { getProgressionDataInternal } from './progressionLogic';
 import { generateInstanceId } from '../../utils/id';
+import { getIdentityClaims } from './developerAccess';
 
 const INITIAL_PROFILE: Omit<UserProfile, 'id'> = {
+    email: '',
+    isDeveloper: false,
     username: 'Commander',
     level: 0, 
     seasonProgress: { '2025_01': { level: 1, xp: 0 } },
@@ -40,7 +43,12 @@ export const profileService = {
         await simulateNetwork(400, 700);
         const persisted = getPersistedProfile();
         
-        const newProfileBase = { ...INITIAL_PROFILE, id: userId } as UserProfile;
+        const identity = getIdentityClaims(userId);
+        const newProfileBase = {
+            ...INITIAL_PROFILE,
+            ...identity,
+            id: userId,
+        } satisfies UserProfile;
 
         if (persisted && persisted.id === userId) {
             // Migration: Ensure critical fields exist even if they are missing from persisted storage
@@ -48,6 +56,10 @@ export const profileService = {
                 ...newProfileBase,
                 ...persisted,
                 id: userId, // Explicitly enforce the correct ID
+                // Authentication claims always come from the fake server,
+                // never browser-persisted profile data.
+                email: identity.email,
+                isDeveloper: identity.isDeveloper,
                 credits: (typeof persisted.credits === 'number') ? persisted.credits : newProfileBase.credits,
                 gold: (typeof persisted.gold === 'number') ? persisted.gold : newProfileBase.gold,
                 tokens: (typeof persisted.tokens === 'number') ? persisted.tokens : newProfileBase.tokens,

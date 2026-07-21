@@ -4,6 +4,7 @@ import { createPlayMotionSurface } from '../playMotionSurface';
 import {
   canonicalCardEndpoint,
   captureCardVisual,
+  normalizedCardRect,
 } from './createCardSurrogate';
 
 afterEach(() => {
@@ -38,6 +39,41 @@ const fixture = () => {
 };
 
 describe('governed card motion session', () => {
+  it('preserves painted hand scale and the already-built canonical text', () => {
+    const source = document.createElement('div');
+    source.className = 'card';
+    source.style.width = '70px';
+    source.style.height = '100px';
+    source.getBoundingClientRect = () => new DOMRect(20, 30, 63, 90);
+
+    const renderer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    renderer.classList.add('card-renderer');
+    renderer.setAttribute('viewBox', '0 0 500 700');
+    renderer.style.width = '100%';
+    renderer.style.height = '100%';
+    const name = document.createElement('div');
+    name.dataset.gameText = 'container';
+    Object.defineProperty(name, 'clientWidth', { configurable: true, value: 50 });
+    const inner = document.createElement('div');
+    inner.dataset.gameText = 'inner';
+    inner.style.fontSize = '10px';
+    name.append(inner);
+    renderer.append(name);
+    source.append(renderer);
+    document.body.append(source);
+
+    const rect = normalizedCardRect(source);
+    const snapshot = captureCardVisual('scaled-hand-card', source);
+    expect(rect.width).toBe(63);
+    expect(rect.height).toBe(90);
+    expect(snapshot.clone.querySelector<HTMLElement>('[data-game-text="inner"]')?.style.fontSize)
+      .toBe('10px');
+    expect(snapshot.clone.querySelector('.card-renderer')?.getAttribute('viewBox'))
+      .toBe('0 0 500 700');
+    expect((snapshot.clone.querySelector('.card-renderer') as SVGElement | null)?.style.width)
+      .toBe('100%');
+  });
+
   it('hands off without a blank representation and cleans up exactly once', async () => {
     vi.useFakeTimers();
     const { source, destination, cardId, surface, overlay } = fixture();

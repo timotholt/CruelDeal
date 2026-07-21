@@ -95,6 +95,25 @@ const justifyForAlign = (align: GameTextV3Align) =>
 const alignForVertical = (align: GameTextV3VerticalAlign) =>
   align === 'top' ? 'start' : align === 'bottom' ? 'end' : 'center';
 
+interface CachedTextLayout {
+  readonly fontSize: string;
+  readonly top: string;
+  readonly scale: string;
+  readonly mode: GameTextV3FitMode;
+}
+
+const textLayoutCache = new Map<string, CachedTextLayout>();
+const TEXT_LAYOUT_CACHE_LIMIT = 1024;
+
+const rememberTextLayout = (key: string, value: CachedTextLayout): void => {
+  textLayoutCache.set(key, value);
+  if (textLayoutCache.size <= TEXT_LAYOUT_CACHE_LIMIT) return;
+  const oldest = textLayoutCache.keys().next().value;
+  if (oldest !== undefined) textLayoutCache.delete(oldest);
+};
+
+export const clearGameTextLayoutCacheForTests = (): void => textLayoutCache.clear();
+
 let metricContext: CanvasRenderingContext2D | null | undefined;
 const getMetricContext = () => {
   if (metricContext === undefined) metricContext = document.createElement('canvas').getContext('2d');
@@ -192,6 +211,34 @@ export const GameTextV3 = (props: GameTextV3Props) => {
       textEl.style.top = '0px';
       const basePx = Number.parseFloat(getComputedStyle(textEl).fontSize)
         || (typeof props.baseFontSize === 'number' ? props.baseFontSize * 16 : 16);
+      const layoutKey = JSON.stringify([
+        renderedText(),
+        containerWidth,
+        containerHeight,
+        basePx,
+        mode,
+        maxLines(),
+        minScale(),
+        maxScale(),
+        safetyScale,
+        verticalMetric(),
+        verticalAlign(),
+        style.fontFamily,
+        style.fontWeight,
+        style.fontStyle,
+        style.letterSpacing,
+        style.lineHeight,
+        style.textTransform,
+      ]);
+      const cached = textLayoutCache.get(layoutKey);
+      if (cached) {
+        textEl.style.fontSize = cached.fontSize;
+        textEl.style.top = cached.top;
+        textEl.dataset.gameTextScale = cached.scale;
+        textEl.dataset.gameTextMode = cached.mode;
+        textEl.dataset.gameTextCache = 'hit';
+        return;
+      }
 
       const measurements = () => {
         const computed = getComputedStyle(textEl);
@@ -281,6 +328,13 @@ export const GameTextV3 = (props: GameTextV3Props) => {
 
       textEl.dataset.gameTextScale = scale.toFixed(4);
       textEl.dataset.gameTextMode = mode;
+      textEl.dataset.gameTextCache = 'miss';
+      rememberTextLayout(layoutKey, {
+        fontSize: textEl.style.fontSize,
+        top: textEl.style.top,
+        scale: scale.toFixed(4),
+        mode,
+      });
     };
 
     fit();

@@ -28,7 +28,7 @@
   },
   "cosmetic": {
     "displayName": "SUPERCHARGING STATION",
-    "description": "When revealed, each player gains 1 Energy.",
+    "description": "Each player gains 1 Energy.",
     "accent": "#8d78ff",
     "art": {
       "map": {

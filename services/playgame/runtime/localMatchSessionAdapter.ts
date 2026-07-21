@@ -30,7 +30,6 @@ import type {
   Seat,
 } from '../engine/types/ids';
 import type { MatchState } from '../engine/types/state';
-import type { EventTransition } from '../engine/transactionTimeline';
 import { storedPowerDelta } from '../engine/powerLedger';
 import type {
   CommittedTransactionTimeline,
@@ -47,7 +46,6 @@ import type {
 import {
   projectBootstrapForSeat,
   overlaySeatPrivatePlan,
-  projectAnimationEventForSeat,
   projectMatchStateForSeat,
   projectSnapshotForSeat,
   projectTransactionTimelineForSeat,
@@ -55,23 +53,35 @@ import {
   type SeatBootstrap,
   type SeatCardToken,
   type SeatMatchSnapshot,
-  type SeatReplayTimeline,
   type SeatTransactionTimeline,
 } from './projection';
 import type {
   SeatCardStatReadModel,
   SeatLanePowerReadModel,
 } from './seatReadModels';
+import type { DebugReplayTimeline } from '../debug/replayContracts';
+import {
+  annotateReplayEventJson,
+  createReplayActorResolver,
+  createReplayNameResolver,
+  describeReplayStep,
+} from '../debug/replayPresentation';
+
+export interface LocalMatchSessionAdapterOptions {
+  /** Server/fake-server identity claim; never inferred from browser input. */
+  readonly developerAccess: boolean;
+}
 
 /**
  * Trusted local bridge between canonical MatchSession authority and the
- * player-facing provider contract. Canonical state and IDs never appear in
- * this object's public result types.
+ * player-facing provider contract. Normal client results never expose
+ * canonical state or IDs. The separately authorized debug capability may
+ * expose canonical replay events, while retaining a seat-safe board snapshot.
  */
 export class LocalMatchSessionAdapter implements MatchClient {
   readonly bootstrap: SeatBootstrap;
   readonly content: MatchContentCatalog;
-  readonly debug: MatchClientDebug;
+  readonly debug: MatchClientDebug | null;
 
   readonly #session: MatchSession;
   readonly #manifest: Manifest;
@@ -81,28 +91,33 @@ export class LocalMatchSessionAdapter implements MatchClient {
   #intentCounter = 0;
   #disposed = false;
 
-  constructor(session: MatchSession) {
+  constructor(
+    session: MatchSession,
+    options: LocalMatchSessionAdapterOptions,
+  ) {
     this.#session = session;
     this.#manifest = session.manifest;
     this.#viewerSeat = session.bootstrap.viewerSeat;
     this.bootstrap = projectBootstrapForSeat(session.bootstrap);
     this.content = projectMatchContentCatalog(session.manifest);
-    this.debug = Object.freeze({
-      replay: () => this.replay(),
-      performanceProfile: () => this.performanceProfile(),
-      recordFramePresentationTiming: timing => {
-        this.recordFramePresentationTiming(timing);
-      },
-      installBrowserDebug: async () => {
-        const { installSnapDebug } = await import('../debug/installSnapDebug');
-        if (this.#disposed) return () => undefined;
-        return installSnapDebug(
-          this.#session.runtime,
-          this.#manifest,
-          this.#session.exportReplay,
-        );
-      },
-    });
+    this.debug = options.developerAccess
+      ? Object.freeze({
+          replay: () => this.#replay(),
+          performanceProfile: () => this.performanceProfile(),
+          recordFramePresentationTiming: timing => {
+            this.recordFramePresentationTiming(timing);
+          },
+          installBrowserDebug: async () => {
+            const { installSnapDebug } = await import('../debug/installSnapDebug');
+            if (this.#disposed) return () => undefined;
+            return installSnapDebug(
+              this.#session.runtime,
+              this.#manifest,
+              this.#session.exportReplay,
+            );
+          },
+        } satisfies MatchClientDebug)
+      : null;
 
     const initialization = session.runtime.initialization();
     this.#initialization = Object.freeze({
@@ -200,40 +215,30 @@ export class LocalMatchSessionAdapter implements MatchClient {
     return this.#session.runtime.performanceProfile();
   }
 
-  replay(): SeatReplayTimeline {
+  #replay(): DebugReplayTimeline {
+    const replayExport = this.#session.exportReplay();
     const rendered = renderRuntimeReplay(
-      this.#session.exportReplay(),
+      replayExport,
       this.#manifest,
     );
-    const steps = rendered.steps.map((step, index) => {
-      const before = index === 0
-        ? rendered.initialState
-        : rendered.steps[index - 1]!.state;
-      const event = step.event;
-      const transactionId = step.transactionId;
-      const projectedEvent = event && transactionId && step.scope
-        ? projectAnimationEventForSeat({
-            index: index - 1,
-            transactionId,
-            framedEvent: step.framedEvent!,
-            frame: step.frame,
-            scope: step.scope,
-            event,
-            before,
-            after: step.state,
-          } satisfies EventTransition, this.#viewerSeat)
-        : null;
+    const names = createReplayNameResolver(rendered.steps, this.#manifest);
+    const actors = createReplayActorResolver(replayExport);
+    const steps = rendered.steps.map((step) => {
       return {
         cursor: step.cursor,
-        ...(transactionId === undefined ? {} : { transactionId }),
+        ...(step.transactionId === undefined
+          ? {}
+          : { transactionId: step.transactionId }),
         frame: step.frame,
         scope: step.scope,
-        event: projectedEvent,
+        event: step.event,
         state: projectMatchStateForSeat(
           step.state,
           this.#viewerSeat,
           this.#manifest,
         ),
+        description: describeReplayStep(step, names, actors),
+        annotatedEventJson: annotateReplayEventJson(step, names),
       };
     });
     return {

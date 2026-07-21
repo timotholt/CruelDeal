@@ -1,5 +1,6 @@
 import { createMemo, type Accessor } from 'solid-js';
 import type { MatchContentCatalog } from '@/services/playgame/client/contentCatalog';
+import type { MatchIntentActivity } from '@/contexts/MatchSessionContext';
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
 import type {
@@ -8,10 +9,12 @@ import type {
 } from '@/services/playgame/runtime/seatReadModels';
 import type {
   SeatCardToken,
-  SeatReplayStep,
-  SeatReplayTimeline,
   SeatVisibleMatchState,
 } from '@/services/playgame/runtime/projection';
+import type {
+  DebugReplayStep,
+  DebugReplayTimeline,
+} from '@/services/playgame/debug/replayContracts';
 import {
   getCardsInZoneForSeat,
   getHandForSeat,
@@ -37,7 +40,8 @@ interface PlayBoardViewModelOptions {
   readonly ui: UiState;
   readonly isResolving: Accessor<boolean>;
   readonly turnFlowRunning: Accessor<boolean>;
-  readonly replayTimeline: Accessor<SeatReplayTimeline | null>;
+  readonly intentActivity: Accessor<MatchIntentActivity>;
+  readonly replayTimeline: Accessor<DebugReplayTimeline | null>;
   readonly replayCursor: Accessor<number>;
   readonly openPile: Accessor<SelectedPile | null>;
   readonly cardStatReadModel: (
@@ -51,7 +55,7 @@ interface PlayBoardViewModelOptions {
 
 export interface PlayBoardViewModel {
   readonly replayLastCursor: Accessor<number>;
-  readonly replayStep: Accessor<SeatReplayStep | null>;
+  readonly replayStep: Accessor<DebugReplayStep | null>;
   readonly inspectingReplayHistory: Accessor<boolean>;
   readonly presentedState: Accessor<SeatVisibleMatchState>;
   readonly boardLocked: Accessor<boolean>;
@@ -102,6 +106,7 @@ export function usePlayBoardViewModel(
   ));
   const boardLocked = createMemo(() => (
     options.turnFlowRunning()
+    || options.intentActivity() !== null
     || options.isResolving()
     || presentedState().phase === 'RESOLVING'
   ));

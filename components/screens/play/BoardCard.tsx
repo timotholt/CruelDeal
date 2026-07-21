@@ -13,7 +13,7 @@ import { usePlayUi } from '@/contexts/PlayUiContext';
 import type { ResolvedCard } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import { isBoardCardFaceDown } from '@/services/playgame/presentation/cardFacing';
-import { CardFace } from './CardFace';
+import { CardRenderer } from './rendering/CardRenderer';
 
 interface BoardCardProps {
   card: ResolvedCard;
@@ -110,7 +110,7 @@ export const BoardCard = (props: BoardCardProps) => {
       }}
       onClick={onClick}
     >
-      <CardFace card={props.card} variant="play" vfxRegistry={cardVfxRegistry} />
+      <CardRenderer card={props.card} vfxRegistry={cardVfxRegistry} />
     </div>
   );
 };

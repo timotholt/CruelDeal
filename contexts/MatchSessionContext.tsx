@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import type { MatchContentCatalog } from '@/services/playgame/client/contentCatalog';
 import type { MatchClient } from '@/services/playgame/client/matchClient';
+import { continueAfterIntentPendingPaint } from '@/services/playgame/client/intentSubmission';
 import { otherSeat, type LaneId, type Seat } from '@/services/playgame/engine/types/ids';
 import type {
   FramePresentationTiming,
@@ -23,10 +24,10 @@ import type {
   SeatBootstrap,
   SeatCardToken,
   SeatMatchSnapshot,
-  SeatReplayTimeline,
   SeatTransactionFrame,
   SeatTransactionTimeline,
 } from '@/services/playgame/runtime/projection';
+import type { DebugReplayTimeline } from '@/services/playgame/debug/replayContracts';
 
 export interface MatchSessionContextValue {
   readonly bootstrap: SeatBootstrap;
@@ -34,19 +35,20 @@ export interface MatchSessionContextValue {
   readonly localSeat: Seat;
   readonly remoteSeat: Seat;
   readonly snapshot: Accessor<SeatMatchSnapshot>;
+  readonly intentActivity: Accessor<MatchIntentActivity>;
   readonly openingTimeline: SeatTransactionTimeline;
   readonly subscribeCommittedTransactions: (
     subscriber: (timeline: SeatTransactionTimeline) => void,
   ) => () => void;
   readonly debug: {
     readonly performanceProfile: Accessor<MatchPerformanceProfile>;
-    readonly replay: Accessor<SeatReplayTimeline>;
+    readonly replay: Accessor<DebugReplayTimeline>;
   } | null;
   readonly actions: {
     stageCardInLane: (token: SeatCardToken, lane: LaneId) => Promise<boolean>;
     undoPending: () => Promise<boolean>;
     undoPendingCard: (token: SeatCardToken) => Promise<boolean>;
-    endTurn: (onWaitingForSeat?: (seat: Seat) => void) => Promise<boolean>;
+    endTurn: () => Promise<boolean>;
     refreshSnapshot: () => void;
     presentationStateForFrame: (
       frame: SeatTransactionFrame,
@@ -64,6 +66,18 @@ export interface MatchSessionContextValue {
   };
 }
 
+export type MatchIntentActivity =
+  | {
+      readonly kind: 'PROCESSING_INTENT';
+      readonly intent: 'END_TURN';
+    }
+  | {
+      readonly kind: 'WAITING_FOR_PLAYER';
+      readonly intent: 'END_TURN';
+      readonly seat: Seat;
+    }
+  | null;
+
 const MatchSessionCtx = createContext<MatchSessionContextValue>();
 
 export const MatchSessionProvider = (props: {
@@ -77,10 +91,10 @@ export const MatchSessionProvider = (props: {
   const [snapshot, setSnapshot] = createSignal(initialization.setup, {
     equals: false,
   });
+  const [intentActivity, setIntentActivity] =
+    createSignal<MatchIntentActivity>(null);
   const [performanceRevision, setPerformanceRevision] = createSignal(0);
   const [replayRevision, setReplayRevision] = createSignal(0);
-  const debugEnabled =
-    (import.meta as { env?: { DEV?: boolean } }).env?.DEV === true;
   let providerDisposed = false;
   const transactionSubscribers = new Set<
     (timeline: SeatTransactionTimeline) => void
@@ -96,6 +110,7 @@ export const MatchSessionProvider = (props: {
     untrack(() => {
       if (providerDisposed) return;
       batch(() => {
+        setIntentActivity(null);
         setSnapshot({
           version: 1,
           matchId: timeline.matchId,
@@ -141,9 +156,10 @@ export const MatchSessionProvider = (props: {
     localSeat,
     remoteSeat,
     snapshot,
+    intentActivity,
     openingTimeline: initialization.opening,
     subscribeCommittedTransactions,
-    debug: debugEnabled && client.debug
+    debug: client.debug
       ? {
           replay: () => {
             void replayRevision();
@@ -159,15 +175,35 @@ export const MatchSessionProvider = (props: {
       stageCardInLane: (token, lane) => accepted(client.stageCard(token, lane)),
       undoPending: () => accepted(client.undoLastStagedCard()),
       undoPendingCard: token => accepted(client.unstageCard(token)),
-      endTurn: async (onWaitingForSeat) => {
-        const result = await client.endTurn();
+      endTurn: async () => {
+        if (intentActivity() !== null) return false;
+        setIntentActivity({ kind: 'PROCESSING_INTENT', intent: 'END_TURN' });
+        await continueAfterIntentPendingPaint();
+        if (providerDisposed) return false;
+        let result: Awaited<ReturnType<MatchClient['endTurn']>>;
+        try {
+          result = await client.endTurn();
+        } catch (error) {
+          if (!providerDisposed) setIntentActivity(null);
+          throw error;
+        }
         if (providerDisposed || result.status !== 'accepted') {
+          setIntentActivity(null);
           refreshSnapshot();
           return false;
         }
-        if (result.commit === 'PRIVATE') {
-          refreshSnapshot();
-          onWaitingForSeat?.(remoteSeat);
+        if (
+          result.commit === 'PRIVATE'
+          && intentActivity()?.kind === 'PROCESSING_INTENT'
+        ) {
+          batch(() => {
+            setIntentActivity({
+              kind: 'WAITING_FOR_PLAYER',
+              intent: 'END_TURN',
+              seat: remoteSeat,
+            });
+            refreshSnapshot();
+          });
         }
         return true;
       },
@@ -186,7 +222,7 @@ export const MatchSessionProvider = (props: {
 
   let uninstallDebug = (): void => undefined;
   if (
-    debugEnabled
+    client.debug
     && typeof window !== 'undefined'
   ) {
     void client.debug?.installBrowserDebug?.().then((uninstall) => {

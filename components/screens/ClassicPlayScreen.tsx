@@ -14,6 +14,7 @@ import type { MatchBootstrap } from '@/services/playgame/runtime/contracts';
 import { LocalMatchSessionAdapter } from '@/services/playgame/runtime/localMatchSessionAdapter';
 import { MatchSession, MatchSessionSetupError } from '@/services/playgame/runtime/matchSession';
 import type { PlayInteractionSettings } from './play/playInteractionSettings';
+import { useUser } from '@/contexts/UserContext';
 
 interface ClassicPlayScreenProps {
   onExit?: () => void;
@@ -35,6 +36,7 @@ const DevelopmentDeckPicker: Component<DebugDeckPickerProps> = import.meta.env.D
   : () => null;
 
 export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
+  const { user } = useUser();
   const [client, setClient] = createSignal<MatchClient | null>(null);
   const [setupError, setSetupError] = createSignal<string | null>(null);
 
@@ -42,6 +44,7 @@ export const ClassicPlayScreen = (props: ClassicPlayScreenProps) => {
     try {
       setClient(new LocalMatchSessionAdapter(
         MatchSession.fromBootstrap(candidate),
+        { developerAccess: user.isDeveloper },
       ));
       setSetupError(null);
     } catch (error) {

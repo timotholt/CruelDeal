@@ -50,7 +50,7 @@
   },
   "cosmetic": {
     "displayName": "RENT-A-WRECK",
-    "description": "When revealed, each player adds a move card to their hand.",
+    "description": "Each player adds a move card to their hand.",
     "accent": "#ff7a59",
     "art": {
       "map": {

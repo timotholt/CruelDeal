@@ -1,7 +1,7 @@
 import { render } from 'solid-js/web';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { GameTextV3 } from './GameTextV3';
+import { clearGameTextLayoutCacheForTests, GameTextV3 } from './GameTextV3';
 
 class ResizeObserverStub {
   observe() {}
@@ -26,6 +26,7 @@ const restoreDescriptor = (name: keyof typeof originalDescriptors) => {
 };
 
 afterEach(() => {
+  clearGameTextLayoutCacheForTests();
   (Object.keys(originalDescriptors) as Array<keyof typeof originalDescriptors>).forEach(restoreDescriptor);
   HTMLElement.prototype.getBoundingClientRect = originalGetBoundingClientRect;
   document.body.replaceChildren();
@@ -64,6 +65,40 @@ describe('GameTextV3 layout fitting', () => {
     );
 
     expect(host.querySelector('[data-game-text="inner"]')?.getAttribute('data-game-text-scale')).toBe('1.0000');
+    dispose();
+  });
+
+  it('reuses a completed fit for identical canonical geometry', () => {
+    for (const [name, value] of Object.entries({
+      clientWidth: 400,
+      clientHeight: 240,
+      offsetWidth: 300,
+      offsetHeight: 100,
+      scrollWidth: 300,
+      scrollHeight: 100,
+    })) {
+      Object.defineProperty(HTMLElement.prototype, name, {
+        configurable: true,
+        get: () => value,
+      });
+    }
+
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const dispose = render(
+      () => (
+        <>
+          <GameTextV3 text="LEON" baseFontSize="100px" fitMode="paragraph" maxLines={3} />
+          <GameTextV3 text="LEON" baseFontSize="100px" fitMode="paragraph" maxLines={3} />
+        </>
+      ),
+      host,
+    );
+
+    const inner = host.querySelectorAll<HTMLElement>('[data-game-text="inner"]');
+    expect(inner[0]?.dataset.gameTextCache).toBe('miss');
+    expect(inner[1]?.dataset.gameTextCache).toBe('hit');
+    expect(inner[1]?.style.fontSize).toBe(inner[0]?.style.fontSize);
     dispose();
   });
 });
