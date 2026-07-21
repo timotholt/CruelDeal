@@ -306,6 +306,7 @@ describe('split play providers', () => {
     const observations: Array<{
       type: string;
       token: string | null;
+      owner: string | null;
       phase: string;
       locked: boolean;
       revealed: boolean | null;
@@ -318,6 +319,9 @@ describe('split play providers', () => {
         observations.push({
           type: frame.event?.type ?? 'REDACTED',
           token,
+          owner: typeof frame.event?.data.owner === 'string'
+            ? frame.event.data.owner
+            : null,
           phase: harness.ui.presentedState().phase,
           locked: harness.ui.ui.isFlipped,
           revealed: token === null
@@ -346,6 +350,17 @@ describe('split play providers', () => {
     expect(observations.find(
       observation => observation.type === 'TURN_RESOLUTION_STARTED',
     )).toMatchObject({ phase: 'RESOLVING', locked: true });
+
+    const remoteStageIndex = observations.findIndex(observation => (
+      observation.type === 'CARD_STAGED'
+      && observation.owner === harness.match.remoteSeat
+    ));
+    const resolutionStartIndex = observations.findIndex(
+      observation => observation.type === 'TURN_RESOLUTION_STARTED',
+    );
+    expect(remoteStageIndex).toBeGreaterThanOrEqual(0);
+    expect(remoteStageIndex).toBeLessThan(resolutionStartIndex);
+    expect(observations[remoteStageIndex]?.locked).toBe(true);
 
     const revealFrames = timeline.frames
       .filter(frame => frame.event?.type === 'CARD_REVEALED');

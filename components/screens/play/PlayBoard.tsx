@@ -350,7 +350,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const sink = createPlayPresentationSink({
       host,
       ui: {
-        setFlipped: value => setUi('isFlipped', value),
         setLockedResult: result => setUi('lockedResult', result),
         setEndGamePromptVisible: value => setUi('showEndGamePrompt', value),
       },

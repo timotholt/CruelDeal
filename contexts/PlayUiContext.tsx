@@ -98,12 +98,7 @@ export const PlayUiProvider = (props: {
   const adoptFrame = (
     frame: SeatTransactionTimeline['frames'][number],
   ): void => {
-    batch(() => {
-      if (frame.event?.type === 'TURN_RESOLUTION_STARTED') {
-        setUi('isFlipped', true);
-      }
-      setPresentedState(() => match.actions.presentationStateForFrame(frame));
-    });
+    setPresentedState(() => match.actions.presentationStateForFrame(frame));
   };
 
   const snapToEnd = (timeline: SeatTransactionTimeline): void => {
@@ -180,6 +175,13 @@ export const PlayUiProvider = (props: {
     batch(() => {
       setPresentationBusy(true);
       setTurnFlowRunning(true);
+      if (timeline.frames.some(
+        frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
+      )) {
+        // Remote CARD_STAGED frames canonically precede resolution start, but
+        // the local lock beat must paint before any hidden opposing card flies.
+        setUi('isFlipped', true);
+      }
     });
     timelineQueue.push(timeline);
     void drainPresentationQueue();

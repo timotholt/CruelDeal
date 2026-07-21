@@ -18,8 +18,9 @@ export interface BoardCardResolutionLockInput {
 
 /**
  * Historical replay facing must come from the selected frame. The live UI
- * keeps its sidecar lock because it paints a synthetic face-down beat just
- * before TURN_RESOLUTION_STARTED is adopted.
+ * keeps its sidecar lock because it paints a synthetic face-down beat when the
+ * complete resolution transaction is enqueued, before any committed frame is
+ * adopted or animated.
  */
 export function isBoardCardResolutionLocked(input: BoardCardResolutionLockInput): boolean {
   return input.inspectingHistory

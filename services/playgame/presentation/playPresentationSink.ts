@@ -29,7 +29,6 @@ export interface PresentationToastHandle {
 }
 
 export interface PlayPresentationUiPort {
-  setFlipped(value: boolean): void;
   setLockedResult(result: SeatVisibleMatchState['result']): void;
   setEndGamePromptVisible(value: boolean): void;
 }
@@ -51,10 +50,11 @@ export interface CreatePlayPresentationSinkOptions {
 
 interface RevealPreparation {
   readonly cardId: SeatCardToken;
-  readonly session: CardMotionSession;
+  readonly startRect: DOMRect;
   readonly width: number;
   readonly height: number;
   readonly rotationDegrees: number;
+  session: CardMotionSession | null;
 }
 
 interface LocationPreparation {
@@ -187,23 +187,13 @@ const prepareCardReveal = (
   const element = host.cardElement(cardId);
   if (!element?.isConnected) return null;
   const snapshot = captureCardVisual(cardId, element);
-  const session = host.motionSurface.cardMotion.begin({
-    cardId,
-    route: 'reveal',
-    basis: { kind: 'clone', snapshot },
-    startRect: snapshot.rect,
-    rotationDegrees: snapshot.rotationDegrees,
-    face: 'faceUp',
-    sourceElement: element,
-    zIndex: 200,
-    className: 'reveal-flyer',
-  });
   return {
     cardId,
-    session,
+    startRect: snapshot.rect,
     width: snapshot.rect.width,
     height: snapshot.rect.height,
     rotationDegrees: snapshot.rotationDegrees,
+    session: null,
   };
 };
 
@@ -213,6 +203,25 @@ const animateCardReveal = async (
   signal: AbortSignal,
 ): Promise<void> => {
   if (signal.aborted) return;
+  // Before adoption, an opposing card is intentionally identity-redacted.
+  // Clone the authorized face-up DOM after CARD_REVEALED is adopted while
+  // retaining the stable pre-adoption geometry. This code runs before the
+  // first await, so the canonical card is leased before the browser paints.
+  const element = host.cardElement(preparation.cardId);
+  if (!element?.isConnected) return;
+  const faceUpSnapshot = captureCardVisual(preparation.cardId, element);
+  const session = host.motionSurface.cardMotion.begin({
+    cardId: preparation.cardId,
+    route: 'reveal',
+    basis: { kind: 'clone', snapshot: faceUpSnapshot },
+    startRect: preparation.startRect,
+    rotationDegrees: preparation.rotationDegrees,
+    face: 'faceUp',
+    sourceElement: element,
+    zIndex: 200,
+    className: 'reveal-flyer',
+  });
+  preparation.session = session;
   const boardRect = host.motionSurface.frameRect();
   const centerRect = new DOMRect(
     boardRect.left + boardRect.width / 2 - preparation.width / 2,
@@ -221,7 +230,7 @@ const animateCardReveal = async (
     preparation.height,
   );
   host.playSfx?.('reveal');
-  const centerResult = await preparation.session.animateTo({
+  const centerResult = await session.animateTo({
     rect: centerRect,
     rotationDegrees: preparation.rotationDegrees,
     face: 'faceUp',
@@ -235,7 +244,7 @@ const animateCardReveal = async (
   if (centerResult || signal.aborted) return;
   if (!await waitFor(REVEAL_CINEMATIC_TIMING.holdMs, signal)) return;
   const endpoint = host.motionSurface.cardMotion.endpoint(preparation.cardId);
-  const returnResult = await preparation.session.animateTo(endpoint, {
+  const returnResult = await session.animateTo(endpoint, {
     durationMs: REVEAL_CINEMATIC_TIMING.returnMs,
     easing: 'cubic-bezier(.4,0,.2,1)',
     scaleFrom: 2.2,
@@ -243,7 +252,7 @@ const animateCardReveal = async (
     faceAtLanding: 'faceUp',
   });
   if (returnResult || signal.aborted) return;
-  await preparation.session.handoffTo(endpoint);
+  await session.handoffTo(endpoint);
 };
 
 const animateLocationReveal = async (
@@ -289,7 +298,6 @@ export const createPlayPresentationSink = (
   const { host, ui, browser } = options;
   const preparedFrames = new Map<string, FramePreparation>();
   let disposed = false;
-  let resolutionTransaction = false;
 
   const cleanupFrame = (
     preparation: FramePreparation,
@@ -297,7 +305,9 @@ export const createPlayPresentationSink = (
   ): void => {
     if (cancelMotion) {
       preparation.eventAnimation.dispose('presentation-invalidated');
-      void preparation.reveal?.session.cancel('presentation-invalidated');
+      if (preparation.reveal?.session) {
+        void preparation.reveal.session.cancel('presentation-invalidated');
+      }
     } else {
       preparation.eventAnimation.dispose();
     }
@@ -314,11 +324,8 @@ export const createPlayPresentationSink = (
   };
 
   return {
-    beforeTransaction: (frames) => {
+    beforeTransaction: () => {
       cleanupAll(true);
-      resolutionTransaction = frames.some(
-        frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
-      );
     },
 
     beforeFrame: (frame) => {
@@ -333,9 +340,6 @@ export const createPlayPresentationSink = (
         eventAnimation = prepareEventAnimation(host, frame);
         reveal = prepareCardReveal(host, frame);
         location = prepareLocationReveal(host, browser, frame);
-        if (frame.event?.type === 'TURN_RESOLUTION_STARTED') {
-          ui.setFlipped(true);
-        }
         preparedFrames.set(key, {
           frame,
           eventAnimation,
@@ -345,7 +349,9 @@ export const createPlayPresentationSink = (
         });
       } catch (error) {
         eventAnimation?.dispose('presentation-invalidated');
-        void reveal?.session.cancel('presentation-invalidated');
+        if (reveal?.session) {
+          void reveal.session.cancel('presentation-invalidated');
+        }
         if (location) resetLocationStyles(location);
         throw error;
       }
@@ -419,15 +425,12 @@ export const createPlayPresentationSink = (
 
     afterTransaction: () => {
       cleanupAll(true);
-      if (resolutionTransaction) ui.setFlipped(false);
-      resolutionTransaction = false;
     },
 
     dispose: () => {
       if (disposed) return;
       disposed = true;
       cleanupAll(true);
-      resolutionTransaction = false;
     },
   };
 };

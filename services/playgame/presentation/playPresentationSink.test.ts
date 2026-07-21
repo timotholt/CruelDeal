@@ -82,7 +82,6 @@ const fixture = () => {
     playSfx,
   });
   const ui: PlayPresentationUiPort = {
-    setFlipped: vi.fn(),
     setLockedResult: vi.fn(),
     setEndGamePromptVisible: vi.fn(),
   };
@@ -114,32 +113,14 @@ const fixture = () => {
 };
 
 describe('browser play presentation sink', () => {
-  it('owns resolution lock/unlock and match-result UI without a command port', async () => {
-    vi.useFakeTimers();
-    try {
-      const test = fixture();
-      const resolution = frame('TURN_RESOLUTION_STARTED', { turn: 1 });
-      test.sink.beforeTransaction?.([resolution]);
-      test.sink.beforeFrame?.(resolution);
-      expect(test.ui.setFlipped).toHaveBeenCalledWith(true);
-      const animation = test.sink.afterFrame?.(
-        resolution,
-        new AbortController().signal,
-      );
-      await vi.runAllTimersAsync();
-      await animation;
-      await test.sink.afterTransaction?.();
-      expect(test.ui.setFlipped).toHaveBeenLastCalledWith(false);
-
-      const ended = frame('MATCH_ENDED', { result }, state({ result }));
-      test.sink.beforeTransaction?.([ended]);
-      test.sink.beforeFrame?.(ended);
-      await test.sink.afterFrame?.(ended, new AbortController().signal);
-      expect(test.ui.setLockedResult).toHaveBeenCalledWith(result);
-      expect(test.ui.setEndGamePromptVisible).toHaveBeenCalledWith(true);
-    } finally {
-      vi.useRealTimers();
-    }
+  it('owns match-result UI without a command or interaction-lock port', async () => {
+    const test = fixture();
+    const ended = frame('MATCH_ENDED', { result }, state({ result }));
+    test.sink.beforeTransaction?.([ended]);
+    test.sink.beforeFrame?.(ended);
+    await test.sink.afterFrame?.(ended, new AbortController().signal);
+    expect(test.ui.setLockedResult).toHaveBeenCalledWith(result);
+    expect(test.ui.setEndGamePromptVisible).toHaveBeenCalledWith(true);
   });
 
   it('shows the canonical turn banner and dismisses it when aborted', async () => {
@@ -163,7 +144,7 @@ describe('browser play presentation sink', () => {
     }
   });
 
-  it('prepares a facedown reveal before adoption and cleans up after cinematic handoff', async () => {
+  it('uses the post-adoption enemy identity in the reveal flyer', async () => {
     vi.useFakeTimers();
     try {
       const test = fixture();
@@ -177,13 +158,20 @@ describe('browser play presentation sink', () => {
       const revealed = frame('CARD_REVEALED', { card: cardId });
 
       test.sink.beforeFrame?.(revealed);
-      expect(test.overlay.querySelector('.reveal-flyer')).not.toBeNull();
-      expect(card.style.visibility).toBe('hidden');
+      expect(test.overlay.querySelector('.reveal-flyer')).toBeNull();
+
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = 'REMOTE IDENTITY';
+      card.append(name);
       card.classList.remove('facedown');
       const animation = test.sink.afterFrame?.(
         revealed,
         new AbortController().signal,
       );
+      const flyer = test.overlay.querySelector<HTMLElement>('.reveal-flyer');
+      expect(flyer?.textContent).toContain('REMOTE IDENTITY');
+      expect(card.style.visibility).toBe('hidden');
       await vi.runAllTimersAsync();
       await animation;
 
