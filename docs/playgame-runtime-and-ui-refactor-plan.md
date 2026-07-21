@@ -828,6 +828,29 @@ Phase 2 is a consumer migration. It may expose projected committed events, react
 
 **[BUILD AFTER]** Reduce orchestration density after the runtime API is stable.
 
+### Animation-Preservation Contract
+
+The current card flip, reveal, transfer, drag, landing, lane-slide, and location
+reveal choreography is accepted product behavior and is frozen during Phase 4.
+Phase 4 is an ownership and composition refactor, not an animation rewrite.
+
+- Existing animation implementations remain in their dedicated presentation
+  modules (`presentation/cardMotion`, `eventAnimator`, the presentation sink,
+  and `services/vfx/animations`). Extracted UI components call those routines
+  through the existing presentation/motion interfaces; they do not reproduce
+  animation code inline.
+- Do not change durations, easing curves, transforms, resting rotations,
+  visibility handoffs, face-adoption timing, sequencing, DOM-clone behavior, or
+  temporary-flyer lifecycle as part of component extraction.
+- Move call sites only when necessary to transfer component ownership. Any such
+  move must preserve the same routine, arguments, ordering, anchor coordinate
+  space, and cancellation behavior.
+- Before extracting an owner, characterize its observable animation behavior.
+  After extraction, the same characterization and architecture fences must
+  pass unchanged.
+- A desired animation change is separate follow-up work with explicit visual
+  approval; it must not be bundled into Phase 4 cleanup.
+
 ### Work
 
 Extract cohesive units without changing the visual design:
@@ -862,6 +885,12 @@ Extract cohesive units without changing the visual design:
 ### Exit Criteria
 
 - **[BUILD AFTER]** `PlayBoard` is a composition root; replay is read-only; children receive explicit view data/commands; no module bypasses session API.
+- **[BUILD AFTER]** Phase 4 introduces no new inline animation implementation,
+  and all existing motion/reveal characterization tests and card-motion
+  architecture fences pass without weakening their assertions.
+- **[BUILD AFTER]** Card flip, reveal apex/hold, transfer flight, landing,
+  drag-to-lane handoff, location flip/map fade synchronization, and lane
+  topology motion retain their pre-Phase-4 timing and visible behavior.
 
 ## Phase 5: Component and Layout Refactors
 

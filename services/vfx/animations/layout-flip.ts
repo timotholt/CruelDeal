@@ -18,10 +18,10 @@
  * Ported from ccg/vfx-engine/project/ui/layout-flip.js.
  *
  * Solid usage pattern:
- *   const rects = captureHandRects(currentIds, cardRefs);
+ *   const rects = captureCardRects(currentIds, cardRefs);
  *   setState(/* mutation * /);
  *   // After next microtask (so Solid has rendered):
- *   queueMicrotask(() => playLayoutSlide(rects, cardRefs));
+ *   queueMicrotask(() => playCardLayoutSlide(rects, cardRefs));
  */
 
 /** Capture the current bounding rect for each id that still has a live ref. */
@@ -36,9 +36,6 @@ export function captureCardRects(
   }
   return rects;
 }
-
-/** @deprecated Use captureCardRects. */
-export const captureHandRects = captureCardRects;
 
 export interface LayoutSlideOpts {
   duration?: number;
@@ -128,6 +125,3 @@ export function playCardLayoutSlide(
     }, duration + 100);
   }
 }
-
-/** @deprecated Use playCardLayoutSlide. */
-export const playLayoutSlide = playCardLayoutSlide;

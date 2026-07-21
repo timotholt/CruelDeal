@@ -32,5 +32,5 @@ export type {
   RevealPendingCinematicOpts,
 } from './animations/reveal-cinematic';
 
-export { captureHandRects, playLayoutSlide } from './animations/layout-flip';
+export { captureCardRects, playCardLayoutSlide } from './animations/layout-flip';
 export type { LayoutSlideOpts } from './animations/layout-flip';

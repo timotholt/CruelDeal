@@ -35,12 +35,14 @@ describe('Phase 1.21 presentation architecture fences', () => {
   it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
     const playBoard = source('./PlayBoard.tsx');
+    const opening = source('../../../services/playgame/presentation/openingPresentation.ts');
     const css = source('../../../src/styles/playgame.css');
 
     expect(classicPlay).toContain('class="playgame-root playfield-hidden"');
-    expect(playBoard).toContain('createPlayfieldEventPresenter(playRoot)');
-    expect(playBoard).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
-    expect(playBoard).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
+    expect(playBoard).toContain('startOpeningPresentation({');
+    expect(opening).toContain('createPlayfieldEventPresenter(options.root)');
+    expect(opening).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
+    expect(opening).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
     expect(playBoard).not.toContain('fadeInLocationTile');
     expect(css).toContain('.playgame-root.playfield-hidden .board > .board-game-area');
     expect(css).toContain('transition: opacity 2000ms ease');
@@ -48,16 +50,36 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
   it('keeps opening on one committed frame walk and derives terminal copy from presented state', () => {
     const playBoard = source('./PlayBoard.tsx');
+    const opening = source('../../../services/playgame/presentation/openingPresentation.ts');
     const uiContext = source('../../../contexts/PlayUiContext.tsx');
 
-    expect(playBoard).toContain('uiActions.presentOpening(openingTimeline)');
-    expect(playBoard).toContain('uiActions.bindPresentationSink(sink)');
+    expect(playBoard).toContain('presentOpening: uiActions.presentOpening');
+    expect(playBoard).toContain('bindPresentationSink: uiActions.bindPresentationSink');
+    expect(opening).toContain('options.presentOpening(options.timeline)');
+    expect(opening).toContain('options.bindPresentationSink(options.sink)');
     expect(uiContext).toContain('await director.present(timeline, sink)');
     expect(uiContext).not.toContain('for (const frame of timeline.frames)');
     expect(playBoard).not.toContain('createScript');
     expect(playBoard).not.toContain('resolveTurnFlow');
     expect(playBoard).toContain('presentedState().turn');
     expect(playBoard).not.toContain('Turn 6');
+  });
+
+  it('keeps animation implementations out of the PlayBoard composition root', () => {
+    const playBoard = source('./PlayBoard.tsx');
+    const opening = source('../../../services/playgame/presentation/openingPresentation.ts');
+    const handPresentation = source('../../../services/playgame/presentation/handPresentation.ts');
+
+    expect(playBoard).toContain('startOpeningPresentation({');
+    expect(playBoard).toContain('prepareHandLayoutTransition(allIds, cardRefs)');
+    expect(playBoard).not.toContain("from '@/services/vfx/animations/");
+    expect(playBoard).not.toContain('createPlayfieldEventPresenter(');
+    expect(playBoard).not.toContain('setTimeout(');
+    expect(playBoard).not.toContain('requestAnimationFrame(');
+    expect(opening).toContain("'HIDE_PLAYFIELD'");
+    expect(opening).toContain("'SHOW_PLAYFIELD'");
+    expect(handPresentation).toContain('captureCardRects(cardIds, cardRefs)');
+    expect(handPresentation).toContain('playCardLayoutSlide(oldRects, cardRefs)');
   });
 
   it('publishes committed turn blocks to one director-owned presentation queue', () => {

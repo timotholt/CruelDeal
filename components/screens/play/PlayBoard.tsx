@@ -33,7 +33,6 @@ import type { LaneId } from '@/services/playgame/engine/types/ids';
 import type {
   SeatLanePowerReadModel,
 } from '@/services/playgame/runtime/seatReadModels';
-import { captureHandRects, playLayoutSlide } from '@/services/vfx/animations/layout-flip';
 import { ZoomInspector } from '../ZoomInspector';
 import { HandRow } from './HandRow';
 import { LaneColumn } from './LaneColumn';
@@ -49,12 +48,15 @@ import { TurnOrb } from './TurnOrb';
 import { MiniDeckIndicator } from './MiniDeckIndicator';
 import { selectInteractiveHand } from './handInteractivity';
 import {
+  prepareHandLayoutTransition,
+} from '@/services/playgame/presentation/handPresentation';
+import {
   releaseAllHandSlots,
   releaseHandSlots,
   reserveHandSlots,
 } from '@/services/playgame/presentation/handReservations';
 import { isBoardCardResolutionLocked } from '@/services/playgame/presentation/cardFacing';
-import { createPlayfieldEventPresenter } from '@/services/playgame/presentation/playfieldEvents';
+import { startOpeningPresentation } from '@/services/playgame/presentation/openingPresentation';
 import { createPlayPresentationHost } from '@/services/playgame/presentation/playPresentationHost';
 import { createPlayPresentationSink } from '@/services/playgame/presentation/playPresentationSink';
 import { showToast } from '@/services/playgame/toast';
@@ -289,11 +291,11 @@ export const PlayBoard = (props: PlayBoardProps) => {
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
     // both the restored card and the shuffled hand into place.
     const allIds = [lastStaged as string, ...interactiveHand().map((c) => c.id)];
-    const oldRects = captureHandRects(allIds, cardRefs);
+    const handLayoutTransition = prepareHandLayoutTransition(allIds, cardRefs);
     setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
     const undone = await actions.undoPending().finally(() => setReplayClientActivity(null));
     if (!undone) return;
-    queueMicrotask(() => playLayoutSlide(oldRects, cardRefs));
+    handLayoutTransition.playAfterRender();
   };
 
   let boardEl: HTMLDivElement | undefined;
@@ -367,47 +369,17 @@ export const PlayBoard = (props: PlayBoardProps) => {
         ),
       },
     });
-    const openingController = new AbortController();
-    let unbindPresentationSink: (() => void) | null = null;
-    let openingToast: ReturnType<typeof showToast> | null = null;
-    const presentPlayfieldEvent = createPlayfieldEventPresenter(playRoot);
-    const waitForOpeningBeat = (durationMs: number): Promise<boolean> => {
-      const signal = openingController.signal;
-      if (signal.aborted) return Promise.resolve(false);
-      return new Promise(resolve => {
-        let settled = false;
-        const finish = (completed: boolean): void => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timeout);
-          signal.removeEventListener('abort', onAbort);
-          resolve(completed);
-        };
-        const onAbort = (): void => finish(false);
-        const timeout = setTimeout(() => finish(true), durationMs);
-        signal.addEventListener('abort', onAbort, { once: true });
-      });
-    };
-
-    // The opening transaction is already one committed immutable block. Keep
-    // the input lock active while the non-gameplay title prelude runs, then
-    // let the director adopt and animate that block frame by frame.
-    uiActions.presentOpening(openingTimeline);
-    void (async () => {
-      await presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' });
-      if (!await waitForOpeningBeat(200)) return;
-      openingToast = showToast(toastAreaEl!, 'CRUEL DEAL', { duration: 2_500 });
-      if (!await waitForOpeningBeat(2_800)) return;
-      await presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' });
-      if (!await waitForOpeningBeat(150)) return;
-      if (openingController.signal.aborted) return;
-      unbindPresentationSink = uiActions.bindPresentationSink(sink);
-    })();
+    const openingPresentation = startOpeningPresentation({
+      root: playRoot,
+      toastArea: toastAreaEl,
+      timeline: openingTimeline,
+      sink,
+      presentOpening: uiActions.presentOpening,
+      bindPresentationSink: uiActions.bindPresentationSink,
+    });
 
     onCleanup(() => {
-      openingController.abort('play-board-unmounted');
-      openingToast?.dismiss();
-      unbindPresentationSink?.();
+      openingPresentation.dispose();
       sink.dispose();
       releaseAllHandSlots({ setUi });
       motion.cardMotion.cancelAll('presentation-invalidated');
