@@ -1616,12 +1616,14 @@ interface PreparedBeatPresentation {
   readonly beatId: string;
   readonly firstFrame: number;
   readonly lastFrame: number;
+  readonly declaredDurationMs: number;
   presentAfterAdoption(signal: AbortSignal): Promise<PresentationOutcome>;
   cancel(reason: PresentationCancelReason): void;
 }
 
 interface PreparedTransactionPresentation {
   readonly transactionId: string;
+  readonly declaredDurationMs: number;
   present(signal: AbortSignal): Promise<PresentationOutcome>;
   cancel(reason: PresentationCancelReason): void;
 }

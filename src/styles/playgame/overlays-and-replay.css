@@ -398,6 +398,9 @@
     opacity: 0;
     animation: toastIn var(--toast-duration, 1100ms) ease-out forwards;
   }
+  .toast.toast--compiled-timeline {
+    animation: none;
+  }
   @keyframes toastIn {
     0%   { opacity: 0; transform: translateY(12px) scale(0.9); }
     12%  { opacity: 1; transform: translateY(0) scale(1); }

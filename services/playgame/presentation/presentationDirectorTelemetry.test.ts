@@ -9,6 +9,7 @@ import {
   PresentationDirector,
   PresentationTimeoutError,
 } from './presentationDirector';
+import { planForTimeline } from './__tests__/presentationPlanFixture';
 
 const state: SeatVisibleMatchState = {
   turn: 1,
@@ -36,6 +37,7 @@ const frame: SeatTransactionFrame = {
   frame: asFrame(1),
   scope: { turn: 1, phase: 'END' },
   event: { type: 'TURN_ENDED', data: { turn: 1 } },
+  effect: null,
   before: state,
   after: state,
 };
@@ -56,22 +58,38 @@ describe('PresentationDirector diagnostics', () => {
   it('records completed and failed frame hooks without giving diagnostics authority', async () => {
     const outcomes: string[] = [];
     const completed = new PresentationDirector({
-      cursor: { advance: () => undefined, snapToEnd: () => undefined },
+      cursor: { advanceBatch: () => undefined, snapToEnd: () => undefined },
       onFrameSettled: (_frame, timing) => {
         outcomes.push(timing.outcome);
         throw new Error('diagnostic sidecar failed');
       },
     });
-    await expect(completed.present(timeline, {})).resolves.toMatchObject({
+    await expect(completed.present(planForTimeline(timeline), {
+      prepareBeat: async beat => ({
+        beatId: beat.id,
+        firstFrame: beat.frames[0].frame,
+        lastFrame: beat.frames.at(-1)!.frame,
+        declaredDurationMs: 0,
+        presentAfterAdoption: async () => 'COMPLETED',
+        cancel: () => undefined,
+      }),
+    })).resolves.toMatchObject({
       status: 'completed',
     });
 
     const failed = new PresentationDirector({
-      cursor: { advance: () => undefined, snapToEnd: () => undefined },
+      cursor: { advanceBatch: () => undefined, snapToEnd: () => undefined },
       onFrameSettled: (_frame, timing) => outcomes.push(timing.outcome),
     });
-    await expect(failed.present(timeline, {
-      afterFrame: () => { throw new Error('animation failed'); },
+    await expect(failed.present(planForTimeline(timeline), {
+      prepareBeat: async beat => ({
+        beatId: beat.id,
+        firstFrame: beat.frames[0].frame,
+        lastFrame: beat.frames.at(-1)!.frame,
+        declaredDurationMs: 0,
+        presentAfterAdoption: async () => { throw new Error('animation failed'); },
+        cancel: () => undefined,
+      }),
     })).rejects.toThrow('animation failed');
 
     expect(outcomes).toEqual(['completed', 'failed']);
@@ -81,12 +99,19 @@ describe('PresentationDirector diagnostics', () => {
     vi.useFakeTimers();
     const outcomes: string[] = [];
     const director = new PresentationDirector({
-      cursor: { advance: () => undefined, snapToEnd: () => undefined },
-      timeoutMs: 5,
+      cursor: { advanceBatch: () => undefined, snapToEnd: () => undefined },
+      diagnosticGraceMs: 5,
       onFrameSettled: (_frame, timing) => outcomes.push(timing.outcome),
     });
-    const running = director.present(timeline, {
-      afterFrame: () => new Promise<void>(() => undefined),
+    const running = director.present(planForTimeline(timeline), {
+      prepareBeat: async beat => ({
+        beatId: beat.id,
+        firstFrame: beat.frames[0].frame,
+        lastFrame: beat.frames.at(-1)!.frame,
+        declaredDurationMs: 0,
+        presentAfterAdoption: () => new Promise(() => undefined),
+        cancel: () => undefined,
+      }),
     }).catch(error => error);
 
     await vi.advanceTimersByTimeAsync(5);

@@ -8,9 +8,11 @@
 
 export interface ShowToastOpts {
   duration?: number;
+  autoDismiss?: boolean;
 }
 
 export interface ToastHandle {
+  readonly element: HTMLElement;
   dismiss(): void;
 }
 
@@ -32,12 +34,14 @@ export function showToast(
   const dismiss = (): void => {
     if (dismissed) return;
     dismissed = true;
-    clearTimeout(timeout);
+    if (timeout !== null) clearTimeout(timeout);
     t.remove();
     if (!area.querySelector('.toast')) area.classList.remove('has-message');
   };
-  const timeout = setTimeout(dismiss, duration + 100);
-  return { dismiss };
+  const timeout = opts.autoDismiss === false
+    ? null
+    : setTimeout(dismiss, duration + 100);
+  return { element: t, dismiss };
 }
 
 /**

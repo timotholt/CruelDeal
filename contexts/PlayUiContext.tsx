@@ -16,11 +16,11 @@ import type {
   SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '@/services/playgame/runtime/projection';
-import { seatPresentationBlockToTransactionTimeline } from '@/services/playgame/runtime/projection';
 import {
   PresentationDirector,
   type MatchPresentationSink,
 } from '@/services/playgame/presentation/presentationDirector';
+import { TransactionPresentationPlanner } from '@/services/playgame/presentation/transactionPresentationPlanner';
 import type { UiState } from '@/services/playgame/view';
 import type { VisiblePileZone } from '@/services/playgame/view';
 import type { Seat } from '@/services/playgame/engine/types/ids';
@@ -31,6 +31,18 @@ export type ReplayClientActivity =
   | { readonly kind: 'PLAYING_ANIMATIONS' }
   | { readonly kind: 'WAITING_FOR_PLAYER'; readonly seat: Seat }
   | null;
+
+export type PresentationRecoveryState =
+  | { readonly kind: 'READY' }
+  | {
+      readonly kind: 'RESYNC_REQUIRED';
+      readonly transactionId: string;
+      readonly message: string;
+    }
+  | {
+      readonly kind: 'RESYNCING';
+      readonly transactionId: string;
+    };
 
 export interface OpenPile {
   readonly owner: Seat;
@@ -50,6 +62,7 @@ export interface PlayUiContextValue {
   readonly replayFollowingLive: Accessor<boolean>;
   readonly replayClientActivity: Accessor<ReplayClientActivity>;
   readonly turnFlowRunning: Accessor<boolean>;
+  readonly presentationRecovery: Accessor<PresentationRecoveryState>;
   readonly actions: {
     bindPresentationSink: (sink: MatchPresentationSink) => () => void;
     presentOpening: (block: SeatPresentationBlock) => void;
@@ -93,17 +106,15 @@ export const PlayUiProvider = (props: {
   const [replayClientActivity, setReplayClientActivity] =
     createSignal<ReplayClientActivity>(null);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
+  const [presentationRecovery, setPresentationRecovery] =
+    createSignal<PresentationRecoveryState>({ kind: 'READY' });
   let presentationSink: MatchPresentationSink | null = null;
   const blockQueue: SeatPresentationBlock[] = [];
   let draining = false;
   let disposed = false;
   let presentationPreludePending: Promise<void> | null = null;
 
-  const adoptFrame = (
-    frame: SeatTransactionTimeline['frames'][number],
-  ): void => {
-    setPresentedState(() => match.actions.presentationStateForFrame(frame));
-  };
+  const planner = new TransactionPresentationPlanner();
 
   const snapToEnd = (timeline: SeatTransactionTimeline): void => {
     const finalFrame = timeline.frames.at(-1);
@@ -114,7 +125,13 @@ export const PlayUiProvider = (props: {
 
   const director = new PresentationDirector({
     cursor: {
-      advance: adoptFrame,
+      advanceBatch: (frames) => {
+        batch(() => {
+          for (const frame of frames) {
+            setPresentedState(() => match.actions.presentationStateForFrame(frame));
+          }
+        });
+      },
       snapToEnd,
     },
     onFrameSettled: (frame, timing) => {
@@ -130,7 +147,12 @@ export const PlayUiProvider = (props: {
   });
 
   const finishPresentationQueue = (): void => {
-    if (disposed || blockQueue.length > 0 || director.activeGeneration !== null) {
+    if (
+      disposed
+      || presentationRecovery().kind !== 'READY'
+      || blockQueue.length > 0
+      || director.activeGeneration !== null
+    ) {
       return;
     }
     batch(() => {
@@ -140,6 +162,40 @@ export const PlayUiProvider = (props: {
       setTurnFlowRunning(false);
       setReplayClientActivity(null);
     });
+  };
+
+  const recoverPresentationFailure = async (
+    block: SeatPresentationBlock,
+    error: unknown,
+  ): Promise<void> => {
+    blockQueue.length = 0;
+    setPresentationRecovery({
+      kind: 'RESYNC_REQUIRED',
+      transactionId: block.transactionId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
+    try {
+      setPresentationRecovery({
+        kind: 'RESYNCING',
+        transactionId: block.transactionId,
+      });
+      await match.actions.requestFreshSeatSnapshot();
+      if (disposed) return;
+      batch(() => {
+        setPresentedState(() => match.snapshot().state);
+        setPresentationRecovery({ kind: 'READY' });
+      });
+    } catch (resyncError) {
+      if (disposed) return;
+      setPresentationRecovery({
+        kind: 'RESYNC_REQUIRED',
+        transactionId: block.transactionId,
+        message: resyncError instanceof Error
+          ? resyncError.message
+          : String(resyncError),
+      });
+    }
   };
 
   const drainPresentationQueue = async (): Promise<void> => {
@@ -156,19 +212,17 @@ export const PlayUiProvider = (props: {
       if (prelude) await prelude;
       while (!disposed && presentationSink && blockQueue.length > 0) {
         const block = blockQueue.shift()!;
-        const timeline = seatPresentationBlockToTransactionTimeline(block);
         const sink = presentationSink;
         try {
-          await director.present(timeline, sink);
+          const plan = planner.plan(block);
+          await director.present(plan, sink);
+          await match.actions.acknowledgePresentationBlock(block);
         } catch (error) {
-          // Authority is already committed and the director has snapped the
-          // visible cursor. Surface the presentation defect without blocking
-          // later committed transactions.
           if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
             console.error('Committed timeline presentation failed', error);
           }
-        } finally {
-          await match.actions.acknowledgePresentationBlock(block);
+          await recoverPresentationFailure(block, error);
+          break;
         }
       }
     } finally {
@@ -181,7 +235,7 @@ export const PlayUiProvider = (props: {
   };
 
   const enqueueBlock = (block: SeatPresentationBlock): void => {
-    if (disposed) return;
+    if (disposed || presentationRecovery().kind !== 'READY') return;
     let needsResolutionPreludePaint = false;
     batch(() => {
       setPresentationBusy(true);
@@ -223,7 +277,9 @@ export const PlayUiProvider = (props: {
     ui,
     setUi,
     isResolving: () =>
-      presentationBusy() || presentedState().phase === 'RESOLVING',
+      presentationBusy()
+      || presentationRecovery().kind !== 'READY'
+      || presentedState().phase === 'RESOLVING',
     inspectorTarget,
     openMenuSeat,
     openPile,
@@ -232,6 +288,7 @@ export const PlayUiProvider = (props: {
     replayFollowingLive,
     replayClientActivity,
     turnFlowRunning,
+    presentationRecovery,
     actions: {
       bindPresentationSink: (sink) => {
         if (presentationSink && presentationSink !== sink) {

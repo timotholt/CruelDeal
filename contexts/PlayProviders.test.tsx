@@ -23,8 +23,9 @@ import type {
   SeatCardToken,
   SeatPresentationBlock,
 } from '@/services/playgame/runtime/projection';
-import { seatPresentationBlockToTransactionTimeline } from '@/services/playgame/runtime/projection';
-import type { MatchPresentationSink } from '@/services/playgame/presentation/presentationDirector';
+import { TransactionPresentationPlanner } from '@/services/playgame/presentation/transactionPresentationPlanner';
+
+const presentationPlanner = new TransactionPresentationPlanner();
 
 const disposers: Array<() => void> = [];
 
@@ -104,18 +105,46 @@ function firstPlayableCard(harness: Harness): SeatCardToken {
 
 async function presentOpeningImmediately(
   harness: Harness,
-  sink: MatchPresentationSink = {},
+  hooks: {
+    readonly beforeTransaction?: (
+      frames: readonly import('@/services/playgame/runtime/projection').SeatTransactionFrame[],
+    ) => void;
+    readonly beforeFrame?: (
+      frame: import('@/services/playgame/runtime/projection').SeatTransactionFrame,
+    ) => void;
+    readonly afterFrame?: (
+      frame: import('@/services/playgame/runtime/projection').SeatTransactionFrame,
+      signal: AbortSignal,
+    ) => Promise<void> | void;
+    readonly afterTransaction?: () => Promise<void> | void;
+  } = {},
 ): Promise<void> {
   let resolveCompleted!: () => void;
   const completed = new Promise<void>((resolve) => {
     resolveCompleted = resolve;
   });
   harness.ui.actions.bindPresentationSink({
-    beforeTransaction: sink.beforeTransaction,
-    beforeFrame: sink.beforeFrame,
-    afterFrame: sink.afterFrame,
+    prepareTransaction: async (frames) => {
+      hooks.beforeTransaction?.(frames);
+      return null;
+    },
+    prepareBeat: async beat => {
+      const frame = beat.frames[0];
+      hooks.beforeFrame?.(frame);
+      return {
+        beatId: beat.id,
+        firstFrame: frame.frame,
+        lastFrame: beat.frames.at(-1)!.frame,
+        declaredDurationMs: 0,
+        presentAfterAdoption: async (signal) => {
+          await hooks.afterFrame?.(frame, signal);
+          return signal.aborted ? 'CANCELLED' : 'COMPLETED';
+        },
+        cancel: () => undefined,
+      };
+    },
     afterTransaction: async () => {
-      await sink.afterTransaction?.();
+      await hooks.afterTransaction?.();
       resolveCompleted();
     },
   });
@@ -401,7 +430,7 @@ describe(`${authorityDriver.id} split play providers`, () => {
     unsubscribe();
     const block = blocks.at(-1);
     if (!block) throw new Error('END_TURN did not publish');
-    const timeline = seatPresentationBlockToTransactionTimeline(block);
+    const timeline = presentationPlanner.plan(block).timeline;
     await vi.waitFor(() => {
       expect(harness.ui.presentedState().turn).toBe(2);
       expect(harness.ui.isResolving()).toBe(false);

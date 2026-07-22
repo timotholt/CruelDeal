@@ -86,7 +86,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(laneMap).not.toContain('shuffle');
   });
 
-  it('conceals setup topology behind typed playfield events and reveals all lanes together', () => {
+  it('conceals setup topology behind one compiled transaction prelude and reveals all lanes together', () => {
     const classicPlay = source('../ClassicPlayScreen.tsx');
     const playBoard = source('./PlayBoard.tsx');
     const opening = source('../../../services/playgame/presentation/openingPresentation.ts');
@@ -94,12 +94,15 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
     expect(classicPlay).toContain('class="playgame-root playfield-hidden"');
     expect(playBoard).toContain('startOpeningPresentation({');
-    expect(opening).toContain('createPlayfieldEventPresenter(options.root)');
-    expect(opening).toContain("presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' })");
-    expect(opening).toContain("presentPlayfieldEvent({ type: 'SHOW_PLAYFIELD' })");
+    expect(opening).toContain('options.bindPresentationSink(options.sink)');
+    expect(playBoard).toContain('openingTransactionId: openingBlock.transactionId');
+    expect(existsSync(new URL(
+      '../../../services/playgame/presentation/playfieldEvents.ts',
+      import.meta.url,
+    ))).toBe(false);
     expect(playBoard).not.toContain('fadeInLocationTile');
     expect(css).toContain(':scope.playfield-hidden .board > .board-game-area');
-    expect(css).toContain('transition: opacity 2000ms ease');
+    expect(css).not.toContain('transition: opacity 2000ms ease');
   });
 
   it('keeps opening on one committed frame walk and derives terminal copy from presented state', () => {
@@ -109,9 +112,12 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
     expect(playBoard).toContain('presentOpening: uiActions.presentOpening');
     expect(playBoard).toContain('bindPresentationSink: uiActions.bindPresentationSink');
-    expect(opening).toContain('options.presentOpening(options.block)');
     expect(opening).toContain('options.bindPresentationSink(options.sink)');
-    expect(uiContext).toContain('await director.present(timeline, sink)');
+    expect(opening.indexOf('options.bindPresentationSink(options.sink)')).toBeLessThan(
+      opening.indexOf('options.presentOpening(options.block)'),
+    );
+    expect(opening).toContain('options.presentOpening(options.block)');
+    expect(uiContext).toContain('await director.present(plan, sink)');
     expect(uiContext).not.toContain('for (const frame of timeline.frames)');
     expect(playBoard).not.toContain('createScript');
     expect(playBoard).not.toContain('resolveTurnFlow');
@@ -130,8 +136,9 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(playBoard).not.toContain('createPlayfieldEventPresenter(');
     expect(playBoard).not.toContain('setTimeout(');
     expect(playBoard).not.toContain('requestAnimationFrame(');
-    expect(opening).toContain("'HIDE_PLAYFIELD'");
-    expect(opening).toContain("'SHOW_PLAYFIELD'");
+    expect(opening).not.toContain('setTimeout(');
+    expect(opening).not.toContain("'HIDE_PLAYFIELD'");
+    expect(opening).not.toContain("'SHOW_PLAYFIELD'");
     expect(handPresentation).toContain('captureCardRects(cardIds, cardRefs)');
     expect(handPresentation).toContain('playCardLayoutSlide(oldRects, cardRefs)');
   });
@@ -165,7 +172,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(matchContext).not.toContain('resolutionWaiters');
     expect(uiContext).toContain('const blockQueue: SeatPresentationBlock[] = []');
     expect(uiContext).toContain('match.subscribePresentationBlocks');
-    expect(uiContext).toContain('seatPresentationBlockToTransactionTimeline(block)');
+    expect(uiContext).toContain('const plan = planner.plan(block)');
     expect(uiContext).toContain('setPresentationBusy(true)');
     expect(uiContext).not.toContain('director.activeGeneration !== null) director.fastForward()');
     expect(playBoard).not.toContain('timeline.frames.forEach');

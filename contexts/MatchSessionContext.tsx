@@ -59,6 +59,7 @@ export interface MatchSessionContextValue {
     acknowledgePresentationBlock: (
       block: SeatPresentationBlock,
     ) => Promise<void>;
+    requestFreshSeatSnapshot: () => Promise<void>;
     cardStatReadModel: (
       token: SeatCardToken,
     ) => SeatCardStatReadModel | null;
@@ -231,6 +232,27 @@ export const MatchSessionProvider = (props: {
           publicRevision: block.publicRevision,
           frame: block.lastFrame,
           postStateHash: block.postStateHash,
+        });
+      },
+      requestFreshSeatSnapshot: async () => {
+        const current = snapshot();
+        const response = await client.resync({
+          version: 2,
+          matchId: current.matchId,
+          viewerSeat: current.viewerSeat,
+          publicRevision: current.publicRevision,
+          planRevision: current.planRevision,
+          frame: current.frame,
+          postStateHash: null,
+        });
+        if (providerDisposed) return;
+        if (response.type !== 'SNAPSHOT') {
+          throw new Error('Fresh seat-snapshot request returned a presentation block');
+        }
+        batch(() => {
+          setSnapshot(response.snapshot);
+          setIntentActivity(null);
+          setReplayRevision(revision => revision + 1);
         });
       },
       cardStatReadModel: token => client.cardStatReadModel(token),

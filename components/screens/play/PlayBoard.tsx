@@ -212,6 +212,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
   };
 
   let boardEl: HTMLDivElement | undefined;
+  let playfieldEl: HTMLElement | undefined;
   let toastAreaEl: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -222,7 +223,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     document.addEventListener('click', closeMenus);
     onCleanup(() => document.removeEventListener('click', closeMenus));
 
-    if (!boardEl || !toastAreaEl) return;
+    if (!boardEl || !playfieldEl || !toastAreaEl) return;
     boardEl.classList.add('ready');
 
     const motion = motionSurface();
@@ -274,20 +275,25 @@ export const PlayBoard = (props: PlayBoardProps) => {
     });
     const sink = createPlayPresentationSink({
       host,
+      openingTransactionId: openingBlock.transactionId,
       ui: {
         setLockedResult: result => setUi('lockedResult', result),
         setEndGamePromptVisible: value => setUi('showEndGamePrompt', value),
       },
       browser: {
+        document,
+        playfieldRoot: playRoot,
+        playfield: playfieldEl,
         locationMap: lanePresentationRefs.mapElement,
         locationTile: lanePresentationRefs.tileElement,
         showToast: (message, options) =>
-          showToast(toastAreaEl!, message, { duration: options.durationMs }),
+          showToast(toastAreaEl!, message, {
+            duration: options.durationMs,
+            autoDismiss: options.autoDismiss,
+          }),
       },
     });
     const openingPresentation = startOpeningPresentation({
-      root: playRoot,
-      toastArea: toastAreaEl,
       block: openingBlock,
       sink,
       presentOpening: uiActions.presentOpening,
@@ -370,6 +376,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
         />
 
         <LaneGrid
+          stageRef={element => {
+            playfieldEl = element;
+          }}
           laneIds={laneIds()}
           location={laneLoc}
           topCards={topLane}

@@ -9,6 +9,7 @@ import type {
   SeatVisibleMatchState,
 } from '../runtime/projection';
 import { PresentationDirector } from './presentationDirector';
+import { planForTimeline } from './__tests__/presentationPlanFixture';
 
 const PROPERTY_FILE =
   'services/playgame/presentation/presentationInterleaving.property.test.ts';
@@ -123,6 +124,7 @@ function generateScenario(seed: string, mode: InterleaveMode): Scenario {
       frame: asFrame(index + 1),
       scope: { turn: index + 1, phase: 'END' },
       event: animationEvent(index + 1),
+      effect: null,
       before,
       after,
     }));
@@ -181,24 +183,36 @@ async function assertScenario(scenario: Scenario): Promise<void> {
 
   const director = new PresentationDirector({
     cursor: {
-      advance: frame => { visibleCursor = frame.after; },
+      advanceBatch: frames => {
+        for (const frame of frames) visibleCursor = frame.after;
+      },
       snapToEnd: timeline => { visibleCursor = timeline.finalState; },
     },
-    timeoutMs: 1_000,
+    preparationTimeoutMs: 1_000,
+    diagnosticGraceMs: 1_000,
   });
-  const observed = director.present(scenario.timeline, {
-    afterFrame: async (frame) => {
-      await delayMicrotasks(scenario.delayTicks[frame.index] ?? 0);
-      if (frame.index !== scenario.injectionIndex) return;
-      if (scenario.mode === 'failure') {
-        throw new Error(`generated presentation failure at ${frame.index}`);
-      }
-      if (scenario.mode === 'cancel' || scenario.mode === 'fast-forward') {
-        reachedInjection.resolve();
-        await heldHook.promise;
-        staleWriteCount++;
-      }
-    },
+  const observed = director.present(planForTimeline(scenario.timeline), {
+    prepareBeat: async beat => ({
+      beatId: beat.id,
+      firstFrame: beat.frames[0].frame,
+      lastFrame: beat.frames.at(-1)!.frame,
+      declaredDurationMs: 0,
+      presentAfterAdoption: async (signal) => {
+        const frame = beat.frames[0];
+        await delayMicrotasks(scenario.delayTicks[frame.index] ?? 0);
+        if (frame.index !== scenario.injectionIndex) return 'COMPLETED';
+        if (scenario.mode === 'failure') {
+          throw new Error(`generated presentation failure at ${frame.index}`);
+        }
+        if (scenario.mode === 'cancel' || scenario.mode === 'fast-forward') {
+          reachedInjection.resolve();
+          await heldHook.promise;
+          staleWriteCount++;
+        }
+        return signal.aborted ? 'CANCELLED' : 'COMPLETED';
+      },
+      cancel: () => undefined,
+    }),
   }).then(
     result => ({ result, error: null as unknown }),
     error => ({ result: null, error }),

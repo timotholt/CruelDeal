@@ -21,6 +21,7 @@ interface LaneGridProps {
   readonly replayAvailable: boolean;
   readonly replayOpen: boolean;
   readonly onToggleReplay: () => void;
+  readonly stageRef: (element: HTMLElement) => void;
   readonly bindMapRef: (lane: LaneId) => (element: HTMLElement) => void;
   readonly bindLocationRef: (lane: LaneId) => (element: HTMLElement) => void;
 }
@@ -30,7 +31,7 @@ interface LaneGridProps {
  * projection changes update descendants without remounting lane/card DOM.
  */
 export const LaneGrid = (props: LaneGridProps) => (
-  <main class="board-stage board-game-area">
+  <main class="board-stage board-game-area" ref={props.stageRef}>
     <Show when={props.replayAvailable}>
       <button
         class="replay-toggle replay-float-toggle"

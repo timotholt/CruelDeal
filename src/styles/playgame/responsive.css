@@ -2,7 +2,7 @@
   /* Presentation events own playfield visibility. Setup can therefore build
      canonical lane history without exposing its intermediate topology. */
   .board > .board-game-area {
-    transition: opacity 2000ms ease;
+    opacity: 1;
   }
   :scope.playfield-hidden .board > .board-game-area {
     opacity: 0;

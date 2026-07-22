@@ -9,10 +9,11 @@ import { getLaneCardsForSeat } from '../../view';
 import type {
   SeatCardToken,
   SeatPresentationBlock,
-  SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '../projection';
-import { seatPresentationBlockToTransactionTimeline } from '../projection';
+import { TransactionPresentationPlanner } from '../../presentation/transactionPresentationPlanner';
+
+const presentationPlanner = new TransactionPresentationPlanner();
 
 function fixture(seed: string) {
   const session = MatchSession.fromBootstrap(buildDebugMatchBootstrap(
@@ -176,7 +177,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     unsubscribe();
     expect(blocks).toHaveLength(1);
     const block = blocks[0]!;
-    const timeline = seatPresentationBlockToTransactionTimeline(block);
+    const timeline = presentationPlanner.plan(block).timeline;
     expect(timeline.frames.length).toBeGreaterThan(0);
     expect(timeline.frames.some(
       frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
@@ -260,7 +261,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     unsubscribe();
 
     expect(blocks).toHaveLength(1);
-    const timeline = seatPresentationBlockToTransactionTimeline(blocks[0]!);
+    const timeline = presentationPlanner.plan(blocks[0]!).timeline;
     const enemyStage = timeline.frames.find(
       frame => frame.event?.type === 'CARD_STAGED'
         && frame.event.data.owner === opponent,

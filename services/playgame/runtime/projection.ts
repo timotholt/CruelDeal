@@ -290,6 +290,7 @@ export interface SeatTransactionFrame {
   readonly frame: Frame;
   readonly scope: TemporalScope;
   readonly event: SeatAnimationEvent | null;
+  readonly effect: SeatEffectTraceEntry | null;
   readonly before: SeatVisibleMatchState;
   readonly after: SeatVisibleMatchState;
 }
@@ -1277,6 +1278,7 @@ export function projectTransactionTimelineForSeat(
         phase: transition.scope.phase,
       },
       event: projectAnimationEventForSeat(transition, viewerSeat),
+      effect: projectEffectTraceForSeat(transition, viewerSeat),
       before: projectMatchStateForSeat(
         projectAuthorityState(transition.before),
         viewerSeat,
@@ -1303,53 +1305,6 @@ export function projectTransactionTimelineForSeat(
     viewerSeat,
     frames,
     finalState,
-  };
-}
-
-/**
- * Client-side presentation adapter for the current animation director.
- *
- * The wire contract delivers complete SeatPresentationBlocks. The animation
- * system still consumes before/after frame timelines, so this function
- * reconstructs that short-lived shape from the already-redacted block without
- * asking the authority for canonical state.
- */
-export function seatPresentationBlockToTransactionTimeline(
-  block: SeatPresentationBlock,
-): SeatTransactionTimeline {
-  let before = block.preState;
-  const frames = block.frames.map((projected): SeatTransactionFrame => {
-    const frame = {
-      index: projected.index,
-      transactionId: block.transactionId,
-      frame: projected.frame,
-      scope: projected.scope,
-      event: projected.event,
-      before,
-      after: projected.after,
-    };
-    before = projected.after;
-    return frame;
-  });
-  const lastVisibleState = frames.at(-1)?.after ?? block.preState;
-  if (!seatStatesEqual(lastVisibleState, block.postState)) {
-    throw new Error(
-      'seatPresentationBlockToTransactionTimeline: visible frames do not reach postState',
-    );
-  }
-  if (hashSeatVisibleState(block.postState) !== block.postStateHash) {
-    throw new Error(
-      'seatPresentationBlockToTransactionTimeline: post-state checksum mismatch',
-    );
-  }
-  return {
-    transactionId: block.transactionId,
-    matchId: block.matchId,
-    baseRevision: block.basePublicRevision,
-    revision: block.publicRevision,
-    viewerSeat: block.viewerSeat,
-    frames,
-    finalState: block.postState,
   };
 }
 

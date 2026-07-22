@@ -1,26 +1,55 @@
-import type {
-  SeatTransactionFrame,
-  SeatTransactionTimeline,
-} from '../runtime/projection';
+import type { SeatTransactionFrame, SeatTransactionTimeline } from '../runtime/projection';
 import {
   elapsed,
   monotonicNow,
   type PresentationFrameOutcome,
 } from '../runtime/performanceTelemetry';
+import type { PresentationOutcome } from './storyboard/contracts';
+import type {
+  PresentationBeat,
+  TransactionPresentationPlan,
+} from './transactionPresentationPlanner';
+
+export type PresentationCancelReason =
+  | 'presentation-cancelled'
+  | 'presentation-fast-forwarded'
+  | 'presentation-superseded'
+  | 'presentation-disposed'
+  | 'presentation-failed';
+
+export interface PreparedBeatPresentation {
+  readonly beatId: string;
+  readonly firstFrame: number;
+  readonly lastFrame: number;
+  /** Maximum authored playback time before diagnostic grace. */
+  readonly declaredDurationMs: number;
+  presentAfterAdoption(signal: AbortSignal): Promise<PresentationOutcome>;
+  cancel(reason: PresentationCancelReason): void;
+}
+
+export interface PreparedTransactionPresentation {
+  readonly transactionId: string;
+  /** Maximum authored playback time before diagnostic grace. */
+  readonly declaredDurationMs: number;
+  present(signal: AbortSignal): Promise<PresentationOutcome>;
+  cancel(reason: PresentationCancelReason): void;
+}
 
 export interface MatchPresentationSink {
-  beforeTransaction?(frames: readonly SeatTransactionFrame[]): void;
-  beforeFrame?(frame: SeatTransactionFrame): void;
-  afterFrame?(
-    frame: SeatTransactionFrame,
+  prepareTransaction?(
+    frames: readonly SeatTransactionFrame[],
     signal: AbortSignal,
-  ): Promise<void> | void;
-  afterTransaction?(): Promise<void> | void;
+  ): Promise<PreparedTransactionPresentation | null>;
+  prepareBeat(
+    beat: PresentationBeat,
+    signal: AbortSignal,
+  ): Promise<PreparedBeatPresentation>;
+  afterTransaction?(signal: AbortSignal): Promise<void>;
 }
 
 export interface PresentationCursor {
-  /** Adopts this committed frame before its animation hook starts. */
-  advance(frame: SeatTransactionFrame): void;
+  /** Synchronously adopts every Frame in one non-painting batch. */
+  advanceBatch(frames: readonly SeatTransactionFrame[]): void;
   /** Atomically adopts the immutable committed transaction end. */
   snapToEnd(timeline: SeatTransactionTimeline): void;
 }
@@ -39,9 +68,11 @@ export interface PresentationRunResult {
 
 export interface PresentationDirectorOptions {
   readonly cursor: PresentationCursor;
-  /** Maximum wait for one asynchronous presentation hook. */
-  readonly timeoutMs?: number;
-  /** Optional diagnostic sidecar; it has no influence on run settlement. */
+  /** Bounded failure budget for resource preparation only. */
+  readonly preparationTimeoutMs?: number;
+  /** Added to each owner's declared duration; never used as animation pacing. */
+  readonly diagnosticGraceMs?: number;
+  readonly reactiveCommitBarrier?: () => Promise<void>;
   readonly onFrameSettled?: (
     frame: SeatTransactionFrame,
     timing: {
@@ -55,16 +86,21 @@ export interface PresentationDirectorOptions {
 
 interface ActiveRun {
   readonly generation: number;
-  readonly timeline: SeatTransactionTimeline;
+  readonly plan: TransactionPresentationPlan;
   readonly sink: MatchPresentationSink;
   readonly controller: AbortController;
+  transactionOwner: PreparedTransactionPresentation | null;
+  beatOwner: PreparedBeatPresentation | null;
   snapped: boolean;
   stopReason: Exclude<PresentationRunStatus, 'completed'> | null;
 }
 
-type HookSettlement = 'completed' | 'timed-out' | 'aborted';
+type AwaitSettlement<T> =
+  | { readonly status: 'completed'; readonly value: T }
+  | { readonly status: 'timed-out' | 'aborted' };
 
-const DEFAULT_HOOK_TIMEOUT_MS = 5_000;
+const DEFAULT_PREPARATION_TIMEOUT_MS = 5_000;
+const DEFAULT_DIAGNOSTIC_GRACE_MS = 1_000;
 
 export class PresentationTimeoutError extends Error {
   readonly generation: number;
@@ -82,31 +118,40 @@ export class PresentationTimeoutError extends Error {
   }
 }
 
+export class PresentationOutcomeError extends Error {
+  constructor(owner: string, outcome: Exclude<PresentationOutcome, 'COMPLETED'>) {
+    super(`Prepared presentation ${owner} returned ${outcome}`);
+    this.name = 'PresentationOutcomeError';
+  }
+}
+
 function nextMicrotask(): Promise<void> {
   return new Promise(resolve => queueMicrotask(resolve));
 }
 
-function settleWithin(
-  hook: Promise<void> | void,
+function settleWithin<T>(
+  hook: Promise<T>,
   timeoutMs: number,
   signal: AbortSignal,
-): Promise<HookSettlement> {
-  if (signal.aborted) return Promise.resolve('aborted');
-
+): Promise<AwaitSettlement<T>> {
+  if (signal.aborted) return Promise.resolve({ status: 'aborted' });
   return new Promise((resolve, reject) => {
     let settled = false;
-    const finish = (result: HookSettlement): void => {
+    const finish = (result: AwaitSettlement<T>): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       signal.removeEventListener('abort', onAbort);
       resolve(result);
     };
-    const onAbort = (): void => finish('aborted');
-    const timeout = setTimeout(() => finish('timed-out'), timeoutMs);
+    const onAbort = (): void => finish({ status: 'aborted' });
+    const timeout = setTimeout(
+      () => finish({ status: 'timed-out' }),
+      timeoutMs,
+    );
     signal.addEventListener('abort', onAbort, { once: true });
-    void Promise.resolve(hook).then(
-      () => finish('completed'),
+    void hook.then(
+      value => finish({ status: 'completed', value }),
       error => {
         if (settled) return;
         settled = true;
@@ -118,26 +163,47 @@ function settleWithin(
   });
 }
 
-/**
- * Sole owner of committed presentation iteration. Match authority has already
- * committed every timeline passed here; this class can move only a visible
- * cursor and has no gameplay-command capability.
- */
+function cancelReasonForStatus(
+  status: Exclude<PresentationRunStatus, 'completed'>,
+): PresentationCancelReason {
+  switch (status) {
+    case 'cancelled': return 'presentation-cancelled';
+    case 'fast-forwarded': return 'presentation-fast-forwarded';
+    case 'superseded': return 'presentation-superseded';
+    case 'disposed': return 'presentation-disposed';
+  }
+}
+
+/** Sole owner of prepared-resource adoption and serial committed playback. */
 export class PresentationDirector {
   readonly #cursor: PresentationCursor;
-  readonly #timeoutMs: number;
+  readonly #preparationTimeoutMs: number;
+  readonly #diagnosticGraceMs: number;
+  readonly #reactiveCommitBarrier: () => Promise<void>;
   readonly #onFrameSettled: PresentationDirectorOptions['onFrameSettled'];
   #generation = 0;
   #active: ActiveRun | null = null;
   #disposed = false;
 
   constructor(options: PresentationDirectorOptions) {
-    const timeoutMs = options.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
-    if (!Number.isFinite(timeoutMs) || timeoutMs < 0) {
-      throw new Error('PresentationDirector timeoutMs must be finite and non-negative');
+    const preparationTimeoutMs = options.preparationTimeoutMs
+      ?? DEFAULT_PREPARATION_TIMEOUT_MS;
+    const diagnosticGraceMs = options.diagnosticGraceMs
+      ?? DEFAULT_DIAGNOSTIC_GRACE_MS;
+    if (!Number.isFinite(preparationTimeoutMs) || preparationTimeoutMs < 0) {
+      throw new Error(
+        'PresentationDirector preparationTimeoutMs must be finite and non-negative',
+      );
+    }
+    if (!Number.isFinite(diagnosticGraceMs) || diagnosticGraceMs < 0) {
+      throw new Error(
+        'PresentationDirector diagnosticGraceMs must be finite and non-negative',
+      );
     }
     this.#cursor = options.cursor;
-    this.#timeoutMs = timeoutMs;
+    this.#preparationTimeoutMs = preparationTimeoutMs;
+    this.#diagnosticGraceMs = diagnosticGraceMs;
+    this.#reactiveCommitBarrier = options.reactiveCommitBarrier ?? nextMicrotask;
     this.#onFrameSettled = options.onFrameSettled;
   }
 
@@ -146,19 +212,20 @@ export class PresentationDirector {
   }
 
   present(
-    timeline: SeatTransactionTimeline,
+    plan: TransactionPresentationPlan,
     sink: MatchPresentationSink,
   ): Promise<PresentationRunResult> {
     if (this.#disposed) {
       return Promise.reject(new Error('PresentationDirector is disposed'));
     }
     if (this.#active) this.#stopActive('superseded', true);
-
     const run: ActiveRun = {
       generation: ++this.#generation,
-      timeline,
+      plan,
       sink,
       controller: new AbortController(),
+      transactionOwner: null,
+      beatOwner: null,
       snapped: false,
       stopReason: null,
     };
@@ -166,21 +233,14 @@ export class PresentationDirector {
     return this.#execute(run);
   }
 
-  cancel(): boolean {
-    return this.#stopActive('cancelled', true);
-  }
-
-  fastForward(): boolean {
-    return this.#stopActive('fast-forwarded', true);
-  }
+  cancel(): boolean { return this.#stopActive('cancelled', true); }
+  fastForward(): boolean { return this.#stopActive('fast-forwarded', true); }
 
   dispose(): void {
     if (this.#disposed) return;
     this.#disposed = true;
-    // A disposed host must never receive one final cursor write. Remounting
-    // adopts current authority through a new director instance.
     this.#stopActive('disposed', false);
-    this.#generation++;
+    this.#generation += 1;
   }
 
   #isCurrent(run: ActiveRun): boolean {
@@ -189,10 +249,17 @@ export class PresentationDirector {
       && this.#generation === run.generation;
   }
 
+  #cancelOwners(run: ActiveRun, reason: PresentationCancelReason): void {
+    run.beatOwner?.cancel(reason);
+    run.beatOwner = null;
+    run.transactionOwner?.cancel(reason);
+    run.transactionOwner = null;
+  }
+
   #snap(run: ActiveRun): boolean {
     if (!this.#isCurrent(run) || run.snapped) return false;
     run.snapped = true;
-    this.#cursor.snapToEnd(run.timeline);
+    this.#cursor.snapToEnd(run.plan.timeline);
     return true;
   }
 
@@ -203,18 +270,17 @@ export class PresentationDirector {
     const run = this.#active;
     if (!run) return false;
     run.stopReason = reason;
+    this.#cancelOwners(run, cancelReasonForStatus(reason));
     if (snap) this.#snap(run);
     run.controller.abort(reason);
     this.#active = null;
-    this.#generation++;
+    this.#generation += 1;
     return true;
   }
 
   async #fail(run: ActiveRun, error: unknown): Promise<never | PresentationRunResult> {
+    this.#cancelOwners(run, 'presentation-failed');
     run.controller.abort('presentation-failed');
-    // Failure snaps are deliberately deferred: hooks cannot synchronously
-    // re-enter cursor mutation, and a newer generation can invalidate this
-    // continuation before it writes.
     await nextMicrotask();
     if (!this.#isCurrent(run)) {
       return {
@@ -227,91 +293,160 @@ export class PresentationDirector {
     throw error;
   }
 
+  async #awaitOwner<T>(
+    run: ActiveRun,
+    promise: Promise<T>,
+    frame: number | null,
+    timeoutMs: number,
+  ): Promise<T | null> {
+    const settlement = await settleWithin(
+      promise,
+      timeoutMs,
+      run.controller.signal,
+    );
+    if (settlement.status === 'timed-out') {
+      throw new PresentationTimeoutError(run.generation, frame, timeoutMs);
+    }
+    if (settlement.status !== 'completed' || !this.#isCurrent(run)) return null;
+    return settlement.value;
+  }
+
+  #assertPreparedBeat(
+    beat: PresentationBeat,
+    prepared: PreparedBeatPresentation,
+  ): void {
+    const first = beat.frames[0].frame;
+    const last = beat.frames.at(-1)!.frame;
+    if (
+      prepared.beatId !== beat.id
+      || prepared.firstFrame !== first
+      || prepared.lastFrame !== last
+    ) {
+      prepared.cancel('presentation-failed');
+      throw new Error(`Prepared beat identity does not match ${beat.id}`);
+    }
+    this.#assertDeclaredDuration(prepared.declaredDurationMs, beat.id);
+  }
+
+  #assertDeclaredDuration(durationMs: number, owner: string): void {
+    if (!Number.isSafeInteger(durationMs) || durationMs < 0) {
+      throw new Error(`${owner} has invalid declared presentation duration`);
+    }
+  }
+
+  #playbackWatchdogMs(durationMs: number): number {
+    const budget = durationMs + this.#diagnosticGraceMs;
+    if (!Number.isSafeInteger(budget)) {
+      throw new Error('Presentation watchdog budget exceeds safe integer range');
+    }
+    return budget;
+  }
+
   async #execute(run: ActiveRun): Promise<PresentationRunResult> {
     try {
-      run.sink.beforeTransaction?.(run.timeline.frames);
-      for (const frame of run.timeline.frames) {
-        if (!this.#isCurrent(run)) {
-          return {
-            generation: run.generation,
-            status: run.stopReason ?? 'superseded',
-          };
-        }
-        run.sink.beforeFrame?.(frame);
-        if (!this.#isCurrent(run)) {
-          return {
-            generation: run.generation,
-            status: run.stopReason ?? 'superseded',
-          };
-        }
-
-        this.#cursor.advance(frame);
-        // Cursor adoption is a reactive state write. Yield exactly one
-        // microtask so every DOM consumer of frame.after can commit its
-        // canonical surfaces before the sink resolves destination geometry.
-        // Microtasks complete before the browser's next paint, preserving the
-        // source actor's visual-ownership lease without exposing an adopted
-        // destination for one frame.
-        await nextMicrotask();
-        if (!this.#isCurrent(run)) {
-          return {
-            generation: run.generation,
-            status: run.stopReason ?? 'superseded',
-          };
-        }
-        const startedAtMs = monotonicNow();
-        let settlement: HookSettlement;
-        try {
-          settlement = await settleWithin(
-            run.sink.afterFrame?.(frame, run.controller.signal),
-            this.#timeoutMs,
+      if (run.sink.prepareTransaction) {
+        const owner = await this.#awaitOwner(
+          run,
+          run.sink.prepareTransaction(
+            run.plan.timeline.frames,
             run.controller.signal,
+          ),
+          null,
+          this.#preparationTimeoutMs,
+        );
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+        run.transactionOwner = owner;
+        if (owner) {
+          if (owner.transactionId !== run.plan.timeline.transactionId) {
+            throw new Error('Prepared transaction identity mismatch');
+          }
+          this.#assertDeclaredDuration(owner.declaredDurationMs, owner.transactionId);
+          const outcome = await this.#awaitOwner(
+            run,
+            owner.present(run.controller.signal),
+            null,
+            this.#playbackWatchdogMs(owner.declaredDurationMs),
+          );
+          if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+          if (outcome !== 'COMPLETED') {
+            throw new PresentationOutcomeError(owner.transactionId, outcome!);
+          }
+          run.transactionOwner = null;
+        }
+      }
+
+      for (const beat of run.plan.beats) {
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+        const prepared = await this.#awaitOwner(
+          run,
+          run.sink.prepareBeat(beat, run.controller.signal),
+          beat.frames[0].frame,
+          this.#preparationTimeoutMs,
+        );
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+        if (!prepared) return this.#stoppedResult(run);
+        this.#assertPreparedBeat(beat, prepared);
+        run.beatOwner = prepared;
+
+        // This call is intentionally the only synchronous adoption boundary.
+        // The cursor implementation owns the framework batch and may not await.
+        this.#cursor.advanceBatch(beat.frames);
+        await this.#reactiveCommitBarrier();
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+
+        const startedAtMs = monotonicNow();
+        let outcome: PresentationOutcome | null;
+        try {
+          outcome = await this.#awaitOwner(
+            run,
+            prepared.presentAfterAdoption(run.controller.signal),
+            beat.frames[0].frame,
+            this.#playbackWatchdogMs(prepared.declaredDurationMs),
           );
         } catch (error) {
-          this.#recordFrameSettlement(frame, 'failed', startedAtMs);
+          for (const frame of beat.frames) {
+            this.#recordFrameSettlement(
+              frame,
+              error instanceof PresentationTimeoutError ? 'timed-out' : 'failed',
+              startedAtMs,
+            );
+          }
           throw error;
         }
-        if (settlement === 'timed-out') {
-          this.#recordFrameSettlement(frame, 'timed-out', startedAtMs);
-          throw new PresentationTimeoutError(
-            run.generation,
-            frame.frame,
-            this.#timeoutMs,
-          );
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+        if (outcome !== 'COMPLETED') {
+          for (const frame of beat.frames) {
+            this.#recordFrameSettlement(frame, 'failed', startedAtMs);
+          }
+          throw new PresentationOutcomeError(beat.id, outcome!);
         }
-        if (settlement === 'aborted' || !this.#isCurrent(run)) {
-          return {
-            generation: run.generation,
-            status: run.stopReason ?? 'superseded',
-          };
+        run.beatOwner = null;
+        for (const frame of beat.frames) {
+          this.#recordFrameSettlement(frame, 'completed', startedAtMs);
         }
-        this.#recordFrameSettlement(frame, 'completed', startedAtMs);
       }
 
-      const transactionSettlement = await settleWithin(
-        run.sink.afterTransaction?.(),
-        this.#timeoutMs,
-        run.controller.signal,
-      );
-      if (transactionSettlement === 'timed-out') {
-        throw new PresentationTimeoutError(
-          run.generation,
+      if (run.sink.afterTransaction) {
+        await this.#awaitOwner(
+          run,
+          run.sink.afterTransaction(run.controller.signal),
           null,
-          this.#timeoutMs,
+          this.#preparationTimeoutMs,
         );
       }
-      if (transactionSettlement === 'aborted' || !this.#isCurrent(run)) {
-        return {
-          generation: run.generation,
-          status: run.stopReason ?? 'superseded',
-        };
-      }
-
+      if (!this.#isCurrent(run)) return this.#stoppedResult(run);
       this.#active = null;
       return { generation: run.generation, status: 'completed' };
     } catch (error) {
       return this.#fail(run, error);
     }
+  }
+
+  #stoppedResult(run: ActiveRun): PresentationRunResult {
+    return {
+      generation: run.generation,
+      status: run.stopReason ?? 'superseded',
+    };
   }
 
   #recordFrameSettlement(

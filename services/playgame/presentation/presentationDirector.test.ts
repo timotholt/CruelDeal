@@ -9,18 +9,17 @@ import type {
   SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '../runtime/projection';
+import { planForTimeline } from './__tests__/presentationPlanFixture';
 import {
   PresentationDirector,
   PresentationTimeoutError,
+  type MatchPresentationSink,
   type PresentationCursor,
 } from './presentationDirector';
 
-const visibleState = (
-  turn: number,
-  phase: SeatVisibleMatchState['phase'] = 'AWAITING_INTENT',
-): SeatVisibleMatchState => ({
+const visibleState = (turn: number): SeatVisibleMatchState => ({
   turn,
-  phase,
+  phase: 'AWAITING_INTENT',
   priority: 'P0',
   energy: { P0: turn, P1: turn },
   maxEnergy: { P0: turn, P1: turn },
@@ -56,6 +55,7 @@ const timeline = (
       frame: asFrame(index + 1),
       scope: { turn, phase: 'END' as const },
       event: event(turn),
+      effect: null,
       before,
       after,
     });
@@ -83,258 +83,220 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+const sink = (
+  present: (frame: SeatTransactionFrame, signal: AbortSignal) => Promise<void> | void,
+  options: {
+    readonly prepare?: (frame: SeatTransactionFrame) => void;
+    readonly cancel?: (frame: SeatTransactionFrame) => void;
+    readonly afterTransaction?: () => void;
+    readonly declaredDurationMs?: number;
+  } = {},
+): MatchPresentationSink => ({
+  prepareBeat: async (beat) => {
+    const frame = beat.frames[0];
+    options.prepare?.(frame);
+    return {
+      beatId: beat.id,
+      firstFrame: frame.frame,
+      lastFrame: beat.frames.at(-1)!.frame,
+      declaredDurationMs: options.declaredDurationMs ?? 0,
+      presentAfterAdoption: async (signal) => {
+        await present(frame, signal);
+        return signal.aborted ? 'CANCELLED' : 'COMPLETED';
+      },
+      cancel: () => options.cancel?.(frame),
+    };
+  },
+  afterTransaction: async () => options.afterTransaction?.(),
+});
+
 const crossAdoptionBarrier = async (): Promise<void> => {
+  await Promise.resolve();
   await Promise.resolve();
   await Promise.resolve();
 };
 
 const cursorRecorder = (writes: string[]): PresentationCursor => ({
-  advance: frame => writes.push(`advance:${frame.transactionId}:${frame.index}`),
+  advanceBatch: frames => {
+    for (const frame of frames) writes.push(`advance:${frame.transactionId}:${frame.index}`);
+  },
   snapToEnd: value => writes.push(`snap:${value.transactionId}`),
 });
 
-describe('PresentationDirector', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+describe('PresentationDirector prepared lifecycle', () => {
+  afterEach(() => vi.useRealTimers());
 
-  it('is the sole iterator and lets each adopted frame commit before afterFrame', async () => {
+  it('awaits preparation, adopts one batch, crosses the barrier, then presents', async () => {
     const order: string[] = [];
     const value = timeline('ordered');
     const director = new PresentationDirector({
       cursor: {
-        advance: frame => {
-          order.push(`advance:${frame.index}`);
-          queueMicrotask(() => order.push(`adoptionCommitted:${frame.index}`));
+        advanceBatch: frames => {
+          order.push(`advance:${frames[0]!.index}`);
+          queueMicrotask(() => order.push(`adoptionCommitted:${frames[0]!.index}`));
         },
         snapToEnd: () => order.push('snap'),
       },
-      timeoutMs: 100,
+      preparationTimeoutMs: 100,
     });
 
-    const result = await director.present(value, {
-      beforeTransaction: frames => order.push(`beforeTransaction:${frames.length}`),
-      beforeFrame: frame => order.push(`beforeFrame:${frame.index}`),
-      afterFrame: async (frame, signal) => {
-        order.push(`afterFrame:${frame.index}:${String(signal.aborted)}`);
+    const result = await director.present(planForTimeline(value), sink(
+      async (frame, signal) => order.push(`present:${frame.index}:${signal.aborted}`),
+      {
+        prepare: frame => order.push(`prepare:${frame.index}`),
+        afterTransaction: () => order.push('afterTransaction'),
       },
-      afterTransaction: async () => {
-        order.push('afterTransaction');
-      },
-    });
+    ));
 
     expect(result).toEqual({ generation: 1, status: 'completed' });
     expect(order).toEqual([
-      'beforeTransaction:2',
-      'beforeFrame:0',
+      'prepare:0',
       'advance:0',
       'adoptionCommitted:0',
-      'afterFrame:0:false',
-      'beforeFrame:1',
-      'advance:1',
-      'adoptionCommitted:1',
-      'afterFrame:1:false',
-      'afterTransaction',
-    ]);
-    expect(director.activeGeneration).toBeNull();
-  });
-
-  it('does not prepare or adopt the next frame until the current animation and cleanup settle', async () => {
-    const order: string[] = [];
-    const currentAnimation = deferred();
-    const director = new PresentationDirector({
-      cursor: {
-        advance: frame => order.push(`advance:${frame.index}`),
-        snapToEnd: () => order.push('snap'),
-      },
-      timeoutMs: 1_000,
-    });
-
-    const running = director.present(timeline('strictly-serial'), {
-      beforeFrame: frame => order.push(`prepare:${frame.index}`),
-      afterFrame: async (frame) => {
-        order.push(`animate:${frame.index}:start`);
-        if (frame.index === 0) await currentAnimation.promise;
-        order.push(`animate:${frame.index}:cleanup-complete`);
-      },
-    });
-
-    await crossAdoptionBarrier();
-    expect(order).toEqual([
-      'prepare:0',
-      'advance:0',
-      'animate:0:start',
-    ]);
-
-    currentAnimation.resolve();
-    await running;
-    expect(order).toEqual([
-      'prepare:0',
-      'advance:0',
-      'animate:0:start',
-      'animate:0:cleanup-complete',
+      'present:0:false',
       'prepare:1',
       'advance:1',
-      'animate:1:start',
-      'animate:1:cleanup-complete',
+      'adoptionCommitted:1',
+      'present:1:false',
+      'afterTransaction',
     ]);
   });
 
-  it('defers a failed-hook snap, snaps that generation once, and surfaces the error', async () => {
-    const writes: string[] = [];
-    const failure = new Error('animation failed');
-    const director = new PresentationDirector({
-      cursor: cursorRecorder(writes),
-      timeoutMs: 100,
-    });
-
-    const running = director.present(timeline('failed'), {
-      afterFrame: () => {
-        throw failure;
+  it('does not prepare the next beat until current presentation cleanup settles', async () => {
+    const order: string[] = [];
+    const gate = deferred();
+    const director = new PresentationDirector({ cursor: cursorRecorder(order) });
+    const running = director.present(planForTimeline(timeline('serial')), sink(
+      async (frame) => {
+        order.push(`present:${frame.index}:start`);
+        if (frame.index === 0) await gate.promise;
+        order.push(`present:${frame.index}:cleanup`);
       },
-    });
-    expect(writes).toEqual(['advance:failed:0']);
+      { prepare: frame => order.push(`prepare:${frame.index}`) },
+    ));
 
-    await expect(running).rejects.toBe(failure);
-    expect(writes).toEqual(['advance:failed:0', 'snap:failed']);
-    expect(director.fastForward()).toBe(false);
-    expect(director.cancel()).toBe(false);
-    expect(writes.filter(write => write === 'snap:failed')).toHaveLength(1);
+    await vi.waitFor(() => expect(order).toContain('present:0:start'));
+    expect(order).toEqual(['prepare:0', 'advance:serial:0', 'present:0:start']);
+    gate.resolve();
+    await running;
+    expect(order).toContain('prepare:1');
+    expect(order.indexOf('prepare:1')).toBeGreaterThan(order.indexOf('present:0:cleanup'));
   });
 
-  it('bounds a hanging hook, aborts its signal, and snaps to committed end', async () => {
+  it('does not adopt a beat when preparation fails', async () => {
+    const writes: string[] = [];
+    const failure = new Error('prepare failed');
+    const director = new PresentationDirector({ cursor: cursorRecorder(writes) });
+    const broken: MatchPresentationSink = {
+      prepareBeat: async () => { throw failure; },
+    };
+    await expect(director.present(planForTimeline(timeline('prepare-failed')), broken))
+      .rejects.toBe(failure);
+    expect(writes).toEqual(['snap:prepare-failed']);
+  });
+
+  it('fails closed after adoption, cancels the owner, and snaps once', async () => {
+    const writes: string[] = [];
+    const cancelled: string[] = [];
+    const failure = new Error('animation failed');
+    const director = new PresentationDirector({ cursor: cursorRecorder(writes) });
+    await expect(director.present(planForTimeline(timeline('failed')), sink(
+      () => { throw failure; },
+      { cancel: frame => cancelled.push(String(frame.index)) },
+    ))).rejects.toBe(failure);
+    expect(writes).toEqual(['advance:failed:0', 'snap:failed']);
+    expect(cancelled).toEqual(['0']);
+  });
+
+  it('bounds a hanging owner, aborts it, cancels resources, and snaps', async () => {
     vi.useFakeTimers();
     const writes: string[] = [];
     let signal: AbortSignal | null = null;
+    let cancelled = false;
     const director = new PresentationDirector({
       cursor: cursorRecorder(writes),
-      timeoutMs: 25,
+      diagnosticGraceMs: 25,
     });
-    const observed = director.present(timeline('timeout'), {
-      afterFrame: (_frame, activeSignal) => {
+    const observed = director.present(planForTimeline(timeline('timeout')), sink(
+      (_frame, activeSignal) => {
         signal = activeSignal;
         return new Promise<void>(() => undefined);
       },
-    }).catch(error => error as unknown);
-
+      { cancel: () => { cancelled = true; } },
+    )).catch(error => error);
     await vi.advanceTimersByTimeAsync(25);
     const error = await observed;
-
     expect(error).toBeInstanceOf(PresentationTimeoutError);
-    expect(error).toMatchObject({ generation: 1, frame: 1 });
     expect(signal?.aborted).toBe(true);
+    expect(cancelled).toBe(true);
     expect(writes).toEqual(['advance:timeout:0', 'snap:timeout']);
-    expect(director.activeGeneration).toBeNull();
   });
 
-  it('fast-forwards exactly once and ignores a stale hook completion', async () => {
+  it('derives its playback watchdog from a prepared owner\'s declared duration', async () => {
+    vi.useFakeTimers();
     const writes: string[] = [];
-    const pending = deferred();
-    const director = new PresentationDirector({
-      cursor: cursorRecorder(writes),
-      timeoutMs: 1_000,
-    });
-    const first = director.present(timeline('old'), {
-      afterFrame: () => pending.promise,
-    });
+    const director = new PresentationDirector({ cursor: cursorRecorder(writes) });
+    const running = director.present(
+      planForTimeline(timeline('declared-duration', [1])),
+      sink(
+        () => new Promise<void>(resolve => setTimeout(resolve, 5_150)),
+        { declaredDurationMs: 5_150 },
+      ),
+    );
 
+    await crossAdoptionBarrier();
+    await vi.advanceTimersByTimeAsync(5_150);
+    await expect(running).resolves.toMatchObject({ status: 'completed' });
+    expect(writes).not.toContain('snap:declared-duration');
+  });
+
+  it('fast-forwards exactly once and ignores stale completion', async () => {
+    const writes: string[] = [];
+    const gate = deferred();
+    const director = new PresentationDirector({ cursor: cursorRecorder(writes) });
+    const running = director.present(planForTimeline(timeline('old')), sink(
+      () => gate.promise,
+    ));
     await crossAdoptionBarrier();
     expect(director.fastForward()).toBe(true);
     expect(director.fastForward()).toBe(false);
-    await expect(first).resolves.toEqual({
-      generation: 1,
-      status: 'fast-forwarded',
-    });
-
-    await expect(director.present(timeline('new', [3]), {})).resolves.toEqual({
-      generation: 3,
-      status: 'completed',
-    });
-    const afterNewRun = [...writes];
-    pending.resolve();
+    await expect(running).resolves.toMatchObject({ status: 'fast-forwarded' });
+    const settled = [...writes];
+    gate.resolve();
     await crossAdoptionBarrier();
-
-    expect(writes).toEqual(afterNewRun);
-    expect(writes).toEqual([
-      'advance:old:0',
-      'snap:old',
-      'advance:new:0',
-    ]);
+    expect(writes).toEqual(settled);
   });
 
-  it('supersedes an old generation and prevents its late failure from writing', async () => {
+  it('supersedes old ownership and dispose performs no stale cursor write', async () => {
     const writes: string[] = [];
-    const pending = deferred();
-    const director = new PresentationDirector({
-      cursor: cursorRecorder(writes),
-      timeoutMs: 1_000,
-    });
-    const oldRun = director.present(timeline('generation-old'), {
-      afterFrame: () => pending.promise,
-    });
+    const oldGate = deferred();
+    const director = new PresentationDirector({ cursor: cursorRecorder(writes) });
+    const old = director.present(planForTimeline(timeline('old-generation')), sink(
+      () => oldGate.promise,
+    ));
     await crossAdoptionBarrier();
+    const next = director.present(planForTimeline(timeline('new-generation', [3])), sink(
+      () => undefined,
+    ));
+    await expect(old).resolves.toMatchObject({ status: 'superseded' });
+    await expect(next).resolves.toMatchObject({ status: 'completed' });
 
-    const newRun = director.present(timeline('generation-new', [4]), {});
-    await expect(oldRun).resolves.toEqual({
-      generation: 1,
-      status: 'superseded',
-    });
-    await expect(newRun).resolves.toEqual({
-      generation: 3,
-      status: 'completed',
-    });
-    const afterNewRun = [...writes];
-    pending.reject(new Error('stale animation rejection'));
-    await crossAdoptionBarrier();
-
-    expect(writes).toEqual(afterNewRun);
-    expect(writes.filter(write => write === 'snap:generation-old')).toHaveLength(1);
-  });
-
-  it('cancels by snapping, while dispose invalidates without a stale cursor write', async () => {
-    const writes: string[] = [];
-    const cancelPending = deferred();
-    const director = new PresentationDirector({
-      cursor: cursorRecorder(writes),
-      timeoutMs: 1_000,
-    });
-    const cancelled = director.present(timeline('cancelled'), {
-      afterFrame: () => cancelPending.promise,
-    });
-    await crossAdoptionBarrier();
-    expect(director.cancel()).toBe(true);
-    await expect(cancelled).resolves.toMatchObject({ status: 'cancelled' });
-    expect(writes.filter(write => write === 'snap:cancelled')).toHaveLength(1);
-
-    const disposePending = deferred();
-    const disposed = director.present(timeline('disposed'), {
-      afterFrame: () => disposePending.promise,
-    });
+    const disposeGate = deferred();
+    const disposed = director.present(planForTimeline(timeline('disposed')), sink(
+      () => disposeGate.promise,
+    ));
     await crossAdoptionBarrier();
     director.dispose();
-    expect(director.activeGeneration).toBeNull();
     await expect(disposed).resolves.toMatchObject({ status: 'disposed' });
     expect(writes).not.toContain('snap:disposed');
-
-    const afterDispose = [...writes];
-    disposePending.resolve();
-    await Promise.resolve();
-    expect(writes).toEqual(afterDispose);
-    await expect(director.present(timeline('too-late'), {}))
-      .rejects.toThrow('disposed');
   });
 
   it('has no DOM or gameplay-submission capability', () => {
     const source = readFileSync(
-      resolve(
-        process.cwd(),
-        'services/playgame/presentation/presentationDirector.ts',
-      ),
+      resolve(process.cwd(), 'services/playgame/presentation/presentationDirector.ts'),
       'utf8',
     );
-    expect(source).not.toMatch(
-      /\b(?:document|window|HTMLElement|DOMRect|submitIntent)\b/,
-    );
+    expect(source).not.toMatch(/\b(?:document|window|HTMLElement|DOMRect|submitIntent)\b/);
     expect(source).not.toMatch(/from\s*['"][^'"]*engine\/(?:kernel|resolve|apply)/);
   });
 });

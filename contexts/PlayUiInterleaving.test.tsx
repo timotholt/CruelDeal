@@ -19,6 +19,7 @@ import type { MatchClient } from '@/services/playgame/client/matchClient';
 import type { MatchAuthorityTestDriver } from '@/services/playgame/testing/authorityTestDriver';
 import { MATCH_AUTHORITY_TEST_DRIVERS } from '@/services/playgame/testing/authorityRegistry';
 import type { SeatPresentationBlock } from '@/services/playgame/runtime/projection';
+import type { MatchPresentationSink } from '@/services/playgame/presentation/presentationDirector';
 
 interface Harness {
   readonly match: MatchSessionContextValue;
@@ -107,6 +108,41 @@ async function commitTwoTurns(harness: Harness): Promise<void> {
   await submitEndTurn();
 }
 
+type TestPresentationHooks = {
+  readonly beforeTransaction?: (
+    frames: readonly import('@/services/playgame/runtime/projection').SeatTransactionFrame[],
+  ) => void;
+  readonly beforeFrame?: (frame: import('@/services/playgame/runtime/projection').SeatTransactionFrame) => void;
+  readonly afterFrame?: (
+    frame: import('@/services/playgame/runtime/projection').SeatTransactionFrame,
+    signal: AbortSignal,
+  ) => Promise<void> | void;
+  readonly afterTransaction?: () => Promise<void> | void;
+};
+
+const preparedTestSink = (hooks: TestPresentationHooks): MatchPresentationSink => ({
+  prepareTransaction: async (frames) => {
+    hooks.beforeTransaction?.(frames);
+    return null;
+  },
+  prepareBeat: async beat => {
+    const frame = beat.frames[0];
+    hooks.beforeFrame?.(frame);
+    return {
+      beatId: beat.id,
+      firstFrame: frame.frame,
+      lastFrame: beat.frames.at(-1)!.frame,
+      declaredDurationMs: 0,
+      presentAfterAdoption: async (signal) => {
+        await hooks.afterFrame?.(frame, signal);
+        return signal.aborted ? 'CANCELLED' : 'COMPLETED';
+      },
+      cancel: () => undefined,
+    };
+  },
+  afterTransaction: async () => hooks.afterTransaction?.(),
+});
+
 for (const authorityDriver of MATCH_AUTHORITY_TEST_DRIVERS) {
 describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () => {
   it('H1/H6 completely blocks transaction two and keeps the UI locked between queued runs', async () => {
@@ -125,7 +161,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     let blocked = false;
     let transactionCount = 0;
 
-    harness.ui.actions.bindPresentationSink({
+    harness.ui.actions.bindPresentationSink(preparedTestSink({
       beforeTransaction: (frames) => {
         activeTransaction = frames[0]?.transactionId ?? 'empty';
         transactionCount++;
@@ -154,7 +190,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
           });
         }
       },
-    });
+    }));
 
     await commitTwoTurns(harness);
 
@@ -177,7 +213,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     expect(harness.ui.presentedState()).toBe(harness.match.snapshot().state);
   });
 
-  it('H3 snaps a failed transaction and continues the already-queued transaction', async () => {
+  it('H3 snaps a failed transaction, invalidates the queue, and resyncs', async () => {
     const harness = mountSession(await createClient(
       authorityDriver,
       'interleave-failure-snap',
@@ -188,7 +224,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     let blocked = false;
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    harness.ui.actions.bindPresentationSink({
+    harness.ui.actions.bindPresentationSink(preparedTestSink({
       beforeTransaction: (frames) => {
         const id = frames[0]?.transactionId ?? 'empty';
         transactions.push(id);
@@ -199,19 +235,20 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
         blocked = true;
         return gate.promise;
       },
-    });
+    }));
 
     await commitTwoTurns(harness);
     expect(transactions).toHaveLength(1);
     gate.reject(new Error('synthetic animation failure'));
     await waitForIdle(harness);
 
-    expect(transactions).toHaveLength(2);
+    expect(transactions).toHaveLength(1);
     expect(consoleError).toHaveBeenCalledOnce();
+    expect(harness.ui.presentationRecovery()).toEqual({ kind: 'READY' });
     expect(harness.ui.presentedState()).toBe(harness.match.snapshot().state);
   });
 
-  it('H3 times out a hung transaction, snaps it, and drains the next transaction', async () => {
+  it('H3 times out a hung transaction, invalidates the queue, and resyncs', async () => {
     vi.useFakeTimers();
     const harness = mountSession(await createClient(
       authorityDriver,
@@ -222,7 +259,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     let firstTransaction = '';
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
 
-    harness.ui.actions.bindPresentationSink({
+    harness.ui.actions.bindPresentationSink(preparedTestSink({
       beforeTransaction: (frames) => {
         const id = frames[0]?.transactionId ?? 'empty';
         transactions.push(id);
@@ -231,7 +268,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
       afterFrame: frame => frame.transactionId === firstTransaction
         ? never
         : undefined,
-    });
+    }));
 
     await commitTwoTurns(harness);
     expect(transactions).toHaveLength(1);
@@ -239,8 +276,9 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     vi.useRealTimers();
     await waitForIdle(harness);
 
-    expect(transactions).toHaveLength(2);
+    expect(transactions).toHaveLength(1);
     expect(consoleError).toHaveBeenCalledOnce();
+    expect(harness.ui.presentationRecovery()).toEqual({ kind: 'READY' });
     expect(harness.ui.presentedState()).toBe(harness.match.snapshot().state);
   });
 
@@ -253,7 +291,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     const transactions: string[] = [];
     let blocked = false;
 
-    harness.ui.actions.bindPresentationSink({
+    harness.ui.actions.bindPresentationSink(preparedTestSink({
       beforeTransaction: frames => {
         transactions.push(frames[0]?.transactionId ?? 'empty');
       },
@@ -262,7 +300,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
         blocked = true;
         return gate.promise;
       },
-    });
+    }));
 
     await commitTwoTurns(harness);
     expect(transactions).toHaveLength(1);
@@ -315,7 +353,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     disposers.push(render(() => <Root />, host));
 
     const disposedUi = currentUi;
-    disposedUi.actions.bindPresentationSink({ afterFrame: () => gate.promise });
+    disposedUi.actions.bindPresentationSink(preparedTestSink({ afterFrame: () => gate.promise }));
     await expect(match.actions.endTurn()).resolves.toBe(true);
     expect(disposedUi.isResolving()).toBe(true);
 
@@ -345,12 +383,12 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     harness.match.subscribePresentationBlocks(
       block => published.push(block),
     );
-    harness.ui.actions.bindPresentationSink({
+    harness.ui.actions.bindPresentationSink(preparedTestSink({
       afterFrame: () => {
         hookStarted = true;
         return gate.promise;
       },
-    });
+    }));
 
     await expect(harness.match.actions.endTurn()).resolves.toBe(true);
 
