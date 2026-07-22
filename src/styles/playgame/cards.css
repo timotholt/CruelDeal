@@ -51,6 +51,15 @@
     transform: translateY(-6px);
     filter: drop-shadow(0 14px 22px rgba(166,109,255,0.25));
   }
+  /* Board cards are already rasterized onto a small, fractionally rotated
+     surface. Applying a filter on hover forces Chromium to promote and
+     re-rasterize that surface, which makes face-up art shimmer at common
+     9:16 display scales. Lane hover belongs to the landing zone; keep the
+     mounted card on its exact resting pixels. */
+  .card.lane-card:hover {
+    transform: rotate(var(--card-tilt, 0deg));
+    filter: none;
+  }
   .card.selected { filter: drop-shadow(0 0 3px var(--accent)); }
   .card.target-valid {
     outline: 2px dashed var(--accent-2);
@@ -385,7 +394,6 @@
     min-height: calc(var(--hand-card-h) + 10px);
     --hand-scale: 1;
     --hand-gap: 6px;
-    --hand-slot-reserve-ms: 240ms;
     --hand-scale-ms: 180ms;
     gap: var(--hand-gap);
     flex-wrap: nowrap;
@@ -396,14 +404,16 @@
     width: var(--hand-card-w);
     height: var(--hand-card-h);
     margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
-    will-change: translate, flex-basis, width, margin;
-    transition:
-      flex-basis var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
-      width var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1),
-      margin var(--hand-scale-ms) ease;
+    will-change: translate, margin;
+    transition: margin var(--hand-scale-ms) ease;
   }
   .hand .hand-card-motion--reserved {
-    animation: hand-slot-reserve var(--hand-slot-reserve-ms) cubic-bezier(.2,0,.2,1) both;
+    /* The hidden destination must occupy its final geometry before the
+       compiled transfer endpoint is measured. Existing cards and the flyer
+       then animate against one immutable layout instead of correcting after
+       the flyer lands. */
+    flex-basis: var(--hand-card-w);
+    width: var(--hand-card-w);
   }
   .hand .hand-card-motion > .card {
     transform-origin: bottom center;
@@ -445,12 +455,12 @@
     transform-origin: center center;
     pointer-events: none;
   }
-  .card-motion-visual.card {
+  .card-motion-face.card {
     width: 100%;
     height: 100%;
     margin: 0;
   }
-  .card-motion-visual.card:hover {
+  .card-motion-face.card:hover {
     border-color: var(--card-edge);
     box-shadow: 0 10px 24px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.1);
   }
@@ -461,19 +471,6 @@
   }
   .pointer-drag-ghost:hover {
     box-shadow: 0 18px 42px rgba(0,0,0,0.55), 0 0 22px rgba(255,207,91,0.2);
-  }
-
-  @keyframes hand-slot-reserve {
-    from {
-      flex-basis: 0;
-      width: 0;
-      margin-inline: 0;
-    }
-    to {
-      flex-basis: var(--hand-card-w);
-      width: var(--hand-card-w);
-      margin-inline: calc(var(--hand-card-w) * (var(--hand-scale) - 1) / 2);
-    }
   }
 
 }

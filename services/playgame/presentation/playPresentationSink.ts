@@ -12,10 +12,8 @@ import {
 } from './eventAnimator';
 import type { PlayPresentationHost } from './playPresentationHost';
 import {
-  animateCardReveal,
-  cancelCardRevealAnimation,
   prepareCardRevealAnimation,
-  type CardRevealPreparation,
+  type PreparedCardReveal,
 } from './cardRevealAnimation';
 import {
   prepareLocationRevealAnimation,
@@ -58,7 +56,7 @@ export interface CreatePlayPresentationSinkOptions {
 interface FrameResources {
   readonly frame: SeatTransactionFrame;
   readonly eventAnimation: PreparedEventAnimation;
-  readonly reveal: CardRevealPreparation | null;
+  readonly reveal: PreparedCardReveal | null;
   readonly location: LocationRevealPreparation | null;
   readonly turnBanner: PreparedTurnBanner | null;
   readonly cleanups: Set<() => void>;
@@ -95,7 +93,7 @@ export const createPlayPresentationSink = (
 
   const prepareResources = (frame: SeatTransactionFrame): FrameResources => {
     let eventAnimation: PreparedEventAnimation | null = null;
-    let reveal: CardRevealPreparation | null = null;
+    let reveal: PreparedCardReveal | null = null;
     let location: LocationRevealPreparation | null = null;
     let turnBanner: PreparedTurnBanner | null = null;
     try {
@@ -113,7 +111,7 @@ export const createPlayPresentationSink = (
       };
     } catch (error) {
       eventAnimation?.dispose('presentation-invalidated');
-      if (reveal) cancelCardRevealAnimation(reveal, 'presentation-invalidated');
+      reveal?.cancel('presentation-invalidated');
       location?.cancel();
       turnBanner?.cancel();
       throw error;
@@ -127,7 +125,7 @@ export const createPlayPresentationSink = (
     if (cancelMotion) {
       resources.eventAnimation.dispose('presentation-invalidated');
       if (resources.reveal) {
-        cancelCardRevealAnimation(resources.reveal, 'presentation-invalidated');
+        resources.reveal.cancel('presentation-invalidated');
       }
     } else {
       resources.eventAnimation.dispose();
@@ -200,7 +198,8 @@ export const createPlayPresentationSink = (
 
               case 'CARD_REVEALED':
                 if (resources.reveal) {
-                  await animateCardReveal(host, resources.reveal, signal);
+                  const revealOutcome = await resources.reveal.present(signal);
+                  if (revealOutcome !== 'COMPLETED') return revealOutcome;
                 }
                 if (!signal.aborted) {
                   await animatePreparedEvent(resources.eventAnimation, signal);

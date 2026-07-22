@@ -77,6 +77,7 @@ export interface PresentationDirectorOptions {
     frame: SeatTransactionFrame,
     timing: {
       readonly outcome: PresentationFrameOutcome;
+      readonly failureMessage: string | null;
       readonly startedAtMs: number;
       readonly endedAtMs: number;
       readonly durationMs: number;
@@ -409,16 +410,18 @@ export class PresentationDirector {
               frame,
               error instanceof PresentationTimeoutError ? 'timed-out' : 'failed',
               startedAtMs,
+              error,
             );
           }
           throw error;
         }
         if (!this.#isCurrent(run)) return this.#stoppedResult(run);
         if (outcome !== 'COMPLETED') {
+          const outcomeError = new PresentationOutcomeError(beat.id, outcome!);
           for (const frame of beat.frames) {
-            this.#recordFrameSettlement(frame, 'failed', startedAtMs);
+            this.#recordFrameSettlement(frame, 'failed', startedAtMs, outcomeError);
           }
-          throw new PresentationOutcomeError(beat.id, outcome!);
+          throw outcomeError;
         }
         run.beatOwner = null;
         for (const frame of beat.frames) {
@@ -453,12 +456,16 @@ export class PresentationDirector {
     frame: SeatTransactionFrame,
     outcome: PresentationFrameOutcome,
     startedAtMs: number,
+    failure: unknown = null,
   ): void {
     if (!this.#onFrameSettled) return;
     const endedAtMs = monotonicNow();
     try {
       this.#onFrameSettled(frame, {
         outcome,
+        failureMessage: failure === null
+          ? null
+          : failure instanceof Error ? failure.message : String(failure),
         startedAtMs,
         endedAtMs,
         durationMs: elapsed(startedAtMs, endedAtMs),

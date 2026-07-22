@@ -26,5 +26,4 @@ export type { VfxTheme, EasingFn, QualityLevel, ShakeConfig } from './theme';
 
 export { vfxSfx } from './sfx';
 
-export { captureCardRects, playCardLayoutSlide } from './animations/layout-flip';
-export type { LayoutSlideOpts } from './animations/layout-flip';
+export { captureCardRects } from './animations/layout-flip';

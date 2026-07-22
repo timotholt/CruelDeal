@@ -143,6 +143,11 @@
     z-index: 220;
     pointer-events: auto;
   }
+  .portrait-zone-anchor {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
   .portrait-trigger {
     width: 34px;
     height: 34px;

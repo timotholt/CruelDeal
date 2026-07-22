@@ -39,6 +39,7 @@ export interface FramePresentationTiming {
   readonly eventType: MatchEvent['type'];
   readonly beatKind: string;
   readonly outcome: PresentationFrameOutcome;
+  readonly failureMessage: string | null;
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly durationMs: number;

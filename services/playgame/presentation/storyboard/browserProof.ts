@@ -31,7 +31,7 @@ const driver = new NativeWaapiDriver(document, targetKey => {
   const target = targets.get(targetKey);
   if (!target) throw new Error(`Missing proof target ${targetKey}`);
   return target;
-});
+}, window);
 const cueOrder: string[] = [];
 const runner = new StoryboardRunner(driver, {
   dispatch: cue => { cueOrder.push(cue.id); },

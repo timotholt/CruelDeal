@@ -21,14 +21,24 @@ export const PlayerPortraitMenu = (props: PlayerPortraitMenuProps) => {
   const { bindZoneRef } = useVfx();
   return (
     <div
-      ref={(el) => {
-        bindZoneRef(`${props.owner}:discard`)(el);
-        bindZoneRef(`${props.owner}:destroyed`)(el);
-        bindZoneRef(`${props.owner}:banished`)(el);
-      }}
       class={'portrait-menu-anchor portrait-menu-anchor--' + props.side}
       onClick={(e) => e.stopPropagation()}
     >
+      <span
+        ref={bindZoneRef(`${props.owner}:discard`)}
+        class="portrait-zone-anchor"
+        aria-hidden="true"
+      />
+      <span
+        ref={bindZoneRef(`${props.owner}:destroyed`)}
+        class="portrait-zone-anchor"
+        aria-hidden="true"
+      />
+      <span
+        ref={bindZoneRef(`${props.owner}:banished`)}
+        class="portrait-zone-anchor"
+        aria-hidden="true"
+      />
       <button
         class="portrait-trigger"
         classList={{ 'portrait-trigger--priority': props.hasPriority }}

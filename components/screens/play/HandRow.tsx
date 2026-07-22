@@ -1,6 +1,5 @@
 import { For, createMemo, untrack } from 'solid-js';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { HAND_SLOT_RESERVE_MS } from '@/services/playgame/presentation/handPresentation';
 import type { Seat } from '@/services/playgame/engine/types/ids';
 import { useVfx } from '@/components/game/VfxHost';
 import { HandCard } from './HandCard';
@@ -65,7 +64,6 @@ export const HandRow = (props: HandRowProps) => {
       aria-label="Return selected staged card to hand"
       style={{
         '--hand-scale': handScale().toFixed(3),
-        '--hand-slot-reserve-ms': `${HAND_SLOT_RESERVE_MS}ms`,
       }}
     >
       <For each={cardIds()}>

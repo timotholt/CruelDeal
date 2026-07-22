@@ -1,7 +1,5 @@
 import {
   canonicalCardEndpoint,
-  placeSurrogate,
-  setSurrogateFace,
   setSurrogateModel,
   type CardMotionHost,
   type CardMotionSurrogate,
@@ -21,13 +19,18 @@ import type {
   CardVisualFace,
   SurrogateBasis,
 } from './types';
+import {
+  milliseconds,
+  visualTargetKey,
+  type StoryboardStep,
+} from '../storyboard/contracts';
 
 const isCanonicalEndpoint = (
   endpoint: CardMotionEndpoint,
-): endpoint is CanonicalCardEndpoint => 'resolveElement' in endpoint;
+): endpoint is CanonicalCardEndpoint => endpoint.kind === 'canonical';
 
 const endpointRect = (endpoint: CardMotionEndpoint): DOMRect | null => (
-  isCanonicalEndpoint(endpoint) ? endpoint.resolveRect() : endpoint.rect
+  endpoint.resolveRect()
 );
 
 const endpointRotation = (endpoint: CardMotionEndpoint): number => (
@@ -64,10 +67,15 @@ export interface CardMotionSession {
   readonly cardId: string;
   readonly surrogate: HTMLElement;
   readonly phase: CardMotionPhase;
-  animateTo(endpoint: CardMotionEndpoint, style: CardMotionStyle): Promise<CardMotionResult | null>;
-  handoffTo(endpoint: CanonicalCardEndpoint): Promise<CardMotionResult>;
-  finishAtLogicalZone(): Promise<CardMotionResult>;
-  cancel(reason: CardMotionCancelReason): Promise<CardMotionResult>;
+  prepareStep(
+    stepId: string,
+    endpoint: CardMotionEndpoint,
+    style: CardMotionStyle,
+  ): Promise<StoryboardStep>;
+  timelineTargets(): ReadonlyMap<string, Element>;
+  handoffTo(endpoint: CanonicalCardEndpoint): CardMotionResult;
+  finishAtLogicalZone(): CardMotionResult;
+  cancel(reason: CardMotionCancelReason): CardMotionResult;
   dispose(): void;
 }
 
@@ -84,8 +92,11 @@ export interface CardMotionScope {
 class MotionSession implements CardMotionSession {
   private currentPhase: CardMotionPhase = 'captured';
   private terminalResult: CardMotionResult | null = null;
-  private readonly pendingWaits = new Set<() => void>();
-  private currentFace: CardVisualFace;
+  private plannedFace: CardVisualFace;
+  private plannedRect: DOMRect;
+  private plannedRotationDegrees: number;
+  private plannedOpacity = 1;
+  private plannedScale = 1;
 
   constructor(
     readonly id: string,
@@ -100,7 +111,11 @@ class MotionSession implements CardMotionSession {
     face: CardVisualFace,
     startRect: DOMRect,
   ) {
-    this.currentFace = face;
+    this.plannedFace = face;
+    this.plannedRect = this.host.toLocalRect(startRect);
+    this.plannedRotationDegrees = Number.parseFloat(
+      this.visual.restingShell.style.transform.match(/-?[\d.]+/)?.[0] ?? '0',
+    );
     if (sourceElement) {
       this.leases.acquire(this.id, this.cardId, sourceElement);
       this.recordDiagnostic('lease-acquired', 'source');
@@ -117,106 +132,155 @@ class MotionSession implements CardMotionSession {
     return this.currentPhase;
   }
 
-  async animateTo(
+  async prepareStep(
+    stepId: string,
     endpoint: CardMotionEndpoint,
     style: CardMotionStyle,
-  ): Promise<CardMotionResult | null> {
-    if (this.terminalResult) return this.terminalResult;
-    const rect = endpointRect(endpoint);
-    if (!rect) return this.recover('missing-destination');
-
+  ): Promise<StoryboardStep> {
+    if (this.terminalResult) throw new Error(`Card motion ${this.id} is already complete`);
     if (isCanonicalEndpoint(endpoint)) {
       const destination = endpoint.resolveElement();
-      if (destination) {
-        this.leases.acquire(this.id, this.cardId, destination);
-        this.recordDiagnostic('lease-acquired', 'destination');
+      if (!destination?.isConnected) {
+        throw new Error(`Card motion ${this.id} canonical destination is unavailable`);
       }
+      this.leases.acquire(this.id, this.cardId, destination);
+      this.recordDiagnostic('lease-acquired', 'destination');
     }
 
-    const reducedMotion = typeof matchMedia === 'function'
-      && matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const durationMs = reducedMotion ? 1 : Math.max(1, style.durationMs);
-    const targetFace = style.faceAtLanding ?? endpointFace(endpoint, this.currentFace);
-    const scaleFrom = style.scaleFrom ?? 1;
+    const durationMs = Math.max(1, Math.round(style.durationMs));
+    const targetFace = style.faceAtLanding ?? endpointFace(endpoint, this.plannedFace);
+    const scaleFrom = style.scaleFrom ?? this.plannedScale;
     const scaleTo = style.scaleTo ?? 1;
-    const changesFace = targetFace !== this.currentFace;
-    const halfDurationMs = Math.max(1, durationMs / 2);
-    const midpointScale = (scaleFrom + scaleTo) / 2;
+    const opacityFrom = style.opacityFrom ?? this.plannedOpacity;
+    const opacityTo = style.opacityTo ?? 1;
     const landingModel = endpointModel(endpoint);
     const modelToPrepare = landingModel?.face.kind === 'front'
       ? landingModel
       : this.visual.frontModel;
     if (modelToPrepare?.face.kind === 'front') {
       await prepareCardSurfaceModel(modelToPrepare);
-      if (this.terminalResult) return this.terminalResult;
+      if (this.terminalResult) throw new Error(`Card motion ${this.id} was cancelled`);
+      setSurrogateModel(this.visual, modelToPrepare);
     }
+    // Resolve geometry after asynchronous surface preparation. State adoption
+    // can precede the browser's first usable layout; an endpoint captured
+    // before that boundary may contain a transient zero rectangle.
+    const rect = endpointRect(endpoint);
+    if (!rect) throw new Error(`Card motion ${this.id} is missing its destination`);
+    const targetRect = !isCanonicalEndpoint(endpoint) && endpoint.coordinateSpace === 'frame-local'
+      ? new DOMRect(rect.left, rect.top, rect.width, rect.height)
+      : this.host.toLocalRect(rect);
+    const targetRotation = endpointRotation(endpoint);
+    const startFaceAngle = this.plannedFace === 'faceDown' ? 0 : 180;
+    const targetFaceAngle = targetFace === 'faceDown' ? 0 : 180;
+    const duration = milliseconds(durationMs);
+    const startRect = this.plannedRect;
     this.recordDiagnostic('motion-started', undefined, rect, durationMs);
-    this.visual.root.style.opacity = String(style.opacityFrom ?? 1);
-    // Both canonical faces rest unmirrored. A face change uses two 90-degree
-    // halves with an edge-on artwork swap instead of leaving the back at 180
-    // degrees, which mirrors diagonal card-back artwork at handoff.
-    this.visual.visual.style.transform = `rotateY(0deg) scale(${scaleFrom})`;
-    void this.visual.root.offsetWidth;
 
-    this.visual.root.style.transition = [
-      `left ${durationMs}ms ${style.easing}`,
-      `top ${durationMs}ms ${style.easing}`,
-      `width ${durationMs}ms ${style.easing}`,
-      `height ${durationMs}ms ${style.easing}`,
-      `opacity ${durationMs}ms ${style.easing}`,
-    ].join(', ');
-    this.visual.restingShell.style.transition = `transform ${durationMs}ms ${style.easing}`;
-    this.visual.visual.style.transition = `transform ${changesFace ? halfDurationMs : durationMs}ms ${style.easing}`;
-    placeSurrogate(this.host, this.visual, rect);
-    this.visual.restingShell.style.transform = `rotate(${endpointRotation(endpoint)}deg)`;
-    this.visual.root.style.opacity = String(style.opacityTo ?? 1);
-    this.visual.visual.style.transform = changesFace
-      ? `rotateY(90deg) scale(${midpointScale})`
-      : `rotateY(0deg) scale(${scaleTo})`;
-    const landingWait = this.wait(durationMs + 30);
-    if (changesFace) {
-      // Keep the source artwork on the visible half of the turn. Swapping the
-      // card background before it reaches edge-on reads as a flash, not a
-      // flip. At the midpoint the card has no visible face, so ownership can
-      // change without exposing either image for an extra frame.
-      await this.wait(halfDurationMs);
-      if (this.terminalResult) return this.terminalResult;
-      const targetModel = landingModel;
-      if (targetModel && (
-        (targetFace === 'faceDown' && targetModel.face.kind === 'back')
-        || (targetFace === 'faceUp' && targetModel.face.kind === 'front')
-      )) {
-        setSurrogateModel(this.visual, targetModel);
-      } else {
-        setSurrogateFace(this.visual, targetFace);
-      }
-      this.currentFace = targetFace;
-      this.recordDiagnostic('face-swapped', targetFace);
-      this.visual.visual.style.transition = 'none';
-      this.visual.visual.style.transform = `rotateY(-90deg) scale(${midpointScale})`;
-      void this.visual.visual.offsetWidth;
-      this.visual.visual.style.transition = `transform ${halfDurationMs}ms ${style.easing}`;
-      this.visual.visual.style.transform = `rotateY(0deg) scale(${scaleTo})`;
-    }
-
-    await landingWait;
-    if (this.terminalResult) return this.terminalResult;
-    this.setPhase('landed');
-    this.recordDiagnostic('landed', undefined, rect);
-    return null;
+    const step: StoryboardStep = {
+      id: stepId,
+      durationMs: duration,
+      nextStepAfterMs: duration,
+      tracks: [
+        {
+          kind: 'ELEMENT',
+          id: `${stepId}:root`,
+          target: { kind: 'CARD_ACTOR_ROOT', card: this.cardId },
+          channel: 'layout',
+          keyframes: [
+            {
+              atMs: milliseconds(0),
+              styles: {
+                left: `${startRect.left}px`,
+                top: `${startRect.top}px`,
+                width: `${startRect.width}px`,
+                height: `${startRect.height}px`,
+                opacity: opacityFrom,
+              },
+            },
+            {
+              atMs: duration,
+              styles: {
+                left: `${targetRect.left}px`,
+                top: `${targetRect.top}px`,
+                width: `${targetRect.width}px`,
+                height: `${targetRect.height}px`,
+                opacity: opacityTo,
+              },
+              easing: style.easing,
+            },
+          ],
+        },
+        {
+          kind: 'ELEMENT',
+          id: `${stepId}:resting`,
+          target: { kind: 'CARD_ACTOR_RESTING_SHELL', card: this.cardId },
+          channel: 'resting-pose',
+          keyframes: [
+            {
+              atMs: milliseconds(0),
+              styles: { transform: `rotate(${this.plannedRotationDegrees}deg)` },
+            },
+            {
+              atMs: duration,
+              styles: { transform: `rotate(${targetRotation}deg)` },
+              easing: style.easing,
+            },
+          ],
+        },
+        {
+          kind: 'ELEMENT',
+          id: `${stepId}:face`,
+          target: { kind: 'CARD_ACTOR_FACE_SHELL', card: this.cardId },
+          channel: 'face-turn',
+          keyframes: [
+            {
+              atMs: milliseconds(0),
+              styles: { transform: `rotateY(${startFaceAngle}deg) scale(${scaleFrom})` },
+            },
+            {
+              atMs: duration,
+              styles: { transform: `rotateY(${targetFaceAngle}deg) scale(${scaleTo})` },
+              easing: style.easing,
+            },
+          ],
+        },
+      ],
+      cues: [],
+    };
+    this.plannedRect = targetRect;
+    this.plannedRotationDegrees = targetRotation;
+    this.plannedFace = targetFace;
+    this.plannedOpacity = opacityTo;
+    this.plannedScale = scaleTo;
+    return step;
   }
 
-  async handoffTo(endpoint: CanonicalCardEndpoint): Promise<CardMotionResult> {
+  timelineTargets(): ReadonlyMap<string, Element> {
+    return new Map([
+      [visualTargetKey({ kind: 'CARD_ACTOR_ROOT', card: this.cardId }), this.visual.root],
+      [
+        visualTargetKey({ kind: 'CARD_ACTOR_RESTING_SHELL', card: this.cardId }),
+        this.visual.restingShell,
+      ],
+      [
+        visualTargetKey({ kind: 'CARD_ACTOR_FACE_SHELL', card: this.cardId }),
+        this.visual.visual,
+      ],
+    ]);
+  }
+
+  handoffTo(endpoint: CanonicalCardEndpoint): CardMotionResult {
     if (this.terminalResult) return this.terminalResult;
     this.setPhase('handing-off');
     const destination = endpoint.resolveElement();
     if (!destination) return this.recover('missing-destination');
 
     const destinationFace = endpoint.resolveFace();
-    if (destinationFace !== this.currentFace) {
+    if (destinationFace !== this.plannedFace) {
       this.recordDiagnostic(
         'face-mismatch',
-        `surrogate=${this.currentFace}; canonical=${destinationFace}`,
+        `surrogate=${this.plannedFace}; canonical=${destinationFace}`,
       );
       return this.recover('face-mismatch');
     }
@@ -229,7 +293,7 @@ class MotionSession implements CardMotionSession {
     return this.complete({ status: 'completed' });
   }
 
-  async finishAtLogicalZone(): Promise<CardMotionResult> {
+  finishAtLogicalZone(): CardMotionResult {
     if (this.terminalResult) return this.terminalResult;
     this.leases.releaseSession(this.id);
     this.recordDiagnostic('lease-released');
@@ -237,13 +301,13 @@ class MotionSession implements CardMotionSession {
     return this.complete({ status: 'completed' });
   }
 
-  async cancel(reason: CardMotionCancelReason): Promise<CardMotionResult> {
+  cancel(reason: CardMotionCancelReason): CardMotionResult {
     if (this.terminalResult) return this.terminalResult;
     return this.completeTerminal({ status: 'cancelled', reason });
   }
 
   dispose(): void {
-    void this.cancel('manual');
+    this.cancel('manual');
   }
 
   private recover(reason: CardMotionRecoveryReason): CardMotionResult {
@@ -252,8 +316,6 @@ class MotionSession implements CardMotionSession {
   }
 
   private completeTerminal(result: CardMotionResult): CardMotionResult {
-    for (const settle of [...this.pendingWaits]) settle();
-    this.pendingWaits.clear();
     this.leases.releaseSession(this.id);
     this.recordDiagnostic('lease-released');
     this.cleanupSurrogate();
@@ -270,26 +332,8 @@ class MotionSession implements CardMotionSession {
   }
 
   private cleanupSurrogate(): void {
-    this.visual.root.style.removeProperty('transition');
     this.visual.root.style.removeProperty('will-change');
-    this.visual.restingShell.style.removeProperty('transition');
-    this.visual.visual.style.removeProperty('transition');
     this.visual.release();
-  }
-
-  private wait(ms: number): Promise<void> {
-    return new Promise((resolve) => {
-      let settled = false;
-      const finish = (): void => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timeout);
-        this.pendingWaits.delete(finish);
-        resolve();
-      };
-      this.pendingWaits.add(finish);
-      const timeout = setTimeout(finish, ms);
-    });
   }
 
   private setPhase(phase: CardMotionPhase): void {
@@ -356,7 +400,7 @@ export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => 
       if (disposed) throw new Error('Cannot begin card motion in a disposed scope');
       const existing = sessions.get(options.cardId);
       if (existing) {
-        void existing.cancel('replaced-by-new-session');
+        existing.cancel('replaced-by-new-session');
       }
       const sessionId = `card-motion-${nextSessionId++}`;
       const face = options.face

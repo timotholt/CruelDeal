@@ -7,12 +7,38 @@ import {
   type MountedCardSurface,
 } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import { createPlayMotionSurface } from '../playMotionSurface';
+import { createAutoAdvancingTestTimelineDriverFactory } from '../storyboard/testing';
 import {
   canonicalCardEndpoint,
   captureCardVisual,
   normalizedCardRect,
 } from './createCardSurrogate';
 import { CARD_MOTION_ACTOR_CAPACITY } from './cardMotionActorPool';
+import { runCardMotionStoryboard } from './cardMotionStoryboard';
+import { FakeWaapiDriver } from '../storyboard/waapiDriver';
+import type { CardMotionSession } from './cardMotionSession';
+import type { CanonicalCardEndpoint, CardMotionStyle } from './types';
+
+const runSessionStep = async (
+  session: CardMotionSession,
+  endpoint: CanonicalCardEndpoint,
+  style: CardMotionStyle,
+  driver: FakeWaapiDriver,
+  controller = new AbortController(),
+) => {
+  const step = await session.prepareStep(`${session.id}:test-step`, endpoint, style);
+  const result = runCardMotionStoryboard({
+    id: `${session.id}:test-storyboard`,
+    source: { kind: 'FOUNDATION_PROOF', proofId: session.id },
+    targets: session.timelineTargets(),
+    steps: [step],
+    createTimelineDriver: () => driver,
+    maximumCardActors: 1,
+    handoff: () => { session.handoffTo(endpoint); },
+    signal: controller.signal,
+  });
+  return { result, controller, step };
+};
 
 afterEach(() => {
   vi.useRealTimers();
@@ -73,6 +99,7 @@ const fixture = () => {
     frame,
     overlay,
     cardRefs,
+    timelineDriverFactory: createAutoAdvancingTestTimelineDriverFactory(),
   });
   return {
     frame,
@@ -88,6 +115,19 @@ const fixture = () => {
 };
 
 describe('governed card motion session', () => {
+  it('rejects a storyboard whose declared actor envelope exceeds the validated pool', async () => {
+    await expect(runCardMotionStoryboard({
+      id: 'over-capacity',
+      source: { kind: 'FOUNDATION_PROOF', proofId: 'over-capacity' },
+      targets: new Map(),
+      steps: [],
+      createTimelineDriver: createAutoAdvancingTestTimelineDriverFactory(),
+      maximumCardActors: CARD_MOTION_ACTOR_CAPACITY + 1,
+      handoff: () => undefined,
+      signal: new AbortController().signal,
+    })).rejects.toThrow(`validated capacity is ${String(CARD_MOTION_ACTOR_CAPACITY)}`);
+  });
+
   it('pre-mounts a bounded actor pool and reuses the same painted surface', async () => {
     const { source, cardId, surface, overlay } = fixture();
     const parkedActors = overlay.querySelectorAll<HTMLElement>('[data-card-motion-actor]');
@@ -173,7 +213,6 @@ describe('governed card motion session', () => {
   });
 
   it('hands off without a blank representation and cleans up exactly once', async () => {
-    vi.useFakeTimers();
     const { source, destination, cardId, surface, overlay } = fixture();
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
@@ -187,30 +226,28 @@ describe('governed card motion session', () => {
     });
     const endpoint = canonicalCardEndpoint(cardId, surface.cardElement);
 
-    const flight = session.animateTo(endpoint, {
+    const driver = new FakeWaapiDriver();
+    const { result } = await runSessionStep(session, endpoint, {
       durationMs: 100,
       easing: 'linear',
       faceAtLanding: 'faceUp',
-    });
+    }, driver);
     expect(source.style.visibility).toBe('hidden');
     expect(destination.style.visibility).toBe('hidden');
     expect(overlay.querySelectorAll('[data-card-motion-session]')).toHaveLength(1);
 
-    await vi.runAllTimersAsync();
-    expect(await flight).toBeNull();
-    const handoff = await session.handoffTo(endpoint);
-    expect(handoff).toEqual({ status: 'completed' });
+    driver.advanceTo(100);
+    expect(await result).toBe('COMPLETED');
     expect(source.style.visibility).toBe('');
     expect(destination.style.visibility).toBe('');
     expect(surface.cardMotion.activeSessionCount).toBe(0);
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
     expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
 
-    expect(await session.handoffTo(endpoint)).toEqual({ status: 'completed' });
+    expect(session.handoffTo(endpoint)).toEqual({ status: 'completed' });
   });
 
-  it('changes face artwork only when a flip reaches edge-on', async () => {
-    vi.useFakeTimers();
+  it('pre-mounts both faces and lets one compiled face track cross edge-on', async () => {
     const { source, destinationSurface, cardId, surface, overlay } = fixture();
     destinationSurface.update(identityFreeCardBackModel());
     const snapshot = captureCardVisual(cardId, source);
@@ -224,30 +261,28 @@ describe('governed card motion session', () => {
     });
     const visual = overlay.querySelector<HTMLElement>('.card-motion-visual')!;
 
-    const flight = session.animateTo(surface.cardMotion.endpoint(cardId), {
+    const endpoint = surface.cardMotion.endpoint(cardId);
+    const driver = new FakeWaapiDriver();
+    const { result } = await runSessionStep(session, endpoint, {
       durationMs: 120,
       easing: 'linear',
       faceAtLanding: 'faceDown',
-    });
+    }, driver);
     expect(visual.dataset.cardMotionFace).toBe('faceUp');
-    expect(visual.querySelector('.system-card-back')).toBeNull();
+    expect(visual.querySelectorAll('.card-motion-face')).toHaveLength(2);
+    const faceTrack = driver.compiledTracks.find(track => track.channel === 'face-turn');
+    expect(faceTrack?.keyframes.map(frame => frame.value)).toEqual([
+      'rotateY(180deg) scale(1)',
+      'rotateY(0deg) scale(1)',
+    ]);
+    expect(faceTrack?.keyframes.map(frame => frame.offset)).toEqual([0, 1]);
 
-    await vi.advanceTimersByTimeAsync(59);
-    expect(visual.dataset.cardMotionFace).toBe('faceUp');
-    await vi.advanceTimersByTimeAsync(1);
-    expect(visual.dataset.cardMotionFace).toBe('faceDown');
-    expect(visual.querySelector('.system-card-back')).not.toBeNull();
-
-    await vi.runAllTimersAsync();
-    expect(await flight).toBeNull();
-    expect(visual.style.transform).toBe('rotateY(0deg) scale(1)');
-    expect(await session.handoffTo(surface.cardMotion.endpoint(cardId))).toEqual({
-      status: 'completed',
-    });
+    driver.advanceTo(120);
+    expect(await result).toBe('COMPLETED');
+    expect(surface.cardMotion.activeSessionCount).toBe(0);
   });
 
   it('re-resolves a remounted canonical destination at handoff', async () => {
-    vi.useFakeTimers();
     const { source, destination, cardId, cardRefs, surface } = fixture();
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
@@ -258,9 +293,13 @@ describe('governed card motion session', () => {
       sourceElement: source,
     });
     const endpoint = surface.cardMotion.endpoint(cardId);
-    const flight = session.animateTo(endpoint, { durationMs: 40, easing: 'linear' });
-    await vi.runAllTimersAsync();
-    await flight;
+    const driver = new FakeWaapiDriver();
+    const { result } = await runSessionStep(
+      session,
+      endpoint,
+      { durationMs: 40, easing: 'linear' },
+      driver,
+    );
 
     const remounted = document.createElement('div');
     remounted.className = 'card lane-card';
@@ -271,7 +310,8 @@ describe('governed card motion session', () => {
     destination.replaceWith(remounted);
     cardRefs.set(cardId, remounted);
 
-    expect(await session.handoffTo(endpoint)).toEqual({ status: 'completed' });
+    driver.advanceTo(40);
+    expect(await result).toBe('COMPLETED');
     expect(remounted.style.visibility).toBe('');
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
   });
@@ -301,7 +341,6 @@ describe('governed card motion session', () => {
   });
 
   it('settles an in-flight animation exactly once when cancelled', async () => {
-    vi.useFakeTimers();
     const { source, cardId, surface, overlay } = fixture();
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
@@ -311,21 +350,21 @@ describe('governed card motion session', () => {
       startRect: snapshot.rect,
       sourceElement: source,
     });
-    const flight = session.animateTo(surface.cardMotion.endpoint(cardId), {
+    const endpoint = surface.cardMotion.endpoint(cardId);
+    const driver = new FakeWaapiDriver();
+    const controller = new AbortController();
+    const { result } = await runSessionStep(session, endpoint, {
       durationMs: 1_000,
       easing: 'linear',
-    });
+    }, driver, controller);
 
-    await vi.advanceTimersByTimeAsync(20);
-    expect(await session.cancel('presentation-invalidated')).toEqual({
+    driver.advanceTo(20);
+    controller.abort('test-cancel');
+    expect(session.cancel('presentation-invalidated')).toEqual({
       status: 'cancelled',
       reason: 'presentation-invalidated',
     });
-    expect(await flight).toEqual({
-      status: 'cancelled',
-      reason: 'presentation-invalidated',
-    });
-    await vi.runAllTimersAsync();
+    expect(await result).toBe('CANCELLED');
     expect(surface.cardMotion.activeSessionCount).toBe(0);
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
     expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
@@ -334,7 +373,7 @@ describe('governed card motion session', () => {
     );
   });
 
-  it('recovers a missing destination without stranding source visibility', async () => {
+  it('fails a missing destination instead of substituting non-motion', async () => {
     const { source, destination, cardId, cardRefs, surface } = fixture();
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
@@ -347,30 +386,17 @@ describe('governed card motion session', () => {
     destination.remove();
     cardRefs.delete(cardId);
 
-    expect(await session.animateTo(surface.cardMotion.endpoint(cardId), {
+    await expect(session.prepareStep('missing-destination', surface.cardMotion.endpoint(cardId), {
       durationMs: 10,
       easing: 'linear',
-    })).toEqual({
-      status: 'recovered',
-      reason: 'missing-destination',
-    });
+    })).rejects.toThrow('canonical destination is unavailable');
+    session.cancel('presentation-invalidated');
     expect(source.style.visibility).toBe('');
     expect(surface.cardMotion.activeSessionCount).toBe(0);
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
   });
 
-  it('uses the same lifecycle under reduced motion', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal('matchMedia', vi.fn(() => ({
-      matches: true,
-      media: '(prefers-reduced-motion: reduce)',
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    })));
+  it('keeps long authored motion owned by the compiled master clock', async () => {
     const { source, cardId, surface } = fixture();
     const snapshot = captureCardVisual(cardId, source);
     const session = surface.cardMotion.begin({
@@ -381,14 +407,15 @@ describe('governed card motion session', () => {
       sourceElement: source,
     });
     const endpoint = surface.cardMotion.endpoint(cardId);
-    const flight = session.animateTo(endpoint, {
+    const driver = new FakeWaapiDriver();
+    const { result } = await runSessionStep(session, endpoint, {
       durationMs: 9_000,
       easing: 'linear',
-    });
+    }, driver);
 
-    await vi.advanceTimersByTimeAsync(31);
-    expect(await flight).toBeNull();
-    expect(await session.handoffTo(endpoint)).toEqual({ status: 'completed' });
+    expect(driver.clocks[0]?.durationMs).toBe(9_000);
+    driver.advanceTo(9_000);
+    expect(await result).toBe('COMPLETED');
     expect(surface.cardMotion.activeSessionCount).toBe(0);
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
   });

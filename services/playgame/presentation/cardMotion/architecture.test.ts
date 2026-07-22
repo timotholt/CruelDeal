@@ -25,7 +25,8 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
     const surrogate = source('./createCardSurrogate.ts');
     const actorPool = source('./cardMotionActorPool.ts');
     expect(surrogate).not.toContain('cloneNode(');
-    expect(actorPool).toContain('mountCardSurface(visual, identityFreeCardBackModel())');
+    expect(actorPool).toContain('mountCardSurface(backFace, identityFreeCardBackModel())');
+    expect(actorPool).toContain('mountCardSurface(frontFace, identityFreeCardBackModel())');
     expect(actorPool).toContain('actors.find(candidate => !candidate.active)');
     expect(actorPool).not.toContain('cloneNode(');
     expect(surrogate).toContain('readCardSurfaceModel');
@@ -35,7 +36,8 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
   it('uses the pointer session surrogate through accepted landing', () => {
     const drag = source('../../../../components/screens/play/useCardInteraction.ts');
     expect(drag).toContain('motionSession.surrogate');
-    expect(drag).toContain('session.animateTo(endpoint');
+    expect(drag).toContain('session.prepareStep(');
+    expect(drag).toContain('runCardMotionStoryboard({');
     expect(drag).toContain('session.handoffTo(endpoint)');
     expect(drag).not.toContain('cleanupGhost');
   });
@@ -56,7 +58,8 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
 
   it('keeps the presentation sink as an awaited dispatcher, not an animation implementation', () => {
     const sink = source('../playPresentationSink.ts');
-    expect(sink).toContain('await animateCardReveal(');
+    expect(sink).toContain('await resources.reveal.present(signal)');
+    expect(sink).not.toContain('animateCardReveal');
     expect(sink).toContain('prepareLocationRevealAnimation(host, browser, frame)');
     expect(sink).toContain('await resources.location.present(signal)');
     expect(sink).toContain('await resources.turnBanner.present(signal)');

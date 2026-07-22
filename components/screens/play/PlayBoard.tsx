@@ -202,15 +202,17 @@ export const PlayBoard = (props: PlayBoardProps) => {
       .reverse()
       .find(token => liveState.cards.find(card => card.token === token)?.owner === localSeat);
     if (!lastStaged) return;
+    const motion = motionSurface();
+    if (!motion) return;
     // Capture the lane-card rect plus all current hand rects; after undo,
     // Solid re-renders and the lane card reappears in hand — FLIP-slide
     // both the restored card and the shuffled hand into place.
     const allIds = [lastStaged as string, ...interactiveHand().map(c => c.id)];
-    const handLayoutTransition = prepareHandLayoutTransition(allIds, cardRefs);
+    const handLayoutTransition = prepareHandLayoutTransition(allIds, cardRefs, motion);
     setReplayClientActivity({ kind: 'PROCESSING_EVENTS' });
     const undone = await actions.undoPending().finally(() => setReplayClientActivity(null));
     if (!undone) return;
-    handLayoutTransition.playAfterRender();
+    await handLayoutTransition.playAfterRender();
   };
 
   let boardEl: HTMLDivElement | undefined;
@@ -286,7 +288,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
       browser: {
         playfieldRoot: playRoot,
         playfield: playfieldEl,
-        createTimelineDriver: createNativeTimelineDriverFactory(document),
+        createTimelineDriver: createNativeTimelineDriverFactory(document, window),
         locationMap: lanePresentationRefs.mapElement,
         locationTile: lanePresentationRefs.tileElement,
         showToast: (message, options) =>
@@ -427,21 +429,6 @@ export const PlayBoard = (props: PlayBoardProps) => {
             onEndTurn={handleEndTurn}
           />
         </footer>
-
-        <div
-          ref={bindZoneRef('generated')}
-          class="generated-anchor"
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: '50%',
-            top: '50%',
-            width: '48px',
-            height: '68px',
-            visibility: 'hidden',
-            'pointer-events': 'none',
-          }}
-        />
 
         <div
           class="toast-area"

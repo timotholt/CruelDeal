@@ -25,6 +25,7 @@ import { REVEAL_CINEMATIC_TIMING } from './timing';
 import type { Frame } from '../engine/types/timeline';
 import type { PresentationBeat } from './transactionPresentationPlanner';
 import { FakeWaapiDriver } from './storyboard/waapiDriver';
+import { AutoAdvancingFakeWaapiDriver } from './storyboard/testing';
 
 type SplitEventType<T, D> = T extends string ? { readonly type: T; readonly data: D } : never;
 type ProjectedEvent = SeatAnimationEvent extends infer E
@@ -149,10 +150,17 @@ const fixture = () => {
   root.append(overlay);
   document.body.append(root);
   const cardRefs = new Map<string, HTMLElement>();
+  const cardMotionTimelineDrivers: AutoAdvancingFakeWaapiDriver[] = [];
   const motionSurface = createPlayMotionSurface({
     frame: root,
     overlay,
     cardRefs,
+    timelineDriverFactory: targets => {
+      void targets;
+      const driver = new AutoAdvancingFakeWaapiDriver();
+      cardMotionTimelineDrivers.push(driver);
+      return driver;
+    },
   });
   const playVfx = vi.fn();
   const playSfx = vi.fn();
@@ -213,6 +221,7 @@ const fixture = () => {
     showToast,
     dismissToast,
     timelineDrivers,
+    cardMotionTimelineDrivers,
     setMap: (element: HTMLElement | null) => {
       mapElement = element;
     },
@@ -401,6 +410,34 @@ describe('browser play presentation sink', () => {
       expect(flyer?.textContent).not.toContain('REMOTE IDENTITY');
       expect(card.style.visibility).toBe('hidden');
       await vi.advanceTimersByTimeAsync(REVEAL_CINEMATIC_TIMING.enterMs / 2 + 1);
+      const driver = test.cardMotionTimelineDrivers.at(-1);
+      const faceTransform = driver?.compiledTracks.find(track => (
+        track.channel === 'face-turn' && track.property === 'transform'
+      ));
+      expect(faceTransform?.keyframes.map(keyframe => keyframe.value)).toEqual([
+        'rotateY(0deg) scale(1)',
+        'rotateY(180deg) scale(2.2)',
+        'rotateY(180deg) scale(2.2)',
+        'rotateY(180deg) scale(1)',
+      ]);
+      const left = driver?.compiledTracks.find(track => (
+        track.channel === 'layout' && track.property === 'left'
+      ));
+      const top = driver?.compiledTracks.find(track => (
+        track.channel === 'layout' && track.property === 'top'
+      ));
+      expect(left?.keyframes.map(keyframe => keyframe.value)).toEqual([
+        '80px',
+        '180px',
+        '180px',
+        '80px',
+      ]);
+      expect(top?.keyframes.map(keyframe => keyframe.value)).toEqual([
+        '240px',
+        '332px',
+        '332px',
+        '240px',
+      ]);
       expect(flyer?.textContent).toContain('REMOTE IDENTITY');
       await vi.runAllTimersAsync();
       await animation;

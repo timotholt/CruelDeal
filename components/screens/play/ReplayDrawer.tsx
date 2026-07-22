@@ -252,9 +252,18 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                   </div>
                   <Show when={selectedTiming()?.presentation}>
                     {(timing) => (
-                      <div class="replay-panel__timing-note">
-                        {timing().beatKind} · {timing().outcome}
-                      </div>
+                      <>
+                        <div class="replay-panel__timing-note">
+                          {timing().beatKind} · {timing().outcome}
+                        </div>
+                        <Show when={timing().failureMessage}>
+                          {(message) => (
+                            <div class="replay-panel__timing-note replay-panel__timing-note--error">
+                              {message()}
+                            </div>
+                          )}
+                        </Show>
+                      </>
                     )}
                   </Show>
                   <div class="replay-panel__timing-note">

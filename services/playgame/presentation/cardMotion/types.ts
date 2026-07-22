@@ -19,6 +19,7 @@ export interface CardVisualSnapshot {
 }
 
 export interface CanonicalCardEndpoint {
+  readonly kind: 'canonical';
   readonly cardId: string;
   resolveElement(): HTMLElement | null;
   resolveRect(): DOMRect | null;
@@ -28,7 +29,12 @@ export interface CanonicalCardEndpoint {
 }
 
 export interface LogicalCardEndpoint {
-  readonly rect: DOMRect;
+  readonly kind: 'logical';
+  /** Logical choreography may be authored against either the browser
+      viewport or the fixed 9:16 play frame. The coordinate space is part of
+      the endpoint contract so it can never be guessed from a DOMRect. */
+  readonly coordinateSpace: 'viewport' | 'frame-local';
+  resolveRect(): DOMRect | null;
   readonly rotationDegrees?: number;
   readonly face?: CardVisualFace;
   readonly model?: CardSurfaceModel;

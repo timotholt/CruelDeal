@@ -23,7 +23,10 @@ export interface CardMotionSurrogate {
   readonly root: HTMLElement;
   readonly restingShell: HTMLElement;
   readonly visual: HTMLElement;
-  readonly surface: MountedCardSurface;
+  readonly backFace: HTMLElement;
+  readonly frontFace: HTMLElement;
+  readonly backSurface: MountedCardSurface;
+  readonly frontSurface: MountedCardSurface;
   frontModel: CardSurfaceModel | null;
   release(): void;
 }
@@ -78,6 +81,7 @@ export const canonicalCardEndpoint = (
   cardId: string,
   cardElement: (cardId: string) => HTMLElement | null,
 ): CanonicalCardEndpoint => ({
+  kind: 'canonical',
   cardId,
   resolveElement: () => canonicalVisualElement(cardElement(cardId)),
   resolveRect: () => {
@@ -102,17 +106,28 @@ export const setSurrogateModel = (
   surrogate: CardMotionSurrogate,
   model: CardSurfaceModel,
 ): void => {
-  surrogate.surface.update(model);
-  surrogate.visual.dataset.cardMotionFace = model.face.kind === 'back' ? 'faceDown' : 'faceUp';
-  surrogate.visual.dataset.cardType = model.face.kind === 'front' ? model.face.content.layout : '';
+  if (model.face.kind === 'back') {
+    surrogate.backSurface.update(model);
+    return;
+  }
+  surrogate.frontModel = model;
+  surrogate.frontSurface.update(model);
+  surrogate.visual.dataset.cardType = model.face.content.layout;
 };
 
 export const setSurrogateFace = (
   surrogate: CardMotionSurrogate,
   face: CardVisualFace,
 ): void => {
-  if (face === 'faceDown') setSurrogateModel(surrogate, identityFreeCardBackModel());
-  else if (surrogate.frontModel) setSurrogateModel(surrogate, surrogate.frontModel);
+  if (face === 'faceDown') {
+    setSurrogateModel(surrogate, identityFreeCardBackModel());
+  } else if (surrogate.frontModel) {
+    setSurrogateModel(surrogate, surrogate.frontModel);
+  }
+  surrogate.visual.dataset.cardMotionFace = face;
+  surrogate.visual.style.transform = face === 'faceDown'
+    ? 'rotateY(0deg) scale(1)'
+    : 'rotateY(180deg) scale(1)';
 };
 
 export const placeSurrogate = (

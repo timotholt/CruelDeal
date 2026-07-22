@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createPlayMotionSurface } from './playMotionSurface';
+import { createAutoAdvancingTestTimelineDriverFactory } from './storyboard/testing';
+
+const timelineDriverFactory = createAutoAdvancingTestTimelineDriverFactory();
 
 describe('PlayMotionSurface', () => {
   it('converts viewport geometry into the sole frame-relative coordinate system', () => {
@@ -13,6 +16,7 @@ describe('PlayMotionSurface', () => {
       frame,
       overlay,
       cardRefs: new Map(),
+      timelineDriverFactory,
     });
 
     expect(surface.toLocalRect(new DOMRect(145, 100, 70, 98))).toEqual(
@@ -29,6 +33,7 @@ describe('PlayMotionSurface', () => {
       frame,
       overlay,
       cardRefs: new Map(),
+      timelineDriverFactory,
     });
     const flyer = document.createElement('div');
 
@@ -55,6 +60,7 @@ describe('PlayMotionSurface', () => {
       frame,
       overlay,
       cardRefs: new Map(),
+      timelineDriverFactory,
     });
 
     expect(surface.cardElement('card-1')).toBe(card);
@@ -67,5 +73,45 @@ describe('PlayMotionSurface', () => {
     hand.remove();
     expect(surface.cardElement('card-1')).toBeNull();
     expect(surface.zoneElement('P1:hand')).toBeNull();
+  });
+
+  it('binds a canonical card destination when the renderer mounts it', async () => {
+    const frame = document.createElement('div');
+    const overlay = document.createElement('div');
+    frame.append(overlay);
+    document.body.append(frame);
+    const surface = createPlayMotionSurface({
+      frame,
+      overlay,
+      cardRefs: new Map(),
+      timelineDriverFactory,
+    });
+    const controller = new AbortController();
+
+    const binding = surface.waitForCardElement('card-later', controller.signal);
+    const card = document.createElement('div');
+    card.dataset.playMotionCard = 'card-later';
+    frame.append(card);
+
+    await expect(binding).resolves.toBe(card);
+  });
+
+  it('cancels a pending canonical card destination binding', async () => {
+    const frame = document.createElement('div');
+    const overlay = document.createElement('div');
+    frame.append(overlay);
+    document.body.append(frame);
+    const surface = createPlayMotionSurface({
+      frame,
+      overlay,
+      cardRefs: new Map(),
+      timelineDriverFactory,
+    });
+    const controller = new AbortController();
+
+    const binding = surface.waitForCardElement('card-never-mounted', controller.signal);
+    controller.abort();
+
+    await expect(binding).rejects.toMatchObject({ name: 'AbortError' });
   });
 });

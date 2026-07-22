@@ -1,44 +1,63 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const mocks = vi.hoisted(() => ({
-  oldRects: new Map<string, DOMRect>(),
-  captureCardRects: vi.fn(),
-  playCardLayoutSlide: vi.fn(),
-}));
-
-vi.mock('@/services/vfx/animations/layout-flip', () => ({
-  captureCardRects: mocks.captureCardRects,
-  playCardLayoutSlide: mocks.playCardLayoutSlide,
-}));
-
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { prepareHandLayoutTransition } from './handPresentation';
+import { createPlayMotionSurface } from './playMotionSurface';
+import { AutoAdvancingFakeWaapiDriver } from './storyboard/testing';
 
-beforeEach(() => {
-  mocks.captureCardRects.mockReset();
-  mocks.captureCardRects.mockReturnValue(mocks.oldRects);
-  mocks.playCardLayoutSlide.mockReset();
+afterEach(() => {
+  vi.useRealTimers();
+  document.body.replaceChildren();
 });
 
+const fixture = () => {
+  const frame = document.createElement('div');
+  const overlay = document.createElement('div');
+  const card = document.createElement('div');
+  card.dataset.playMotionCard = 'a';
+  let adopted = false;
+  card.getBoundingClientRect = () => (
+    adopted ? new DOMRect(80, 600, 70, 100) : new DOMRect(20, 600, 70, 100)
+  );
+  frame.getBoundingClientRect = () => new DOMRect(0, 0, 430, 764);
+  frame.append(card, overlay);
+  document.body.append(frame);
+  const driver = new AutoAdvancingFakeWaapiDriver();
+  const cardRefs = new Map<string, HTMLElement>([['a', card]]);
+  const motionSurface = createPlayMotionSurface({
+    frame,
+    overlay,
+    cardRefs,
+    timelineDriverFactory: () => driver,
+  });
+  return { cardRefs, driver, motionSurface, adopt: () => { adopted = true; } };
+};
+
 describe('hand presentation choreography', () => {
-  it('captures before mutation and plays the same layout slide after render', async () => {
-    const cardIds = ['a', 'b'];
-    const cardRefs = new Map<string, HTMLElement>();
+  it('captures before mutation and compiles the post-render FLIP onto one clock', async () => {
+    vi.useFakeTimers();
+    const { cardRefs, driver, motionSurface, adopt } = fixture();
+    const transition = prepareHandLayoutTransition(['a'], cardRefs, motionSurface);
+    adopt();
 
-    const transition = prepareHandLayoutTransition(cardIds, cardRefs);
-    expect(mocks.captureCardRects).toHaveBeenCalledWith(cardIds, cardRefs);
-    expect(mocks.playCardLayoutSlide).not.toHaveBeenCalled();
+    const presentation = transition.playAfterRender();
+    await vi.runAllTimersAsync();
+    await presentation;
 
-    transition.playAfterRender();
-    await Promise.resolve();
-    expect(mocks.playCardLayoutSlide).toHaveBeenCalledWith(mocks.oldRects, cardRefs);
+    const translate = driver.compiledTracks.find(track => track.property === 'translate');
+    expect(translate?.keyframes.map(frame => frame.value)).toEqual(['-60px 0px', '0px 0px']);
+    expect(driver.clocks).toHaveLength(1);
   });
 
   it('cannot accidentally replay one prepared transition twice', async () => {
-    const transition = prepareHandLayoutTransition([], new Map());
-    transition.playAfterRender();
-    transition.playAfterRender();
-    await Promise.resolve();
+    vi.useFakeTimers();
+    const { cardRefs, driver, motionSurface, adopt } = fixture();
+    const transition = prepareHandLayoutTransition(['a'], cardRefs, motionSurface);
+    adopt();
 
-    expect(mocks.playCardLayoutSlide).toHaveBeenCalledOnce();
+    const first = transition.playAfterRender();
+    const second = transition.playAfterRender();
+    await vi.runAllTimersAsync();
+    await Promise.all([first, second]);
+
+    expect(driver.clocks).toHaveLength(1);
   });
 });

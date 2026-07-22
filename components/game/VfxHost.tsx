@@ -36,6 +36,7 @@ import {
   createPlayMotionSurface,
   type PlayMotionSurface,
 } from '@/services/playgame/presentation/playMotionSurface';
+import { createNativeTimelineDriverFactory } from '@/services/playgame/presentation/storyboard/waapiDriver';
 
 export interface VfxContextValue {
   /** The live engine once mounted (null until then). */
@@ -83,6 +84,10 @@ export const VfxHost = (props: VfxHostProps) => {
       frame,
       overlay: motionOverlay,
       cardRefs,
+      // The fixed game frame can be adopted from a detached document during
+      // Solid's render lifecycle. WAAPI must always use the live browser
+      // document timeline or its animations remain pending forever.
+      timelineDriverFactory: createNativeTimelineDriverFactory(document, window),
     });
   });
 
@@ -144,6 +149,19 @@ export const VfxHost = (props: VfxHostProps) => {
         class={props.class ?? 'relative w-full h-full'}
       >
         {props.children}
+        <div
+          data-play-motion-zone="generated"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: '50%',
+            width: '48px',
+            height: '68px',
+            visibility: 'hidden',
+            'pointer-events': 'none',
+          }}
+        />
         <div
           ref={element => {
             overlayEl = element;

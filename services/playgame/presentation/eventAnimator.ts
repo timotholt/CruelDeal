@@ -1,4 +1,4 @@
-import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import { captureCardRects } from '@/services/vfx/animations/layout-flip';
 import type {
   CanonicalCardEndpoint,
   CardMotionCancelReason,
@@ -6,6 +6,9 @@ import type {
 import {
   canonicalVisualElement,
   captureCardVisual,
+  mergeCardMotionTargets,
+  prepareCardLayoutContribution,
+  runCardMotionStoryboard,
   type CardMotionSession,
   type SurrogateBasis,
 } from './cardMotion';
@@ -22,30 +25,16 @@ import {
   type EventChoreography,
   type SfxCue,
 } from './choreography';
-import { HAND_SLOT_RESERVE_MS } from './handPresentation';
 import type { PlayPresentationHost } from './playPresentationHost';
 import type {
   SeatTransactionFrame,
   SeatVisibleMatchState,
 } from '../runtime/projection';
 import { resolveCard, type ResolvedCard } from '../view';
-
-const waitFor = (ms: number, signal: AbortSignal): Promise<boolean> => {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (completed: boolean): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', onAbort);
-      resolve(completed);
-    };
-    const onAbort = (): void => finish(false);
-    const timeout = setTimeout(() => finish(true), ms);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
-};
+import {
+  milliseconds,
+  type StoryboardStep,
+} from './storyboard/contracts';
 
 const playSfx = (
   host: PlayPresentationHost,
@@ -73,12 +62,6 @@ const rectForZone = (
   const registeredRect = host.motionSurface.zoneRect(key);
   if (!registeredRect) throw new Error(`Required card transfer anchor ${key} is unavailable`);
   return registeredRect;
-};
-
-const generatedSourceRect = (host: PlayPresentationHost): DOMRect => {
-  const generated = host.motionSurface.zoneRect('generated');
-  if (generated) return generated;
-  throw new Error('Required generated-card transfer anchor is unavailable');
 };
 
 const rectForTransferEndpoint = (
@@ -117,6 +100,7 @@ type PreparedState = {
   readonly choreography: EventChoreography | null;
   readonly transfers: readonly CardTransfer[];
   readonly oldRects: Map<string, DOMRect>;
+  readonly generatedSourceRect: DOMRect | null;
   readonly preparedTransfers: Map<CardTransfer, PreparedTransfer>;
   readonly sessions: Set<CardMotionSession>;
   readonly cleanups: Set<() => void>;
@@ -295,6 +279,9 @@ export function prepareEventAnimation(
     choreography,
     transfers,
     oldRects,
+    generatedSourceRect: transfers.some(transfer => transfer.from.kind === 'GENERATED')
+      ? host.motionSurface.zoneRect('generated')
+      : null,
     preparedTransfers: new Map(),
     sessions: new Set(),
     cleanups: new Set(),
@@ -303,6 +290,12 @@ export function prepareEventAnimation(
   };
 
   try {
+    if (
+      transfers.some(transfer => transfer.from.kind === 'GENERATED')
+      && !state.generatedSourceRect
+    ) {
+      throw new Error('Required generated-card source anchor is unavailable before adoption');
+    }
     if (choreography) playSfx(host, choreography.sfx, 'on-start');
     for (const transfer of transfers) {
       const prepared = prepareTransferBeforeAdoption(host, transfer, oldRects);
@@ -316,14 +309,6 @@ export function prepareEventAnimation(
     throw error;
   }
 }
-
-const isLocalHandEntry = (
-  host: PlayPresentationHost,
-  transfer: CardTransfer,
-): boolean => (
-  transfer.to.kind === 'HAND'
-  && transfer.to.owner === host.localSeat
-);
 
 const canonicalDestination = (
   host: PlayPresentationHost,
@@ -366,20 +351,26 @@ const basisForLogicalSource = (
     : { kind: 'destination-surface', endpoint };
 };
 
-const animateOneTransfer = async (
+interface CompiledTransferContribution {
+  readonly session: CardMotionSession;
+  readonly endpoint: CanonicalCardEndpoint | null;
+  readonly step: StoryboardStep;
+}
+
+const prepareTransferContribution = async (
   state: PreparedState,
   transfer: CardTransfer,
   signal: AbortSignal,
   useTransferSfx: boolean,
-): Promise<void> => {
+): Promise<CompiledTransferContribution | null> => {
   const { host, oldRects } = state;
-  if (signal.aborted) return;
+  if (signal.aborted) return null;
   const preparedSession = state.preparedTransfers.get(transfer)?.session ?? null;
   // A source captured before adoption is the authoritative visual source for
   // this transfer. Re-resolving it after adoption is both redundant and
   // incorrect for removals: the canonical source is supposed to be gone by
   // the time a destroy/discard/banish animation runs.
-  const source = preparedSession
+  const source = preparedSession || transfer.from.kind === 'GENERATED'
     ? null
     : rectForTransferEndpoint(
         host,
@@ -388,12 +379,14 @@ const animateOneTransfer = async (
         oldRects,
         'from',
       );
-  if (isLocalHandEntry(host, transfer)) {
-    host.handSlots.release([transfer.cardId as string]);
-  }
-
   const endpoint = canonicalDestination(host, transfer);
-  if (endpoint) assertCanonicalDestination(transfer, endpoint);
+  if (endpoint) {
+    const mountedDestination = host.motionSurface.cardElement(transfer.cardId as string);
+    if (!mountedDestination?.isConnected) {
+      await host.motionSurface.waitForCardElement(transfer.cardId as string, signal);
+    }
+    assertCanonicalDestination(transfer, endpoint);
+  }
   const logicalDestination = endpoint
     ? null
     : rectForTransferEndpoint(
@@ -404,7 +397,7 @@ const animateOneTransfer = async (
         'to',
       );
   const sourceRect = transfer.from.kind === 'GENERATED'
-    ? generatedSourceRect(host)
+    ? state.generatedSourceRect
     : source?.rect;
   const transferFace = resolveCardTransferFace(
     transfer.face,
@@ -429,17 +422,20 @@ const animateOneTransfer = async (
     });
   state.sessions.add(session);
   if (signal.aborted) {
-    await session.cancel('presentation-invalidated');
-    return;
+    session.cancel('presentation-invalidated');
+    return null;
   }
-  if (useTransferSfx && transfer.style.sfx) host.playSfx(transfer.style.sfx);
-
   const target = endpoint ?? {
-    rect: logicalDestination!.rect,
+    kind: 'logical' as const,
+    coordinateSpace: 'viewport' as const,
+    resolveRect: () => logicalDestination!.rect,
     rotationDegrees: 0,
     ...(transferFace === null ? {} : { face: transferFace }),
   };
-  const motionResult = await session.animateTo(target, {
+  const authoredStep = await session.prepareStep(
+    `${state.frame.transactionId}:frame:${state.frame.index}:transfer:${String(transfer.cardId)}`,
+    target,
+    {
     durationMs: transfer.style.durationMs,
     easing: transfer.style.easing,
     opacityFrom: transfer.style.opacity === 'fadeIn' ? 0 : 1,
@@ -447,10 +443,21 @@ const animateOneTransfer = async (
     scaleFrom: transfer.style.scale.from,
     scaleTo: transfer.style.scale.to,
     ...(transferFace === null ? {} : { faceAtLanding: transferFace }),
-  });
-  if (signal.aborted || motionResult) return;
-  if (endpoint) await session.handoffTo(endpoint);
-  else await session.finishAtLogicalZone();
+    },
+  );
+  const step = useTransferSfx && transfer.style.sfx
+    ? {
+        ...authoredStep,
+        cues: [{
+          kind: 'AUDIO' as const,
+          id: `${authoredStep.id}:audio`,
+          atMs: milliseconds(0),
+          sound: transfer.style.sfx,
+          volume: 1,
+        }],
+      }
+    : authoredStep;
+  return { session, endpoint, step };
 };
 
 const reserveVisibleHandDestinations = (
@@ -519,29 +526,67 @@ export async function animatePreparedEvent(
     host.handSlots.reserve(reservedHandCards);
     playVfx(host, choreography);
     playSfx(host, choreography.sfx, 'after-dispatch');
-    // Reflow may run alongside the structural transfer for this frame, but it
-    // is still owned by this frame. The director must not advance until both
-    // the transfer and every surviving-card slide have cleaned up.
-    const layoutSlide = playCardLayoutSlide(
-      state.oldRects,
-      currentCardElements(host),
-    );
-    if (reservedHandCards.length > 0) {
-      const completed = await waitFor(HAND_SLOT_RESERVE_MS, executionSignal);
-      if (!completed) return;
-    }
-
+    const contributions: CompiledTransferContribution[] = [];
     for (const transfer of transfers) {
       if (executionSignal.aborted) return;
       hooks.onTransferAnimation?.(transfer);
-      await animateOneTransfer(
-        state,
-        transfer,
-        executionSignal,
-        choreography.sfx.length === 0,
-      );
+      let contribution: CompiledTransferContribution | null;
+      try {
+        contribution = await prepareTransferContribution(
+          state,
+          transfer,
+          executionSignal,
+          choreography.sfx.length === 0,
+        );
+      } catch (error) {
+        if (executionSignal.aborted) return;
+        throw error;
+      }
+      if (contribution) contributions.push(contribution);
     }
-    await layoutSlide;
+
+    const layout = prepareCardLayoutContribution(
+      `${state.frame.transactionId}:frame:${state.frame.index}`,
+      state.oldRects,
+      cardId => host.cardElement(cardId),
+    );
+    const steps: StoryboardStep[] = [];
+    if (layout) steps.push(layout.step);
+    steps.push(...contributions.map(contribution => contribution.step));
+
+    if (steps.length > 0) {
+      const sessions = contributions.map(contribution => contribution.session);
+      const outcome = await runCardMotionStoryboard({
+        id: `${state.frame.transactionId}:frame:${state.frame.index}:card-motion`,
+        source: {
+          kind: 'BEAT',
+          transactionId: state.frame.transactionId,
+          firstFrame: state.frame.frame,
+          lastFrame: state.frame.frame,
+        },
+        targets: mergeCardMotionTargets(sessions, layout?.targets),
+        steps,
+        createTimelineDriver: host.motionSurface.timelineDriverFactory,
+        dispatchCue: cue => {
+          if (cue.kind === 'AUDIO') host.playSfx(cue.sound);
+        },
+        maximumCardActors: sessions.length,
+        handoff: () => {
+          for (const contribution of contributions) {
+            if (contribution.endpoint) {
+              contribution.session.handoffTo(contribution.endpoint);
+            } else {
+              contribution.session.finishAtLogicalZone();
+            }
+          }
+        },
+        signal: executionSignal,
+      });
+      if (outcome !== 'COMPLETED') {
+        for (const session of sessions) session.cancel('presentation-invalidated');
+        return;
+      }
+    }
     if (!executionSignal.aborted) {
       playSfx(host, choreography.sfx, 'on-complete');
       completed = true;

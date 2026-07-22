@@ -16,6 +16,8 @@ import {
 import { animatePreparedEvent, prepareEventAnimation } from './eventAnimator';
 import { createPlayPresentationHost, type PlayPresentationHost } from './playPresentationHost';
 import { createPlayMotionSurface } from './playMotionSurface';
+import { createAutoAdvancingTestTimelineDriverFactory } from './storyboard/testing';
+import { AutoAdvancingFakeWaapiDriver } from './storyboard/testing';
 import { createCardVfxRegistry } from '@/services/vfx/card-effects/registry';
 import { attachTestCardSurface } from '@/components/game-surfaces/testing/cardSurfaceFixture';
 
@@ -24,6 +26,8 @@ const drawCause = {
   effectKind: 'SYSTEM',
   reason: 'TEST_DRAW',
 } as const;
+
+const timelineDriverFactory = createAutoAdvancingTestTimelineDriverFactory();
 
 const registerZone = (element: HTMLElement, key: string): void => {
   element.dataset.playMotionZone = key;
@@ -184,6 +188,7 @@ describe('event animator transfer origins', () => {
       const overlay = document.createElement('div');
       const toastArea = document.createElement('div');
       const cardEl = document.createElement('div');
+      const survivor = document.createElement('div');
       cardEl.className = 'card lane-card';
       cardEl.dataset.cardId = token;
       cardEl.dataset.playMotionCard = token;
@@ -195,15 +200,21 @@ describe('event animator transfer origins', () => {
       boardEl.getBoundingClientRect = () => new DOMRect(0, 0, 600, 800);
       cardEl.getBoundingClientRect = () =>
         adopted ? new DOMRect(430, 300, 70, 100) : new DOMRect(90, 300, 70, 100);
-      boardWrap.append(boardEl, toastArea, cardEl, overlay);
+      survivor.dataset.playMotionCard = 'survivor';
+      survivor.getBoundingClientRect = () => (
+        adopted ? new DOMRect(220, 300, 70, 100) : new DOMRect(200, 300, 70, 100)
+      );
+      boardWrap.append(boardEl, toastArea, cardEl, survivor, overlay);
       document.body.append(boardWrap);
 
       const calls: string[] = [];
-      const cardRefs = new Map([[token, cardEl]]);
+      const cardRefs = new Map([[token, cardEl], ['survivor', survivor]]);
+      const driver = new AutoAdvancingFakeWaapiDriver();
       const motionSurface = createPlayMotionSurface({
         frame: boardWrap,
         overlay,
         cardRefs,
+        timelineDriverFactory: () => driver,
       });
       const host = presentationHost(motionSurface);
       const prepared = prepareEventAnimation(host, projectedFrame);
@@ -232,6 +243,9 @@ describe('event animator transfer origins', () => {
       expect(document.querySelector('.transfer-flyer')).toBeNull();
       expect(motionSurface.cardMotion.activeSessionCount).toBe(0);
       expect(motionSurface.cardMotion.activeLeaseCount).toBe(0);
+      expect(driver.clocks).toHaveLength(1);
+      expect(driver.compiledTracks.some(track => track.property === 'left')).toBe(true);
+      expect(driver.compiledTracks.some(track => track.property === 'translate')).toBe(true);
     } finally {
       vi.useRealTimers();
     }
@@ -299,6 +313,7 @@ describe('event animator transfer origins', () => {
       frame: board,
       overlay,
       cardRefs: new Map([[token, stagedCard]]),
+      timelineDriverFactory,
     });
 
     const prepared = prepareEventAnimation(presentationHost(motionSurface), projectedFrame);
@@ -416,6 +431,7 @@ describe('event animator transfer origins', () => {
         frame: boardWrap,
         overlay,
         cardRefs,
+        timelineDriverFactory,
       });
       const host = presentationHost(motionSurface);
       const prepared = prepareEventAnimation(host, projectedFrame);
@@ -516,6 +532,7 @@ describe('event animator transfer origins', () => {
         frame: boardWrap,
         overlay,
         cardRefs,
+        timelineDriverFactory,
       });
       const host = presentationHost(motionSurface);
       const prepared = prepareEventAnimation(host, projectedFrame);
@@ -541,7 +558,7 @@ describe('event animator transfer origins', () => {
         rect: { left: 180, top: 220, width: 70, height: 100 },
       });
 
-      await vi.advanceTimersByTimeAsync(300);
+      await vi.advanceTimersByTimeAsync(299);
       expect(surrogate.isConnected).toBe(true);
       expect(destination.style.visibility).toBe('hidden');
 
@@ -608,6 +625,7 @@ describe('event animator transfer origins', () => {
         frame: board,
         overlay,
         cardRefs: new Map(),
+        timelineDriverFactory,
       });
       const prepared = prepareEventAnimation(presentationHost(motionSurface), projectedFrame);
       const preparedActor = overlay.querySelector<HTMLElement>('.transfer-flyer');
@@ -672,6 +690,7 @@ describe('event animator transfer origins', () => {
         frame: board,
         overlay,
         cardRefs: new Map([[token, card]]),
+        timelineDriverFactory,
       });
       const prepared = prepareEventAnimation(presentationHost(motionSurface), frame);
       expect(motionSurface.cardMotion.activeSessionCount).toBe(1);
@@ -733,6 +752,7 @@ describe('event animator transfer origins', () => {
         frame: board,
         overlay,
         cardRefs: new Map(),
+        timelineDriverFactory,
       });
       expect(() => prepareEventAnimation(presentationHost(motionSurface), frame))
         .toThrow('Required card transfer anchor P1:deck');
@@ -794,8 +814,10 @@ describe('event animator transfer origins', () => {
         frame: board,
         overlay,
         cardRefs,
+        timelineDriverFactory,
       });
       const prepared = prepareEventAnimation(presentationHost(motionSurface), projected);
+      generated.remove();
       board.prepend(destination);
       cardRefs.set(token, destination);
 
@@ -879,6 +901,7 @@ describe('event animator transfer origins', () => {
         frame: board,
         overlay,
         cardRefs,
+        timelineDriverFactory,
       });
       const prepared = prepareEventAnimation(presentationHost(motionSurface), projected);
       source.remove();

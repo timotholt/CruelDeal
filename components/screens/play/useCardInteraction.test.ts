@@ -3,10 +3,13 @@ import { createInitialMatchState } from '@/services/playgame/engine/cli/initStat
 import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest/bootstrap';
 import { orderedTestLocationDeck } from '@/services/playgame/engine/testkit/runtimeFixture';
 import { createPlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+import { createAutoAdvancingTestTimelineDriverFactory } from '@/services/playgame/presentation/storyboard/testing';
 import type { ResolvedCard } from '@/services/playgame/view';
 import { setupCardInteraction } from './useCardInteraction';
 import { projectMatchStateForSeat } from '@/services/playgame/runtime/projection';
 import { attachTestCardSurface } from '@/components/game-surfaces/testing/cardSurfaceFixture';
+
+const timelineDriverFactory = createAutoAdvancingTestTimelineDriverFactory();
 
 const pointerEvent = (
   type: string,
@@ -84,6 +87,7 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
       frame,
       overlay,
       cardRefs,
+      timelineDriverFactory,
     });
     const stageCardInLane = vi.fn(() => new Promise<boolean>(() => undefined));
     const interaction = setupCardInteraction({
@@ -148,7 +152,7 @@ describe('pointer cancellation and threshold', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'threshold-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, timelineDriverFactory }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane,
       undoPendingCard: vi.fn(async () => false),
@@ -198,7 +202,7 @@ describe('pointer cancellation and threshold', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'cancel-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, timelineDriverFactory }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane,
       undoPendingCard: vi.fn(async () => false),
@@ -270,6 +274,7 @@ describe('pointer visual handoff', () => {
       frame,
       overlay,
       cardRefs,
+      timelineDriverFactory,
     });
     const stageCardInLane = vi.fn(async () => {
       emptySlot.append(destination);
@@ -344,7 +349,7 @@ describe('tap-first card interaction', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'tap-disabled-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, timelineDriverFactory }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane: vi.fn(async () => false),
       undoPendingCard: vi.fn(async () => false),
@@ -401,6 +406,7 @@ describe('tap-first card interaction', () => {
         frame,
         overlay,
         cardRefs: new Map([['tap-card', source]]),
+        timelineDriverFactory,
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       tapToPlayEnabled: () => true,
@@ -459,6 +465,7 @@ describe('tap-first card interaction', () => {
         frame,
         overlay,
         cardRefs,
+        timelineDriverFactory,
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       tapToPlayEnabled: () => true,

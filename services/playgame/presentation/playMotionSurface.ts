@@ -1,4 +1,5 @@
 import { createCardMotionScope, type CardMotionScope } from './cardMotion';
+import type { TimelineDriverFactory } from './storyboard/waapiDriver';
 
 /**
  * The one coordinate system used by every temporary /play animation.
@@ -12,9 +13,11 @@ export interface PlayMotionSurface {
   readonly overlay: HTMLElement;
   readonly cardRefs: Map<string, HTMLElement>;
   readonly cardMotion: CardMotionScope;
+  readonly timelineDriverFactory: TimelineDriverFactory;
   frameRect: () => DOMRect;
   toLocalRect: (viewportRect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>) => DOMRect;
   cardElement: (cardId: string) => HTMLElement | null;
+  waitForCardElement: (cardId: string, signal: AbortSignal) => Promise<HTMLElement>;
   cardIds: () => readonly string[];
   cardRect: (cardId: string) => DOMRect | null;
   zoneElement: (key: string) => HTMLElement | null;
@@ -27,6 +30,7 @@ interface CreatePlayMotionSurfaceOptions {
   frame: HTMLElement;
   overlay: HTMLElement;
   cardRefs: Map<string, HTMLElement>;
+  timelineDriverFactory: TimelineDriverFactory;
 }
 
 export const createPlayMotionSurface = (
@@ -60,6 +64,45 @@ export const createPlayMotionSurface = (
     }
     return null;
   };
+  const waitForCardElement = (
+    cardId: string,
+    signal: AbortSignal,
+  ): Promise<HTMLElement> => {
+    const mounted = cardElement(cardId);
+    if (mounted?.isConnected) return Promise.resolve(mounted);
+    if (signal.aborted) {
+      return Promise.reject(new DOMException('Card binding cancelled', 'AbortError'));
+    }
+    const Observer = options.frame.ownerDocument.defaultView?.MutationObserver;
+    if (!Observer) throw new Error('Play motion surface requires MutationObserver');
+    return new Promise<HTMLElement>((resolve, reject) => {
+      const observer = new Observer(() => {
+        const candidate = cardElement(cardId);
+        if (!candidate?.isConnected) return;
+        settle(() => resolve(candidate));
+      });
+      const onAbort = (): void => settle(() => reject(
+        new DOMException('Card binding cancelled', 'AbortError'),
+      ));
+      let settled = false;
+      const settle = (complete: () => void): void => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        signal.removeEventListener('abort', onAbort);
+        complete();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      observer.observe(options.frame, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-play-motion-card'],
+      });
+      const candidate = cardElement(cardId);
+      if (candidate?.isConnected) settle(() => resolve(candidate));
+    });
+  };
 
   const mountTemporary = (element: HTMLElement): (() => void) => {
     if (disposed) return () => element.remove();
@@ -83,9 +126,11 @@ export const createPlayMotionSurface = (
     overlay: options.overlay,
     cardRefs: options.cardRefs,
     cardMotion,
+    timelineDriverFactory: options.timelineDriverFactory,
     frameRect,
     toLocalRect,
     cardElement,
+    waitForCardElement,
     cardIds: () => [...options.frame.querySelectorAll<HTMLElement>('[data-play-motion-card]')]
       .map(element => element.dataset.playMotionCard)
       .filter((cardId): cardId is string => cardId !== undefined),

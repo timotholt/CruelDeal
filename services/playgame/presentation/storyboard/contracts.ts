@@ -42,6 +42,7 @@ export type VisualChannel =
 export type AnimatableStyleProperty =
   | 'opacity'
   | 'transform'
+  | 'translate'
   | 'filter'
   | 'clipPath'
   | 'left'

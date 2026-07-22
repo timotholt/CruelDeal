@@ -4,39 +4,29 @@ import { eventString } from './projectedEvent';
 import { REVEAL_CINEMATIC_TIMING } from './timing';
 import {
   captureCardVisual,
+  runCardMotionStoryboard,
   type CardMotionCancelReason,
   type CardMotionSession,
 } from './cardMotion';
+import type { LogicalCardEndpoint } from './cardMotion/types';
+import { milliseconds } from './storyboard/contracts';
 
-export interface CardRevealPreparation {
+export interface PreparedCardReveal {
+  readonly frame: SeatTransactionFrame;
   readonly cardId: SeatCardToken;
   readonly width: number;
   readonly height: number;
   readonly rotationDegrees: number;
   readonly session: CardMotionSession;
+  readonly declaredDurationMs: number;
+  present(signal: AbortSignal): Promise<import('./storyboard/contracts').PresentationOutcome>;
+  cancel(reason?: CardMotionCancelReason): void;
 }
-
-const waitFor = (ms: number, signal: AbortSignal): Promise<boolean> => {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise((resolve) => {
-    let settled = false;
-    const finish = (completed: boolean): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      signal.removeEventListener('abort', onAbort);
-      resolve(completed);
-    };
-    const onAbort = (): void => finish(false);
-    const timeout = setTimeout(() => finish(true), ms);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
-};
 
 export const prepareCardRevealAnimation = (
   host: PlayPresentationHost,
   frame: SeatTransactionFrame,
-): CardRevealPreparation | null => {
+): PreparedCardReveal | null => {
   if (frame.event?.type !== 'CARD_REVEALED') return null;
   const cardId = eventString(frame.event, 'card') as SeatCardToken | null;
   if (!cardId) throw new Error('CARD_REVEALED is missing its seat-visible card token');
@@ -56,63 +46,128 @@ export const prepareCardRevealAnimation = (
     zIndex: 200,
     className: 'reveal-flyer',
   });
-  return {
+  let state: 'PREPARED' | 'PRESENTING' | 'SETTLED' = 'PREPARED';
+  const preparation = {
+    frame,
     cardId,
     width: snapshot.rect.width,
     height: snapshot.rect.height,
     rotationDegrees: snapshot.rotationDegrees,
     session,
+    declaredDurationMs: REVEAL_CINEMATIC_TIMING.enterMs
+      + REVEAL_CINEMATIC_TIMING.holdMs
+      + REVEAL_CINEMATIC_TIMING.returnMs,
+    present: async (signal: AbortSignal) => {
+      if (state === 'SETTLED' || signal.aborted) {
+        session.cancel('presentation-invalidated');
+        return 'CANCELLED' as const;
+      }
+      if (state !== 'PREPARED') throw new Error(`Card reveal ${cardId} presented twice`);
+      state = 'PRESENTING';
+      const outcome = await presentPreparedCardReveal(host, preparation, signal);
+      state = 'SETTLED';
+      return outcome;
+    },
+    cancel: (reason: CardMotionCancelReason = 'presentation-invalidated') => {
+      if (state === 'SETTLED') return;
+      state = 'SETTLED';
+      session.cancel(reason);
+    },
   };
+  return preparation;
 };
 
-export const animateCardReveal = async (
+const presentPreparedCardReveal = async (
   host: PlayPresentationHost,
-  preparation: CardRevealPreparation,
+  preparation: PreparedCardReveal,
   signal: AbortSignal,
-): Promise<void> => {
-  if (signal.aborted) return;
+): Promise<import('./storyboard/contracts').PresentationOutcome> => {
+  if (signal.aborted) return 'CANCELLED';
   const { session } = preparation;
   const endpoint = host.motionSurface.cardMotion.endpoint(preparation.cardId);
   const revealedModel = endpoint.resolveModel();
   if (!revealedModel || revealedModel.face.kind !== 'front') {
     throw new Error(`Revealed card surface is unavailable for ${preparation.cardId}`);
   }
-  const boardRect = host.motionSurface.frameRect();
-  const centerRect = new DOMRect(
-    boardRect.left + boardRect.width / 2 - preparation.width / 2,
-    boardRect.top + boardRect.height / 2 - preparation.height / 2,
-    preparation.width,
-    preparation.height,
-  );
-  host.playSfx('reveal');
-  const centerResult = await session.animateTo({
-    rect: centerRect,
+  const centerEndpoint: LogicalCardEndpoint = {
+    kind: 'logical',
+    coordinateSpace: 'frame-local',
+    resolveRect: () => {
+      const frame = host.motionSurface.frameRect();
+      if (frame.width <= 0 || frame.height <= 0) return null;
+      return new DOMRect(
+        frame.width / 2 - preparation.width / 2,
+        frame.height / 2 - preparation.height / 2,
+        preparation.width,
+        preparation.height,
+      );
+    },
     rotationDegrees: preparation.rotationDegrees,
     face: 'faceUp',
     model: revealedModel,
-  }, {
-    durationMs: REVEAL_CINEMATIC_TIMING.enterMs,
-    easing: 'cubic-bezier(.2,.8,.3,1)',
-    scaleFrom: 0.02,
-    scaleTo: 2.2,
-    faceAtLanding: 'faceUp',
+  };
+  const enter = await session.prepareStep(
+    `${preparation.cardId}:reveal-enter`,
+    centerEndpoint,
+    {
+      durationMs: REVEAL_CINEMATIC_TIMING.enterMs,
+      easing: 'cubic-bezier(.2,.8,.3,1)',
+      // The surrogate is already captured over the mounted lane card at its
+      // real resting size. Starting this track near zero made the card snap
+      // out of existence before the first painted animation frame, hiding
+      // the first half of the flip and making the return look like a second
+      // transfer. Reveal grows continuously from the captured lane surface.
+      scaleFrom: 1,
+      scaleTo: 2.2,
+      faceAtLanding: 'faceUp',
+    },
+  );
+  const enterWithAudio = {
+    ...enter,
+    cues: [{
+      kind: 'AUDIO' as const,
+      id: `${enter.id}:audio`,
+      atMs: milliseconds(0),
+      sound: 'reveal',
+      volume: 1,
+    }],
+  };
+  const hold = {
+    id: `${preparation.cardId}:reveal-apex-hold`,
+    durationMs: milliseconds(REVEAL_CINEMATIC_TIMING.holdMs),
+    nextStepAfterMs: milliseconds(REVEAL_CINEMATIC_TIMING.holdMs),
+    tracks: [],
+    cues: [],
+  } as const;
+  const returnToLane = await session.prepareStep(
+    `${preparation.cardId}:reveal-return`,
+    endpoint,
+    {
+      durationMs: REVEAL_CINEMATIC_TIMING.returnMs,
+      easing: 'cubic-bezier(.4,0,.2,1)',
+      scaleFrom: 2.2,
+      scaleTo: 1,
+      faceAtLanding: 'faceUp',
+    },
+  );
+  const outcome = await runCardMotionStoryboard({
+    id: `${preparation.cardId}:reveal-storyboard`,
+    source: {
+      kind: 'BEAT',
+      transactionId: preparation.frame.transactionId,
+      firstFrame: preparation.frame.frame,
+      lastFrame: preparation.frame.frame,
+    },
+    targets: session.timelineTargets(),
+    steps: [enterWithAudio, hold, returnToLane],
+    createTimelineDriver: host.motionSurface.timelineDriverFactory,
+    dispatchCue: cue => {
+      if (cue.kind === 'AUDIO') host.playSfx(cue.sound);
+    },
+    maximumCardActors: 1,
+    handoff: () => { session.handoffTo(endpoint); },
+    signal,
   });
-  if (centerResult || signal.aborted) return;
-  if (!await waitFor(REVEAL_CINEMATIC_TIMING.holdMs, signal)) return;
-  const returnResult = await session.animateTo(endpoint, {
-    durationMs: REVEAL_CINEMATIC_TIMING.returnMs,
-    easing: 'cubic-bezier(.4,0,.2,1)',
-    scaleFrom: 2.2,
-    scaleTo: 1,
-    faceAtLanding: 'faceUp',
-  });
-  if (returnResult || signal.aborted) return;
-  await session.handoffTo(endpoint);
-};
-
-export const cancelCardRevealAnimation = (
-  preparation: CardRevealPreparation,
-  reason: CardMotionCancelReason,
-): void => {
-  void preparation.session.cancel(reason);
+  if (outcome !== 'COMPLETED') session.cancel('presentation-invalidated');
+  return outcome;
 };

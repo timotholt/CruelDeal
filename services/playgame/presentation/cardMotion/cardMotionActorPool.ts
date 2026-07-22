@@ -12,7 +12,7 @@ import {
 } from './createCardSurrogate';
 import type { CardVisualFace, SurrogateBasis } from './types';
 
-export const CARD_MOTION_ACTOR_CAPACITY = 16;
+export const CARD_MOTION_ACTOR_CAPACITY = 32;
 
 export interface AcquireCardMotionActorOptions {
   readonly sessionId: string;
@@ -70,11 +70,26 @@ const createActor = (host: CardMotionHost, index: number): PooledActor => {
   const restingShell = document.createElement('div');
   restingShell.className = 'card-motion-resting-shell';
   const visual = document.createElement('div');
-  visual.className = 'card card-motion-visual';
+  visual.className = 'card-motion-visual';
+  visual.style.transformStyle = 'preserve-3d';
+  const backFace = document.createElement('div');
+  backFace.className = 'card card-motion-face card-motion-face--back';
+  const frontFace = document.createElement('div');
+  frontFace.className = 'card card-motion-face card-motion-face--front';
+  for (const face of [backFace, frontFace]) {
+    face.style.position = 'absolute';
+    face.style.inset = '0';
+    face.style.width = '100%';
+    face.style.height = '100%';
+    face.style.backfaceVisibility = 'hidden';
+  }
+  frontFace.style.transform = 'rotateY(180deg)';
+  visual.append(backFace, frontFace);
   restingShell.appendChild(visual);
   root.appendChild(restingShell);
 
-  const surface = mountCardSurface(visual, identityFreeCardBackModel());
+  const backSurface = mountCardSurface(backFace, identityFreeCardBackModel());
+  const frontSurface = mountCardSurface(frontFace, identityFreeCardBackModel());
   const unmount = host.mountTemporary(root);
   let disposed = false;
   const actor: PooledActor = {
@@ -82,7 +97,10 @@ const createActor = (host: CardMotionHost, index: number): PooledActor => {
     root,
     restingShell,
     visual,
-    surface,
+    backFace,
+    frontFace,
+    backSurface,
+    frontSurface,
     frontModel: null,
     active: false,
     release: () => {
@@ -103,7 +121,8 @@ const createActor = (host: CardMotionHost, index: number): PooledActor => {
       if (disposed) return;
       actor.release();
       disposed = true;
-      surface.dispose();
+      backSurface.dispose();
+      frontSurface.dispose();
       unmount();
     },
   };

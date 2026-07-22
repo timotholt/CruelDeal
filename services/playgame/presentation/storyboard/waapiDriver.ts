@@ -47,20 +47,26 @@ export type TimelineDriverFactory = (
 
 export const createNativeTimelineDriverFactory = (
   document: Document,
+  view: Window,
 ): TimelineDriverFactory => targets => new NativeWaapiDriver(document, targetKey => {
   const target = targets.get(targetKey);
   if (!target) throw new Error(`Compiled timeline target ${targetKey} is unavailable`);
   return target;
-});
+}, view);
 
 export class NativeWaapiDriver implements AnimationTimelineDriver {
   readonly #document: Document;
   readonly #resolveTarget: NativeTargetResolver;
+  readonly #view: Window;
   #lastStartOrigins: readonly number[] = [];
 
-  constructor(document: Document, resolveTarget: NativeTargetResolver) {
+  constructor(document: Document, resolveTarget: NativeTargetResolver, view: Window) {
+    if (document.defaultView !== view) {
+      throw new Error('Native WAAPI driver requires a live document/window pair');
+    }
     this.#document = document;
     this.#resolveTarget = resolveTarget;
+    this.#view = view;
   }
 
   get lastStartOrigins(): readonly number[] { return this.#lastStartOrigins; }
@@ -119,21 +125,19 @@ export class NativeWaapiDriver implements AnimationTimelineDriver {
   }
 
   subscribeWakeups(onWakeup: (kind: TimelineWakeupKind) => void): () => void {
-    const view = this.#document.defaultView;
-    if (!view) throw new Error('Native WAAPI driver requires a document window');
     let active = true;
     let frame = 0;
     const tick = (): void => {
       if (!active) return;
       onWakeup('ANIMATION_FRAME');
-      frame = view.requestAnimationFrame(tick);
+      frame = this.#view.requestAnimationFrame(tick);
     };
-    frame = view.requestAnimationFrame(tick);
-    const coarse = view.setInterval(() => onWakeup('COARSE'), 100);
+    frame = this.#view.requestAnimationFrame(tick);
+    const coarse = this.#view.setInterval(() => onWakeup('COARSE'), 100);
     return () => {
       active = false;
-      view.cancelAnimationFrame(frame);
-      view.clearInterval(coarse);
+      this.#view.cancelAnimationFrame(frame);
+      this.#view.clearInterval(coarse);
     };
   }
 }
@@ -164,6 +168,7 @@ function asNativeHandle(animation: TimelineAnimation): NativeTimelineHandle {
 }
 
 export class FakeWaapiDriver implements AnimationTimelineDriver {
+  readonly compiledTracks: CompiledVisualTrack[] = [];
   readonly animations: FakeTimelineHandle[] = [];
   readonly clocks: FakeTimelineHandle[] = [];
   readonly startOrigins: number[] = [];
@@ -171,6 +176,7 @@ export class FakeWaapiDriver implements AnimationTimelineDriver {
   #origin = 1000;
 
   compileTrack(track: CompiledVisualTrack): TimelineAnimation {
+    this.compiledTracks.push(track);
     const handle = new FakeTimelineHandle(track.id, track.totalDurationMs);
     this.animations.push(handle);
     return handle;

@@ -131,7 +131,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const handPresentation = source('../../../services/playgame/presentation/handPresentation.ts');
 
     expect(playBoard).toContain('startOpeningPresentation({');
-    expect(playBoard).toContain('prepareHandLayoutTransition(allIds, cardRefs)');
+    expect(playBoard).toContain('prepareHandLayoutTransition(allIds, cardRefs, motion)');
     expect(playBoard).not.toContain("from '@/services/vfx/animations/");
     expect(playBoard).not.toContain('createPlayfieldEventPresenter(');
     expect(playBoard).not.toContain('setTimeout(');
@@ -140,7 +140,8 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(opening).not.toContain("'HIDE_PLAYFIELD'");
     expect(opening).not.toContain("'SHOW_PLAYFIELD'");
     expect(handPresentation).toContain('captureCardRects(cardIds, cardRefs)');
-    expect(handPresentation).toContain('playCardLayoutSlide(oldRects, cardRefs)');
+    expect(handPresentation).toContain('prepareCardLayoutContribution(');
+    expect(handPresentation).toContain('await runCardMotionStoryboard({');
   });
 
   it('composes the stable header and action bar instead of owning their markup', () => {
@@ -209,6 +210,29 @@ describe('Phase 1.21 presentation architecture fences', () => {
     );
     expect(css).toContain('grid-template-columns: repeat(3, 62px)');
     expect(css).toContain('min-width: 44px');
+  });
+
+  it('gives every off-board pile its own permanent motion anchor', () => {
+    const portrait = source('./PlayerPortraitMenu.tsx');
+    const vfxHost = source('../../game/VfxHost.tsx');
+    const css = source('../../../src/styles/playgame.css');
+
+    expect(portrait).toContain('ref={bindZoneRef(`${props.owner}:discard`)}');
+    expect(portrait).toContain('ref={bindZoneRef(`${props.owner}:destroyed`)}');
+    expect(portrait).toContain('ref={bindZoneRef(`${props.owner}:banished`)}');
+    expect(portrait).not.toContain('bindZoneRef(`${props.owner}:discard`)(el)');
+    expect(vfxHost).toContain('data-play-motion-zone="generated"');
+    expect(css).toContain('.portrait-zone-anchor');
+  });
+
+  it('reserves local hand destinations at final geometry before compilation', () => {
+    const animator = source('../../../services/playgame/presentation/eventAnimator.ts');
+    const hand = source('../../../src/styles/playgame/cards.css');
+
+    expect(animator).not.toContain(':hand-reservation`');
+    expect(hand).not.toContain('@keyframes hand-slot-reserve');
+    expect(hand).not.toContain('animation: hand-slot-reserve');
+    expect(hand).toContain('flex-basis: var(--hand-card-w)');
   });
 
   it('registers single-card opponent transfer anchors instead of aggregate stack bounds', () => {
@@ -304,6 +328,15 @@ describe('Phase 1.21 presentation architecture fences', () => {
     expect(backRule).toContain('#1a1f3a');
     expect(backRule).toContain('#12172a');
     expect(css).not.toContain('.card.facedown::before');
+  });
+
+  it('keeps mounted lane cards on stable pixels during pointer hover', () => {
+    const css = source('../../../src/styles/playgame.css');
+    const laneHoverRule = css.match(/\.card\.lane-card:hover\s*\{([\s\S]*?)\n\s*\}/)?.[1] ?? '';
+    expect(laneHoverRule).toContain('transform: rotate(var(--card-tilt, 0deg))');
+    expect(laneHoverRule).toContain('filter: none');
+    expect(laneHoverRule).not.toContain('translate');
+    expect(laneHoverRule).not.toContain('drop-shadow');
   });
 
   it('keeps native HTML drag-and-drop out of canonical card components', () => {

@@ -12,10 +12,13 @@ import type { SeatVisibleMatchState } from '@/services/playgame/runtime/projecti
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
 import {
   captureCardVisual,
+  mergeCardMotionTargets,
+  prepareCardLayoutContribution,
+  runCardMotionStoryboard,
   type CardMotionSession,
 } from '@/services/playgame/presentation/cardMotion';
 import type { ResolvedCard } from '@/services/playgame/view';
-import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
+import { captureCardRects } from '@/services/vfx/animations/layout-flip';
 
 const DRAG_THRESHOLD_PX = 6;
 const LANDING_DURATION_MS = 120;
@@ -311,17 +314,35 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     active = null;
   };
 
-  const animateGhostTo = async (drag: ActivePointerDrag): Promise<void> => {
+  const animateGhostTo = async (
+    drag: ActivePointerDrag,
+    oldRects: ReadonlyMap<string, DOMRect> = new Map(),
+  ): Promise<void> => {
     const session = drag.motionSession;
     if (!session) return;
     const endpoint = motionSurface.cardMotion.endpoint(drag.cardId);
-    const result = await session.animateTo(endpoint, {
+    const step = await session.prepareStep(`${session.id}:pointer-landing`, endpoint, {
       durationMs: LANDING_DURATION_MS,
       easing: 'cubic-bezier(.4,0,.2,1)',
       scaleFrom: 1,
       scaleTo: 1,
     });
-    if (!result) await session.handoffTo(endpoint);
+    const layout = prepareCardLayoutContribution(
+      `${session.id}:pointer-reflow`,
+      oldRects,
+      cardId => motionSurface.cardElement(cardId),
+    );
+    const outcome = await runCardMotionStoryboard({
+      id: `${session.id}:pointer-landing`,
+      source: { kind: 'FOUNDATION_PROOF', proofId: session.id },
+      targets: mergeCardMotionTargets([session], layout?.targets),
+      steps: [...(layout ? [layout.step] : []), step],
+      createTimelineDriver: motionSurface.timelineDriverFactory,
+      maximumCardActors: 1,
+      handoff: () => { session.handoffTo(endpoint); },
+      signal: new AbortController().signal,
+    });
+    if (outcome !== 'COMPLETED') session.cancel('pointer-cancelled');
   };
 
   const returnToSource = async (drag: ActivePointerDrag): Promise<void> => {
@@ -353,8 +374,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     // until the new owner-visible lane endpoint is painted, while only the
     // sibling cards participate in the hand reflow.
     await nextPaint();
-    void playCardLayoutSlide(oldRects, cardRefs);
-    await animateGhostTo(drag);
+    await animateGhostTo(drag, oldRects);
   };
 
   const performTapDrop = (target: DropTarget): void => {
