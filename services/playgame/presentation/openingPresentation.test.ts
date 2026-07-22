@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { SeatTransactionTimeline } from '../runtime/projection';
+import type { SeatPresentationBlock } from '../runtime/projection';
 import type { MatchPresentationSink } from './presentationDirector';
 import { startOpeningPresentation } from './openingPresentation';
 
-const timeline = {} as SeatTransactionTimeline;
+const block = {} as SeatPresentationBlock;
 const sink = {} as MatchPresentationSink;
 
 const flushPromises = async (): Promise<void> => {
@@ -28,10 +28,10 @@ describe('opening presentation choreography', () => {
     const presentation = startOpeningPresentation({
       root,
       toastArea,
-      timeline,
+      block,
       sink,
       presentOpening: value => {
-        expect(value).toBe(timeline);
+        expect(value).toBe(block);
         calls.push('commit-opening');
       },
       bindPresentationSink: value => {
@@ -89,7 +89,7 @@ describe('opening presentation choreography', () => {
     const presentation = startOpeningPresentation({
       root: document.createElement('div'),
       toastArea: document.createElement('div'),
-      timeline,
+      block,
       sink,
       presentOpening: vi.fn(),
       bindPresentationSink,

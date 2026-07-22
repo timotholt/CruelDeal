@@ -22,10 +22,11 @@ describe('Phase 3b opening authority', () => {
     );
     expect(openingPresenter).not.toContain('.dispatch(');
     expect(openingPresenter).not.toContain('setPresentedState');
-    expect(openingPresenter).toContain('options.presentOpening(options.timeline)');
+    expect(openingPresenter).toContain('options.presentOpening(options.block)');
     expect(openingPresenter).toContain('options.bindPresentationSink(options.sink)');
-    expect(playUi).toContain('const timelineQueue: SeatTransactionTimeline[] = []');
-    expect(playUi).toContain('enqueueTimeline(timeline)');
+    expect(playUi).toContain('const blockQueue: SeatPresentationBlock[] = []');
+    expect(playUi).toContain('enqueueBlock(block)');
+    expect(playUi).toContain('seatPresentationBlockToTransactionTimeline(block)');
     expect(playUi).toContain('await director.present(timeline, sink)');
   });
 
@@ -67,8 +68,9 @@ describe('Phase 3b opening authority', () => {
       frame: transition.frame,
       event: transition.event,
     })));
-    expect(replayFrames.map(step => step.state))
-      .toEqual(live.frames.map(frame => frame.after));
-    expect(replayFrames.at(-1)?.state).toEqual(live.finalState);
+    expect(live.frames.map(frame => (
+      replayFrames.find(step => step.frame === frame.frame)?.state
+    ))).toEqual(live.frames.map(frame => frame.after));
+    expect(replayFrames.at(-1)?.state).toEqual(live.postState);
   });
 });

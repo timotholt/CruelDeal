@@ -4,8 +4,7 @@ import type {
   SeatBootstrap,
   SeatCardToken,
   SeatMatchSnapshot,
-  SeatTransactionFrame,
-  SeatTransactionTimeline,
+  SeatPresentationBlock,
 } from '../runtime/projection';
 import type {
   SeatCardStatReadModel,
@@ -21,7 +20,7 @@ import type {
 
 export interface SeatMatchInitialization {
   readonly setup: SeatMatchSnapshot;
-  readonly opening: SeatTransactionTimeline;
+  readonly opening: SeatPresentationBlock;
 }
 
 interface SeatCommandIdentity {
@@ -90,8 +89,8 @@ export interface MatchClient {
 
   initialization(): SeatMatchInitialization;
   snapshot(): SeatMatchSnapshot;
-  subscribeCommittedTransactions(
-    subscriber: (timeline: SeatTransactionTimeline) => void,
+  subscribePresentationBlocks(
+    subscriber: (block: SeatPresentationBlock) => void,
   ): () => void;
   stageCard(token: SeatCardToken, lane: LaneId): Promise<SeatCommandResult>;
   unstageCard(token: SeatCardToken): Promise<SeatCommandResult>;
@@ -99,9 +98,6 @@ export interface MatchClient {
   endTurn(): Promise<SeatCommandResult>;
   acknowledgePresentationBlock(ack: SeatBlockAck): Promise<SeatResyncResponse>;
   resync(request: SeatResyncRequest): Promise<SeatResyncResponse>;
-  presentationStateForFrame(
-    frame: SeatTransactionFrame,
-  ): SeatTransactionFrame['after'];
   cardStatReadModel(token: SeatCardToken): SeatCardStatReadModel | null;
   lanePowerReadModel(lane: LaneId, owner: Seat): SeatLanePowerReadModel | null;
   dispose(): void;

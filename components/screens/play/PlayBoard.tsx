@@ -57,7 +57,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     localSeat,
     remoteSeat,
     bootstrap,
-    openingTimeline,
+    openingBlock,
     intentActivity,
   } = match;
   const {
@@ -288,7 +288,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
     const openingPresentation = startOpeningPresentation({
       root: playRoot,
       toastArea: toastAreaEl,
-      timeline: openingTimeline,
+      block: openingBlock,
       sink,
       presentOpening: uiActions.presentOpening,
       bindPresentationSink: uiActions.bindPresentationSink,

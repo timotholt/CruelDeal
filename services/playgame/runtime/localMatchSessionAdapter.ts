@@ -61,13 +61,11 @@ import {
   projectMatchStateForSeat,
   projectPresentationBlockForSeat,
   projectSnapshotForSeat,
-  projectTransactionTimelineForSeat,
   resolveSeatCardTokenForAuthority,
   type SeatBootstrap,
   type SeatCardToken,
   type SeatMatchSnapshot,
   type SeatPresentationBlock,
-  type SeatTransactionTimeline,
 } from './projection';
 import type {
   SeatCardStatReadModel,
@@ -145,7 +143,7 @@ export class LocalMatchSessionAdapter implements MatchClient {
         session.manifest,
         session.runtime.interactionStatus(this.#viewerSeat),
       ),
-      opening: this.#projectTimeline(initialization.opening),
+      opening: this.#projectPresentationBlock(initialization.opening),
     });
     Object.freeze(this);
   }
@@ -166,14 +164,14 @@ export class LocalMatchSessionAdapter implements MatchClient {
     );
   }
 
-  subscribeCommittedTransactions(
-    subscriber: (timeline: SeatTransactionTimeline) => void,
+  subscribePresentationBlocks(
+    subscriber: (block: SeatPresentationBlock) => void,
   ): () => void {
     if (this.#disposed) return () => undefined;
     const unsubscribeRuntime = this.#session.runtime.subscribeCommittedTransactions(
       timeline => {
         this.#unacknowledgedBlock = this.#projectPresentationBlock(timeline);
-        subscriber(this.#projectTimeline(timeline));
+        subscriber(this.#unacknowledgedBlock);
       },
     );
     let active = true;
@@ -301,16 +299,6 @@ export class LocalMatchSessionAdapter implements MatchClient {
     };
   }
 
-  presentationStateForFrame(
-    frame: SeatTransactionTimeline['frames'][number],
-  ) {
-    return overlaySeatPrivatePlan(
-      frame.after,
-      this.snapshot().state,
-      this.#viewerSeat,
-    );
-  }
-
   recordFramePresentationTiming(timing: FramePresentationTiming): void {
     this.#session.performanceTelemetry.recordFramePresentation(timing);
   }
@@ -427,17 +415,6 @@ export class LocalMatchSessionAdapter implements MatchClient {
       effectiveMultiplier: breakdown.effectiveMultiplier,
       total: breakdown.total,
     };
-  }
-
-  #projectTimeline(
-    timeline: CommittedTransactionTimeline,
-  ): SeatTransactionTimeline {
-    return projectTransactionTimelineForSeat(
-      timeline,
-      this.#viewerSeat,
-      this.#manifest,
-      state => this.#session.runtime.projectWorkingState(state),
-    );
   }
 
   #projectPresentationBlock(

@@ -141,6 +141,6 @@ describe('Phase 2 provider boundary architecture', () => {
       'contexts/MatchSessionContext.tsx',
     ), 'utf8');
     expect(provider).toContain('readonly client: MatchClient');
-    expect(provider).toContain('client.subscribeCommittedTransactions');
+    expect(provider).toContain('client.subscribePresentationBlocks');
   });
 });

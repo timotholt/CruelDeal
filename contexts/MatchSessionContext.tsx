@@ -24,8 +24,12 @@ import type {
   SeatBootstrap,
   SeatCardToken,
   SeatMatchSnapshot,
+  SeatPresentationBlock,
   SeatTransactionFrame,
-  SeatTransactionTimeline,
+} from '@/services/playgame/runtime/projection';
+import {
+  applySeatPresentationBlock,
+  overlaySeatPrivatePlan,
 } from '@/services/playgame/runtime/projection';
 import type { DebugReplayTimeline } from '@/services/playgame/debug/replayContracts';
 
@@ -36,9 +40,9 @@ export interface MatchSessionContextValue {
   readonly remoteSeat: Seat;
   readonly snapshot: Accessor<SeatMatchSnapshot>;
   readonly intentActivity: Accessor<MatchIntentActivity>;
-  readonly openingTimeline: SeatTransactionTimeline;
-  readonly subscribeCommittedTransactions: (
-    subscriber: (timeline: SeatTransactionTimeline) => void,
+  readonly openingBlock: SeatPresentationBlock;
+  readonly subscribePresentationBlocks: (
+    subscriber: (block: SeatPresentationBlock) => void,
   ) => () => void;
   readonly debug: {
     readonly performanceProfile: Accessor<MatchPerformanceProfile>;
@@ -53,6 +57,9 @@ export interface MatchSessionContextValue {
     presentationStateForFrame: (
       frame: SeatTransactionFrame,
     ) => SeatTransactionFrame['after'];
+    acknowledgePresentationBlock: (
+      block: SeatPresentationBlock,
+    ) => Promise<void>;
     cardStatReadModel: (
       token: SeatCardToken,
     ) => SeatCardStatReadModel | null;
@@ -96,8 +103,8 @@ export const MatchSessionProvider = (props: {
   const [performanceRevision, setPerformanceRevision] = createSignal(0);
   const [replayRevision, setReplayRevision] = createSignal(0);
   let providerDisposed = false;
-  const transactionSubscribers = new Set<
-    (timeline: SeatTransactionTimeline) => void
+  const presentationBlockSubscribers = new Set<
+    (block: SeatPresentationBlock) => void
   >();
 
   const refreshSnapshot = (): void => {
@@ -106,24 +113,32 @@ export const MatchSessionProvider = (props: {
     setReplayRevision(revision => revision + 1);
   };
 
-  const unsubscribeClient = client.subscribeCommittedTransactions(timeline =>
+  const unsubscribeClient = client.subscribePresentationBlocks(block =>
     untrack(() => {
       if (providerDisposed) return;
       batch(() => {
         setIntentActivity(null);
-        setSnapshot({
-          version: 1,
-          matchId: timeline.matchId,
-          revision: timeline.revision,
-          frame: timeline.frames.at(-1)?.frame ?? snapshot().frame,
-          viewerSeat: localSeat,
-          state: timeline.finalState,
-        });
+        const current = snapshot();
+        const nextSnapshot = current.publicRevision === block.basePublicRevision
+          ? applySeatPresentationBlock(current, block)
+          : {
+              version: 2 as const,
+              matchId: block.matchId,
+              publicRevision: block.publicRevision,
+              planRevision: current.planRevision,
+              frame: block.lastFrame,
+              viewerSeat: block.viewerSeat,
+              interactionStatus: block.postState.result === null
+                ? 'PLANNING' as const
+                : 'TERMINAL' as const,
+              state: block.postState,
+            };
+        setSnapshot(nextSnapshot);
         setReplayRevision(revision => revision + 1);
 
-        for (const subscriber of [...transactionSubscribers]) {
+        for (const subscriber of [...presentationBlockSubscribers]) {
           try {
-            subscriber(timeline);
+            subscriber(block);
           } catch {
             // A presentation consumer cannot interrupt authoritative publication
             // or prevent the remaining consumers from observing the transaction.
@@ -133,12 +148,12 @@ export const MatchSessionProvider = (props: {
     }),
   );
 
-  const subscribeCommittedTransactions = (
-    subscriber: (timeline: SeatTransactionTimeline) => void,
+  const subscribePresentationBlocks = (
+    subscriber: (block: SeatPresentationBlock) => void,
   ): (() => void) => {
     if (providerDisposed) return () => undefined;
-    transactionSubscribers.add(subscriber);
-    return () => transactionSubscribers.delete(subscriber);
+    presentationBlockSubscribers.add(subscriber);
+    return () => presentationBlockSubscribers.delete(subscriber);
   };
 
   const accepted = async (
@@ -157,8 +172,8 @@ export const MatchSessionProvider = (props: {
     remoteSeat,
     snapshot,
     intentActivity,
-    openingTimeline: initialization.opening,
-    subscribeCommittedTransactions,
+    openingBlock: initialization.opening,
+    subscribePresentationBlocks,
     debug: client.debug
       ? {
           replay: () => {
@@ -193,7 +208,7 @@ export const MatchSessionProvider = (props: {
           return false;
         }
         if (
-          result.commit === 'PRIVATE'
+          (result.commit === 'PRIVATE' || result.commit === 'WAITING')
           && intentActivity()?.kind === 'PROCESSING_INTENT'
         ) {
           batch(() => {
@@ -209,7 +224,21 @@ export const MatchSessionProvider = (props: {
       },
       refreshSnapshot,
       presentationStateForFrame:
-        frame => client.presentationStateForFrame(frame),
+        frame => overlaySeatPrivatePlan(
+          frame.after,
+          snapshot().state,
+          localSeat,
+        ),
+      acknowledgePresentationBlock: async (block) => {
+        await client.acknowledgePresentationBlock({
+          version: 2,
+          matchId: block.matchId,
+          viewerSeat: block.viewerSeat,
+          publicRevision: block.publicRevision,
+          frame: block.lastFrame,
+          postStateHash: block.postStateHash,
+        });
+      },
       cardStatReadModel: token => client.cardStatReadModel(token),
       lanePowerReadModel: (lane, owner) =>
         client.lanePowerReadModel(lane, owner),
@@ -232,7 +261,7 @@ export const MatchSessionProvider = (props: {
   }
   onCleanup(() => {
     providerDisposed = true;
-    transactionSubscribers.clear();
+    presentationBlockSubscribers.clear();
     unsubscribeClient();
     uninstallDebug();
     client.dispose();

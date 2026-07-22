@@ -1,4 +1,4 @@
-import type { SeatTransactionTimeline } from '../runtime/projection';
+import type { SeatPresentationBlock } from '../runtime/projection';
 import type { MatchPresentationSink } from './presentationDirector';
 import {
   createPlayfieldEventPresenter,
@@ -14,9 +14,9 @@ const OPENING_SETTLE_MS = 150;
 export interface OpeningPresentationOptions {
   readonly root: HTMLElement;
   readonly toastArea: HTMLElement;
-  readonly timeline: SeatTransactionTimeline;
+  readonly block: SeatPresentationBlock;
   readonly sink: MatchPresentationSink;
-  readonly presentOpening: (timeline: SeatTransactionTimeline) => void;
+  readonly presentOpening: (block: SeatPresentationBlock) => void;
   readonly bindPresentationSink: (sink: MatchPresentationSink) => () => void;
   readonly presentPlayfieldEvent?: PlayfieldEventPresenter;
   readonly showOpeningToast?: (
@@ -69,7 +69,7 @@ export function startOpeningPresentation(
   // The opening transaction is already one committed immutable block. Lock
   // presentation immediately, pace only cosmetic events here, and bind the
   // director after the prelude so gameplay never originates in this routine.
-  options.presentOpening(options.timeline);
+  options.presentOpening(options.block);
   void (async () => {
     await presentPlayfieldEvent({ type: 'HIDE_PLAYFIELD' });
     if (!await waitForOpeningBeat(OPENING_LEAD_IN_MS, controller.signal)) return;

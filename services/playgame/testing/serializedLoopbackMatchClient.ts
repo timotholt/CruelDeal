@@ -14,8 +14,7 @@ import type { FramePresentationTiming } from '../runtime/performanceTelemetry';
 import type {
   SeatCardToken,
   SeatMatchSnapshot,
-  SeatTransactionFrame,
-  SeatTransactionTimeline,
+  SeatPresentationBlock,
 } from '../runtime/projection';
 import type {
   SeatCardStatReadModel,
@@ -59,12 +58,12 @@ export class SerializedLoopbackMatchClient implements MatchClient {
     return wireClone(this.#authority.snapshot());
   }
 
-  subscribeCommittedTransactions(
-    subscriber: (timeline: SeatTransactionTimeline) => void,
+  subscribePresentationBlocks(
+    subscriber: (block: SeatPresentationBlock) => void,
   ): () => void {
     if (this.#disposed) return () => undefined;
-    const unsubscribeAuthority = this.#authority.subscribeCommittedTransactions(
-      timeline => subscriber(wireClone(timeline)),
+    const unsubscribeAuthority = this.#authority.subscribePresentationBlocks(
+      block => subscriber(wireClone(block)),
     );
     let active = true;
     const unsubscribe = () => {
@@ -112,12 +111,6 @@ export class SerializedLoopbackMatchClient implements MatchClient {
   async resync(request: SeatResyncRequest): Promise<SeatResyncResponse> {
     await Promise.resolve();
     return wireClone(await this.#authority.resync(wireClone(request)));
-  }
-
-  presentationStateForFrame(
-    frame: SeatTransactionFrame,
-  ): SeatTransactionFrame['after'] {
-    return wireClone(this.#authority.presentationStateForFrame(wireClone(frame)));
   }
 
   cardStatReadModel(token: SeatCardToken): SeatCardStatReadModel | null {

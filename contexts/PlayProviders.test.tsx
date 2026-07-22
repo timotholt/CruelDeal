@@ -21,8 +21,9 @@ import type { MatchAuthorityTestDriver } from '@/services/playgame/testing/autho
 import { MATCH_AUTHORITY_TEST_DRIVERS } from '@/services/playgame/testing/authorityRegistry';
 import type {
   SeatCardToken,
-  SeatTransactionTimeline,
+  SeatPresentationBlock,
 } from '@/services/playgame/runtime/projection';
+import { seatPresentationBlockToTransactionTimeline } from '@/services/playgame/runtime/projection';
 import type { MatchPresentationSink } from '@/services/playgame/presentation/presentationDirector';
 
 const disposers: Array<() => void> = [];
@@ -118,7 +119,7 @@ async function presentOpeningImmediately(
       resolveCompleted();
     },
   });
-  harness.ui.actions.presentOpening(harness.match.openingTimeline);
+  harness.ui.actions.presentOpening(harness.match.openingBlock);
   await completed;
   await vi.waitFor(() => {
     expect(harness.ui.isResolving()).toBe(false);
@@ -166,17 +167,17 @@ describe(`${authorityDriver.id} split play providers`, () => {
   it('publishes committed transactions after the authoritative snapshot', async () => {
     const harness = await mountHarness(authorityDriver, 'provider-transaction-publication');
     const observed: Array<{
-      timeline: SeatTransactionTimeline;
+      block: SeatPresentationBlock;
       snapshotRevision: number;
-      snapshotState: SeatTransactionTimeline['finalState'];
+      snapshotState: SeatPresentationBlock['postState'];
     }> = [];
-    const unsubscribeThrowing = harness.match.subscribeCommittedTransactions(
+    const unsubscribeThrowing = harness.match.subscribePresentationBlocks(
       () => { throw new Error('consumer failure'); },
     );
-    const unsubscribeObserver = harness.match.subscribeCommittedTransactions(
-      timeline => observed.push({
-        timeline,
-        snapshotRevision: harness.match.snapshot().revision,
+    const unsubscribeObserver = harness.match.subscribePresentationBlocks(
+      block => observed.push({
+        block,
+        snapshotRevision: harness.match.snapshot().publicRevision,
         snapshotState: harness.match.snapshot().state,
       }),
     );
@@ -184,8 +185,8 @@ describe(`${authorityDriver.id} split play providers`, () => {
     await expect(harness.match.actions.endTurn()).resolves.toBe(true);
 
     expect(observed).toHaveLength(1);
-    expect(observed[0]?.snapshotRevision).toBe(observed[0]?.timeline.revision);
-    expect(observed[0]?.snapshotState).toBe(observed[0]?.timeline.finalState);
+    expect(observed[0]?.snapshotRevision).toBe(observed[0]?.block.publicRevision);
+    expect(observed[0]?.snapshotState).toBe(observed[0]?.block.postState);
 
     unsubscribeObserver();
     await expect(harness.match.actions.endTurn()).resolves.toBe(true);
@@ -200,7 +201,7 @@ describe(`${authorityDriver.id} split play providers`, () => {
     );
     const harness = mountSession(client);
     const subscriber = vi.fn();
-    harness.match.subscribeCommittedTransactions(subscriber);
+    harness.match.subscribePresentationBlocks(subscriber);
 
     disposers.pop()?.();
     await client.endTurn();
@@ -239,9 +240,9 @@ describe(`${authorityDriver.id} split play providers`, () => {
     const setup = harness.ui.presentedState();
     expect(setup.lanes.map(lane => lane.id)).toEqual([0, 1, 2]);
     expect(setup.hands[harness.match.localSeat]).toHaveLength(0);
-    expect(harness.match.openingTimeline.frames[0]?.event?.type)
+    expect(harness.match.openingBlock.frames[0]?.event?.type)
       .toBe('CARD_DRAWN');
-    expect(harness.match.openingTimeline.frames.some(
+    expect(harness.match.openingBlock.frames.some(
       frame => frame.event?.type === 'LANE_CREATED',
     )).toBe(false);
 
@@ -355,14 +356,15 @@ describe(`${authorityDriver.id} split play providers`, () => {
     observations.length = 0;
     const token = firstPlayableCard(harness);
     await harness.match.actions.stageCardInLane(token, 0);
-    const timelines: SeatTransactionTimeline[] = [];
-    const unsubscribe = harness.match.subscribeCommittedTransactions(
-      timeline => timelines.push(timeline),
+    const blocks: SeatPresentationBlock[] = [];
+    const unsubscribe = harness.match.subscribePresentationBlocks(
+      block => blocks.push(block),
     );
     await expect(harness.match.actions.endTurn()).resolves.toBe(true);
     unsubscribe();
-    const timeline = timelines.at(-1);
-    if (!timeline) throw new Error('END_TURN did not publish');
+    const block = blocks.at(-1);
+    if (!block) throw new Error('END_TURN did not publish');
+    const timeline = seatPresentationBlockToTransactionTimeline(block);
     await vi.waitFor(() => {
       expect(harness.ui.presentedState().turn).toBe(2);
       expect(harness.ui.isResolving()).toBe(false);

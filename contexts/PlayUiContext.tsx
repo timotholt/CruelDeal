@@ -11,9 +11,11 @@ import {
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { useMatchSession } from './MatchSessionContext';
 import type {
+  SeatPresentationBlock,
   SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '@/services/playgame/runtime/projection';
+import { seatPresentationBlockToTransactionTimeline } from '@/services/playgame/runtime/projection';
 import {
   PresentationDirector,
   type MatchPresentationSink,
@@ -49,7 +51,7 @@ export interface PlayUiContextValue {
   readonly turnFlowRunning: Accessor<boolean>;
   readonly actions: {
     bindPresentationSink: (sink: MatchPresentationSink) => () => void;
-    presentOpening: (timeline: SeatTransactionTimeline) => void;
+    presentOpening: (block: SeatPresentationBlock) => void;
     requestPresentationFastForward: () => boolean;
     openInspector: (target: InspectTarget) => void;
     closeInspector: () => void;
@@ -91,7 +93,7 @@ export const PlayUiProvider = (props: {
     createSignal<ReplayClientActivity>(null);
   const [turnFlowRunning, setTurnFlowRunning] = createSignal(false);
   let presentationSink: MatchPresentationSink | null = null;
-  const timelineQueue: SeatTransactionTimeline[] = [];
+  const blockQueue: SeatPresentationBlock[] = [];
   let draining = false;
   let disposed = false;
 
@@ -126,7 +128,7 @@ export const PlayUiProvider = (props: {
   });
 
   const finishPresentationQueue = (): void => {
-    if (disposed || timelineQueue.length > 0 || director.activeGeneration !== null) {
+    if (disposed || blockQueue.length > 0 || director.activeGeneration !== null) {
       return;
     }
     batch(() => {
@@ -147,8 +149,9 @@ export const PlayUiProvider = (props: {
       setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
     });
     try {
-      while (!disposed && presentationSink && timelineQueue.length > 0) {
-        const timeline = timelineQueue.shift()!;
+      while (!disposed && presentationSink && blockQueue.length > 0) {
+        const block = blockQueue.shift()!;
+        const timeline = seatPresentationBlockToTransactionTimeline(block);
         const sink = presentationSink;
         try {
           await director.present(timeline, sink);
@@ -159,23 +162,25 @@ export const PlayUiProvider = (props: {
           if ((import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
             console.error('Committed timeline presentation failed', error);
           }
+        } finally {
+          await match.actions.acknowledgePresentationBlock(block);
         }
       }
     } finally {
       draining = false;
       finishPresentationQueue();
-      if (!disposed && presentationSink && timelineQueue.length > 0) {
+      if (!disposed && presentationSink && blockQueue.length > 0) {
         void drainPresentationQueue();
       }
     }
   };
 
-  const enqueueTimeline = (timeline: SeatTransactionTimeline): void => {
+  const enqueueBlock = (block: SeatPresentationBlock): void => {
     if (disposed) return;
     batch(() => {
       setPresentationBusy(true);
       setTurnFlowRunning(true);
-      if (timeline.frames.some(
+      if (block.frames.some(
         frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
       )) {
         // Remote CARD_STAGED frames canonically precede resolution start, but
@@ -183,17 +188,17 @@ export const PlayUiProvider = (props: {
         setUi('isFlipped', true);
       }
     });
-    timelineQueue.push(timeline);
+    blockQueue.push(block);
     void drainPresentationQueue();
   };
 
-  const unsubscribeCommitted = match.subscribeCommittedTransactions(
-    enqueueTimeline,
+  const unsubscribeCommitted = match.subscribePresentationBlocks(
+    enqueueBlock,
   );
   onCleanup(() => {
     disposed = true;
     unsubscribeCommitted();
-    timelineQueue.length = 0;
+    blockQueue.length = 0;
     presentationSink = null;
     director.dispose();
   });
@@ -231,12 +236,12 @@ export const PlayUiProvider = (props: {
           finishPresentationQueue();
         };
       },
-      presentOpening: (timeline) => {
+      presentOpening: (block) => {
         // The opening transaction committed before this provider subscribed.
         // Lock presentation first, then promote the authoritative snapshot to
         // that already-committed end state. The visible cursor remains on the
         // setup state until the director adopts the opening frames.
-        enqueueTimeline(timeline);
+        enqueueBlock(block);
         match.actions.refreshSnapshot();
       },
       requestPresentationFastForward: () => director.fastForward(),

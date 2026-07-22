@@ -8,9 +8,11 @@ import { MatchSession } from '../matchSession';
 import { getLaneCardsForSeat } from '../../view';
 import type {
   SeatCardToken,
+  SeatPresentationBlock,
   SeatTransactionTimeline,
   SeatVisibleMatchState,
 } from '../projection';
+import { seatPresentationBlockToTransactionTimeline } from '../projection';
 
 function fixture(seed: string) {
   const session = MatchSession.fromBootstrap(buildDebugMatchBootstrap(
@@ -74,7 +76,8 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
   it('exposes transaction publication without a per-frame streaming API', () => {
     const { adapter, session } = fixture('adapter-atomic-api-surface');
 
-    expect(adapter.subscribeCommittedTransactions).toEqual(expect.any(Function));
+    expect(adapter.subscribePresentationBlocks).toEqual(expect.any(Function));
+    expect(adapter).not.toHaveProperty('subscribeCommittedTransactions');
     expect(session.runtime.subscribeCommittedTransactions).toEqual(expect.any(Function));
     expect(adapter).not.toHaveProperty('subscribeFrames');
     expect(adapter).not.toHaveProperty('subscribeFrame');
@@ -98,14 +101,14 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     expect(initialization.opening.frames.some(
       frame => frame.event?.type === 'LANE_CREATED',
     )).toBe(false);
-    expect(initialization.opening.finalState.hands.P0).toHaveLength(4);
-    expect(initialization.opening.finalState.hands.P1).toHaveLength(4);
+    expect(initialization.opening.postState.hands.P0).toHaveLength(4);
+    expect(initialization.opening.postState.hands.P1).toHaveLength(4);
     for (const frame of initialization.opening.frames) {
-      assertProjectedState(frame.before);
       assertProjectedState(frame.after);
       expect(frame).not.toHaveProperty('framedEvent');
+      expect(frame).not.toHaveProperty('before');
     }
-    const hiddenOpponentCards = initialization.opening.finalState.cards.filter(
+    const hiddenOpponentCards = initialization.opening.postState.cards.filter(
       card => card.owner !== adapter.bootstrap.viewerSeat && !card.revealed,
     );
     expect(hiddenOpponentCards.length).toBeGreaterThan(0);
@@ -152,17 +155,17 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
   it('publishes only projected transaction frames and latest projected state', async () => {
     const { adapter } = fixture('adapter-published-frames');
     const token = firstAffordableToken(adapter);
-    const timelines: SeatTransactionTimeline[] = [];
+    const blocks: SeatPresentationBlock[] = [];
     const replayStepsBeforePrivatePlan = adapter.debug!.replay().steps.length;
-    const unsubscribe = adapter.subscribeCommittedTransactions(
-      timeline => timelines.push(timeline),
+    const unsubscribe = adapter.subscribePresentationBlocks(
+      block => blocks.push(block),
     );
 
     await expect(adapter.stageCard(token, 0)).resolves.toMatchObject({
       status: 'accepted',
       commit: 'PRIVATE',
     });
-    expect(timelines).toEqual([]);
+    expect(blocks).toEqual([]);
     expect(adapter.debug!.replay().steps).toHaveLength(replayStepsBeforePrivatePlan);
     const endTurn = await adapter.endTurn();
     expect(endTurn).toMatchObject({
@@ -171,14 +174,15 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     expect(endTurn).not.toHaveProperty('transaction');
 
     unsubscribe();
-    expect(timelines).toHaveLength(1);
-    const timeline = timelines[0]!;
+    expect(blocks).toHaveLength(1);
+    const block = blocks[0]!;
+    const timeline = seatPresentationBlockToTransactionTimeline(block);
     expect(timeline.frames.length).toBeGreaterThan(0);
     expect(timeline.frames.some(
       frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
     )).toBe(true);
     expect(timeline.finalState.turn).toBe(2);
-    expect(adapter.snapshot().state).toEqual(timeline.finalState);
+    expect(adapter.snapshot().state).toEqual(block.postState);
     for (const frame of timeline.frames) {
       assertProjectedState(frame.before);
       assertProjectedState(frame.after);
@@ -193,14 +197,14 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
   it('redelivers one complete unacknowledged block and clears it on ack', async () => {
     const { adapter } = fixture('adapter-block-resync');
     const before = adapter.snapshot();
-    const timelines: SeatTransactionTimeline[] = [];
-    const unsubscribe = adapter.subscribeCommittedTransactions(
-      timeline => timelines.push(timeline),
+    const blocks: SeatPresentationBlock[] = [];
+    const unsubscribe = adapter.subscribePresentationBlocks(
+      block => blocks.push(block),
     );
 
     await adapter.endTurn();
     unsubscribe();
-    expect(timelines).toHaveLength(1);
+    expect(blocks).toHaveLength(1);
 
     const redelivery = await adapter.resync({
       version: 2,
@@ -245,9 +249,9 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     const { adapter } = fixture('bug-stage-1');
     const viewer = adapter.bootstrap.viewerSeat;
     const opponent = viewer === 'P0' ? 'P1' : 'P0';
-    const timelines: SeatTransactionTimeline[] = [];
-    const unsubscribe = adapter.subscribeCommittedTransactions(
-      timeline => timelines.push(timeline),
+    const blocks: SeatPresentationBlock[] = [];
+    const unsubscribe = adapter.subscribePresentationBlocks(
+      block => blocks.push(block),
     );
 
     await expect(adapter.endTurn()).resolves.toMatchObject({
@@ -255,8 +259,9 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     });
     unsubscribe();
 
-    expect(timelines).toHaveLength(1);
-    const enemyStage = timelines[0]!.frames.find(
+    expect(blocks).toHaveLength(1);
+    const timeline = seatPresentationBlockToTransactionTimeline(blocks[0]!);
+    const enemyStage = timeline.frames.find(
       frame => frame.event?.type === 'CARD_STAGED'
         && frame.event.data.owner === opponent,
     );
@@ -272,7 +277,7 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     expect(stagedCard).not.toHaveProperty('defId');
     expect(enemyStage!.event!.data).not.toHaveProperty('defId');
 
-    const committedReveal = timelines[0]!.frames.find(
+    const committedReveal = timeline.frames.find(
       frame => frame.frame > enemyStage!.frame
         && frame.event?.type === 'CARD_REVEALED'
         && frame.event.data.card === token,

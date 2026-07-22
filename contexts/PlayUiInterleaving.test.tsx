@@ -18,7 +18,7 @@ import { buildDebugMatchBootstrap } from '@/services/playgame/debug/buildDebugBo
 import type { MatchClient } from '@/services/playgame/client/matchClient';
 import type { MatchAuthorityTestDriver } from '@/services/playgame/testing/authorityTestDriver';
 import { MATCH_AUTHORITY_TEST_DRIVERS } from '@/services/playgame/testing/authorityRegistry';
-import type { SeatTransactionTimeline } from '@/services/playgame/runtime/projection';
+import type { SeatPresentationBlock } from '@/services/playgame/runtime/projection';
 
 interface Harness {
   readonly match: MatchSessionContextValue;
@@ -340,10 +340,10 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
       'interleave-ai-independent',
     ));
     const gate = deferred();
-    const published: SeatTransactionTimeline[] = [];
+    const published: SeatPresentationBlock[] = [];
     let hookStarted = false;
-    harness.match.subscribeCommittedTransactions(
-      timeline => published.push(timeline),
+    harness.match.subscribePresentationBlocks(
+      block => published.push(block),
     );
     harness.ui.actions.bindPresentationSink({
       afterFrame: () => {
@@ -360,7 +360,7 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
       frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
     )).toBe(true);
     expect(harness.match.snapshot().state.turn).toBe(2);
-    expect(harness.match.snapshot().state).toEqual(published[0]?.finalState);
+    expect(harness.match.snapshot().state).toEqual(published[0]?.postState);
     expect(harness.ui.isResolving()).toBe(true);
 
     expect(harness.ui.actions.requestPresentationFastForward()).toBe(true);

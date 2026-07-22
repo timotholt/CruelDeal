@@ -44,7 +44,7 @@ Do not edit, stage, delete, or otherwise absorb those paths into this phase.
 - [x] Slice 2: `CanonicalFrame` clean cutover
 - [x] Slice 3: authority/player protocol split and seat projection
 - [x] Slice 4: public/private revisions, receipts, and resync
-- [ ] Slice 5: MatchClient and presentation-block cutover
+- [x] Slice 5: MatchClient and presentation-block cutover
 - [ ] Slice 6: replay UI, authority matrix, Rust parity, and full gates
 
 ## Proven Slice 0–1 implementation
@@ -117,8 +117,9 @@ The shared fix belongs in the kernel work loop and operation planners:
 ## Last proven state
 
 - `npm run typecheck:playgame` passes.
-- `npm run protocol:schema:check` passes.
+- Focused Slice 5 client/provider/presentation tests pass: 10 files, 90 tests.
 - Focused Slice 4 runtime/protocol/adapter tests pass: 73 tests.
+- `npm run protocol:schema:check` passes.
 - `npm run test:engine:kernel` passes: 34 files, 284 tests.
 - `npm run test:playgame:phase0` passes with 200 generated cases per property.
 - Focused canonical timeline/runtime/replay tests pass: 65 tests.
@@ -154,6 +155,24 @@ The shared fix belongs in the kernel work loop and operation planners:
 
 ## Next concrete action
 
-Move `MatchClient` and presentation playback from local
-`SeatTransactionTimeline` projection to complete `SeatPresentationBlock`
-delivery.
+Complete Slice 6: replay UI conformance, authority matrix cleanup, Rust parity
+verification, and final handoff gates.
+
+## Proven Slice 5 implementation
+
+- `MatchClient` now exposes `SeatPresentationBlock` delivery through
+  `subscribePresentationBlocks`; the player-facing client contract no longer
+  exposes committed transaction timelines.
+- Match initialization carries the opening as one complete presentation block.
+- The local adapter projects, retains, redelivers, and ACKs the same complete
+  block shape.
+- The serialized-loopback authority test client crosses the JSON boundary with
+  blocks, preventing tests from depending on local-only transaction timelines.
+- `PlayUiContext` queues presentation blocks, converts each block to the
+  existing animation timeline at the director boundary, and ACKs after
+  playback/snap handling.
+- Existing card movement/flip choreography remains isolated in the presentation
+  director and sinks; this slice changes transport and queue shape only.
+- `MatchSessionContext` applies contiguous blocks strictly and has a bounded
+  setup/opening visual-lag adoption path when authority has advanced beyond
+  the visual setup cursor.

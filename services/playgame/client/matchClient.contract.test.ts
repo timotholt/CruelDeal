@@ -4,7 +4,7 @@ import { buildDebugMatchBootstrap } from '../debug/buildDebugBootstrap';
 import { DEBUG_DECKS } from '../debug/debugDecks';
 import type {
   SeatCardToken,
-  SeatTransactionTimeline,
+  SeatPresentationBlock,
 } from '../runtime/projection';
 import type { MatchAuthorityTestDriver } from '../testing/authorityTestDriver';
 import { MATCH_AUTHORITY_TEST_DRIVERS } from '../testing/authorityRegistry';
@@ -18,9 +18,9 @@ function bootstrap(driver: MatchAuthorityTestDriver, seed: string) {
 }
 
 function firstAffordableCard(
-  timeline: SeatTransactionTimeline,
+  block: SeatPresentationBlock,
 ): SeatCardToken {
-  const state = timeline.finalState;
+  const state = block.postState;
   const token = state.hands.P0.find((candidate) => {
     const card = state.cards.find(entry => entry.token === candidate);
     return card?.cost !== undefined && card.cost <= state.energy.P0;
@@ -36,8 +36,8 @@ function runMatchClientContract(driver: MatchAuthorityTestDriver): void {
       const initialization = client.initialization();
 
       expect(initialization.opening.frames.length).toBeGreaterThan(0);
-      expect(initialization.opening.finalState.hands.P0).toHaveLength(4);
-      expect(initialization.opening.finalState.hands.P1).toHaveLength(4);
+      expect(initialization.opening.postState.hands.P0).toHaveLength(4);
+      expect(initialization.opening.postState.hands.P1).toHaveLength(4);
       expect(JSON.stringify(client.bootstrap)).not.toContain('"seed"');
       expect(initialization.setup).not.toHaveProperty('rng');
       expect(initialization.opening.frames.every(
@@ -76,15 +76,16 @@ function runMatchClientContract(driver: MatchAuthorityTestDriver): void {
     it('publishes a committed turn as one complete projected block', async () => {
       const client = await driver.createClient(bootstrap(driver, 'atomic'));
       const initialization = client.initialization();
-      const publications: SeatTransactionTimeline[] = [];
-      const unsubscribe = client.subscribeCommittedTransactions(
-        timeline => publications.push(timeline),
+      const publications: SeatPresentationBlock[] = [];
+      const unsubscribe = client.subscribePresentationBlocks(
+        block => publications.push(block),
       );
 
       expect(initialization.setup).not.toHaveProperty('rng');
       expect(initialization.opening.frames.length).toBeGreaterThan(0);
       expect(client).not.toHaveProperty('subscribeFrame');
       expect(client).not.toHaveProperty('subscribeFrames');
+      expect(client).not.toHaveProperty('subscribeCommittedTransactions');
 
       await expect(client.endTurn()).resolves.toMatchObject({
         status: 'accepted',
@@ -92,8 +93,8 @@ function runMatchClientContract(driver: MatchAuthorityTestDriver): void {
 
       expect(publications).toHaveLength(1);
       expect(publications[0]!.frames.length).toBeGreaterThan(1);
-      expect(publications[0]!.finalState.turn).toBe(2);
-      expect(client.snapshot().state).toEqual(publications[0]!.finalState);
+      expect(publications[0]!.postState.turn).toBe(2);
+      expect(client.snapshot().state).toEqual(publications[0]!.postState);
 
       unsubscribe();
       client.dispose();

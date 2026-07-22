@@ -109,7 +109,7 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
     expect(playBoard).toContain('presentOpening: uiActions.presentOpening');
     expect(playBoard).toContain('bindPresentationSink: uiActions.bindPresentationSink');
-    expect(opening).toContain('options.presentOpening(options.timeline)');
+    expect(opening).toContain('options.presentOpening(options.block)');
     expect(opening).toContain('options.bindPresentationSink(options.sink)');
     expect(uiContext).toContain('await director.present(timeline, sink)');
     expect(uiContext).not.toContain('for (const frame of timeline.frames)');
@@ -161,10 +161,11 @@ describe('Phase 1.21 presentation architecture fences', () => {
     const uiContext = source('../../../contexts/PlayUiContext.tsx');
     const playBoard = source('./PlayBoard.tsx');
 
-    expect(matchContext).toContain('subscribeCommittedTransactions');
+    expect(matchContext).toContain('subscribePresentationBlocks');
     expect(matchContext).not.toContain('resolutionWaiters');
-    expect(uiContext).toContain('const timelineQueue: SeatTransactionTimeline[] = []');
-    expect(uiContext).toContain('match.subscribeCommittedTransactions');
+    expect(uiContext).toContain('const blockQueue: SeatPresentationBlock[] = []');
+    expect(uiContext).toContain('match.subscribePresentationBlocks');
+    expect(uiContext).toContain('seatPresentationBlockToTransactionTimeline(block)');
     expect(uiContext).toContain('setPresentationBusy(true)');
     expect(uiContext).not.toContain('director.activeGeneration !== null) director.fastForward()');
     expect(playBoard).not.toContain('timeline.frames.forEach');
