@@ -372,8 +372,9 @@ storyboard. Tracks contribute to canonical duration and cleanup.
 ### Cue
 
 An instantaneous non-interpolated action dispatched at one exact storyboard
-time. Audio start, an edge-on surface swap, haptic feedback, and diagnostic
-markers are cues. A cue cannot own an undeclared duration.
+time. Audio start, a permitted noncritical surface variant swap, haptic
+feedback, and diagnostic markers are cues. A cue cannot own an undeclared
+duration.
 
 ### Actor
 
@@ -538,31 +539,81 @@ runner starts one timeline and its one completion gates the next beat.
 
 ### Expansion budgets
 
-One beat must fit hard product bounds after expansion:
+One beat must fit the generated `PresentationExpansionBudget` for the match's
+frozen `PlayerPresentationCapacityProfile`:
 
-- at most 512 primitive steps;
-- at most 1,024 visual tracks;
-- at most 256 timed cues;
-- at most 32 simultaneously leased card actors;
-- at most 32 simultaneously active general effect actors;
-- at most 16 nested routine calls along any authored call path.
+```ts
+interface PresentationExpansionBudget {
+  readonly maximumPrimitiveSteps: number;
+  readonly maximumVisualTracks: number;
+  readonly maximumTimedCues: number;
+  readonly maximumAuthoredRoutineDepth: 16;
+  readonly maximumCardActors: number;
+  readonly maximumEffectActors: number;
+}
+```
 
-The constants live in one `animationBudgets.ts` module and are validated before
-state adoption. Exceeding a budget is a presentation contract failure, never
-permission to drop targets or choose a simpler visual.
+The generator consumes the kernel `ResolutionBudget`, lane/slot capacity, and
+the registry-declared finite worst-case expansion cost for every projected
+event, trace outcome, routine, target, and created entity. It emits one
+versioned profile artifact used by match bootstrap and the compiler. A registry
+or kernel-budget change fails generation until the legal-work upper bound is
+recomputed and the browser-capacity proof passes. Hand-maintained constants
+such as "512 steps" are not accepted as proof.
+
+Every authored routine call path remains capped at depth 16 independent of the
+engine's effect-tree depth: engine invocations are finite input data and do not
+become recursive routine calls.
+
+Actor capacity is not an unrelated magic number in this budget. The compiler
+first builds conservative actor-live **interval envelopes** for every expanded
+card and effect use, performs deterministic allocation against those envelopes,
+and proves the maximum number of overlapping leases is no greater than the pool
+capacity derived from the match's frozen
+`PlayerPresentationCapacityProfile`. Non-overlapping envelopes may reuse a
+physical actor; overlapping envelopes may not.
+
+For fixed-duration work, the envelope is the exact planned interval. For
+`SPEED` work, preparation calculates the earliest possible start using every
+preceding speed step's `minDurationMs` and the latest possible end using every
+preceding/current speed step's `maxDurationMs`, including authored overlap and
+gap rules. After destination geometry binds, the compiler calculates exact
+durations and intervals and proves each exact interval is contained by its
+reserved envelope. Exact intervals may become smaller or move within the
+envelope; they may never extend outside it. A bound duration outside its
+declared min/max range or an exact interval outside its envelope is a
+validation failure before playback.
+
+The generated artifact is consumed through one `animationBudgets.ts` module.
+The ruleset capacity profile, derived actor-pool requirements, and expansion
+budgets are validated before match bootstrap and again before beat state
+adoption. Therefore a legal committed block from an accepted match profile
+must fit. Runtime excess means a malformed/mismatched block and enters the
+typed resync path; it is never permission to drop targets or choose a simpler
+visual.
 
 ## Parameter and geometry contract
 
 Routine parameters describe meaning, not DOM implementation.
 
 ```ts
-type GeometryRef =
+type AuthoredGeometryRef =
   | { readonly kind: 'CARD'; readonly card: SeatCardToken; readonly anchor: CardAnchor }
   | { readonly kind: 'LOCATION'; readonly lane: LaneId; readonly anchor: BoxAnchor }
   | { readonly kind: 'ZONE'; readonly zone: ZoneAnchorKey; readonly anchor: BoxAnchor }
   | { readonly kind: 'LANE'; readonly lane: LaneId; readonly side: 'LOCAL' | 'REMOTE'; readonly anchor: BoxAnchor }
   | { readonly kind: 'VIEWPORT'; readonly x: Normalized; readonly y: Normalized }
-  | { readonly kind: 'OFFSET'; readonly from: GeometryRef; readonly dx: number; readonly dy: number };
+  | {
+      readonly kind: 'ENTITY';
+      readonly entity: SeatEntityRef;
+      readonly anchor: CardAnchor | BoxAnchor;
+    }
+  | {
+      readonly kind: 'OFFSET';
+      readonly from: AuthoredGeometryRef;
+      readonly dx: number;
+      readonly dy: number;
+    };
 
 type MotionTiming =
   | { readonly kind: 'DURATION'; readonly durationMs: Milliseconds }
@@ -574,14 +625,33 @@ type MotionTiming =
     };
 
 interface MotionParams {
-  readonly from: GeometryRef;
-  readonly to: GeometryRef;
+  readonly from: AuthoredGeometryRef;
+  readonly to: AuthoredGeometryRef;
   readonly timing: MotionTiming;
   readonly easing: EasingId;
   readonly path: MotionPathId;
   readonly effect: MotionEffectPresetId | null;
 }
 ```
+
+`AuthoredGeometryRef` is the only geometry type exposed to routines and content
+recipes. The prepared-presentation binder later converts it into an
+epoch-specific `PreparedGeometryRef`; the DOM binder resolves that prepared
+reference into finite coordinates. Those stages are different types and may
+not be cast or structurally substituted for one another.
+
+An `ENTITY` reference is resolved using only seat-projected information:
+
+- a visible card or location resolves to its public card/location geometry;
+- a `HIDDEN` entity with an `observableAnchor` resolves only to that zone or
+  lane-side anchor;
+- a `HIDDEN` entity with no observable anchor resolves to the explicit
+  `REDACTED_NO_VISUAL` disposition and cannot produce a geometry track;
+- a hidden blocker may drive an anonymous shield/blocked-impact centered on the
+  visible attempted target, but never blocker geometry or identity.
+
+There is no inference from hidden identity, canonical server state, array
+position, or a default origin.
 
 `DURATION` and `SPEED` are mutually exclusive. After all geometry is bound, a
 speed-based duration is calculated once:
@@ -617,7 +687,7 @@ the highest routine that expresses the committed event.
 | `fade` | Animate opacity with explicit start/end values. |
 | `scale` | Animate the scale channel without owning translation. |
 | `rotate` | Animate a declared rotation channel. |
-| `flip-face` | Animate `rotateY` and schedule one authorized edge-on surface swap. |
+| `flip-face` | Animate the pre-mounted two-sided face shell through edge-on; no JavaScript swap determines card/location face correctness. |
 | `hold` | Extend a visible authored value for an explicit duration. |
 | `shake` | Apply a bounded transient impact/camera displacement. |
 | `pulse` | Apply a bounded scale/brightness emphasis. |
@@ -692,14 +762,27 @@ The desired content-package shape is:
 ```text
 content/cards/<card-slug>/
   card.json
-  presentation.ts
+  presentation.json
+  assets/
+
+content/locations/<location-slug>/
+  location.json
+  presentation.json
   assets/
 ```
 
 The engine manifest generator imports only authoritative rule data from
 `card.json`. The browser presentation-manifest generator imports
-`presentation.ts` and presentation assets. Server/engine modules cannot import
+`presentation.json` and presentation assets. Server/engine modules cannot import
 the presentation manifest or browser routines.
+
+`presentation.json` is data, not executable content code. Its schema permits
+only registered routine IDs, closed preset IDs, validated numeric timing/style
+parameters, and asset references. It cannot contain code, callbacks, selectors,
+loops, expressions, imports, or arbitrary keyframes. Shared executable
+choreography exists only in the typed routine registry. The manifest generator
+schema-validates every recipe and emits a generated typed manifest; runtime
+code never executes a card-authored module.
 
 Operation-family choreography remains shared. For example, the generic
 multi-target destroy author owns target iteration, trace validation, blocked
@@ -740,10 +823,9 @@ canonical surface updates inside the beat without a structural actor transfer;
 | `CARD_TRANSFORMED` | `card-transform` |
 | `CARD_POWER_CHANGED` / `CARD_COST_CHANGED` | number refresh plus `card-power-change` / `card-cost-change` |
 | card tags, text override, counters | surface refresh plus typed pulse only when the data is visible |
-| reveal scheduling, play completion, OR-window open/close | explicit cue/source-emphasis or dispatch-only lifecycle marker |
+| reveal scheduling, play completion | explicit cue/source-emphasis or dispatch-only lifecycle marker |
 | energy/max-energy/next-turn bonus changes | resource-counter transition and optional typed resource pulse |
 | deck shuffle | deck-stack shuffle routine when the zone is visible; otherwise a seat-safe deck cue |
-| pending-effect scheduled/consumed | explicit visible status cue when projected; otherwise dispatch-only bookkeeping |
 | location deck initialization | dispatch-only setup while playfield is hidden |
 | location create/draw/play | location actor transfer selected by authoritative zones |
 | location reveal / turn face-down / show to seats | `location-reveal` or reverse face routine with seat-safe model |
@@ -758,45 +840,90 @@ canonical surface updates inside the beat without a structural actor transfer;
 | turn started | `turn-banner` plus resource/header transitions authored in committed order |
 | turn ended | explicit phase cue; no independent timer |
 | match ended | result banner and final interaction state |
-| recursion limit hit / intent rejected | diagnostic or user feedback cue, never gameplay animation inference |
-| gameplay RNG advanced | non-visual authoritative bookkeeping |
+| `GAMEPLAY_RNG_ADVANCED`, pending-effect scheduled/consumed, OR-window open/close, recursion-limit hit, intent rejected | `NOT_PROJECTED`; these canonical events are absent from `SeatAnimationEvent` because the current seat projector returns `null` |
 
-The projected source union `SeatAnimationEvent['type']` is checked with
-`satisfies` so a newly added event type fails the build until this registry
-supplies one concrete disposition.
+The projected source union `SeatAnimationEvent['type']` is a closed
+discriminated union and is checked with `satisfies` so a newly added projected
+event type fails the projector, wire schema, fixture types, and this registry
+until all supply one concrete disposition. The architecture fence rejects any
+replacement such as `{ type: MatchEvent['type']; data: Record<string,
+JsonValue> }`; unprojected canonical events do not masquerade as generic
+animation input.
 
 ## Effect invocation planning and multi-target beats
 
-### Invocation index
+### Derived invocation index
 
 Before any beat is prepared, `TransactionPresentationPlanner` builds an
-immutable `EffectInvocationIndex` from the complete atomic seat presentation
-block:
+immutable `EffectInvocationIndex` from the complete ordered
+`SeatTransactionFrame[]`. Every materialized Frame must preserve
+`effect: SeatEffectTraceEntry | null` verbatim from its wire frame. The index is
+derived client presentation data; it is not a field supplied by the wire or
+engine.
 
 ```ts
-interface PresentedEffectInvocation {
+interface DerivedEffectInvocation {
   readonly token: string;
   readonly parentToken: string | null;
   readonly source: SeatEntityRef;
   readonly ability: SeatAbilityRef;
   readonly candidates: readonly SeatEntityRef[];
-  readonly outcomes: readonly PresentedTargetOutcome[];
-  readonly children: readonly PresentedEffectInvocation[];
-  readonly firstFrameIndex: number;
-  readonly lastFrameIndex: number;
+  readonly outcomes: readonly DerivedTargetOutcome[];
+  readonly children: readonly DerivedEffectInvocation[];
+  readonly firstProjectedFrameIndex: number;
+  readonly lastProjectedFrameIndex: number;
+  readonly childInsertionPoints: readonly DerivedChildInsertionPoint[];
+}
+
+interface DerivedTargetOutcome {
+  readonly attemptToken: string;
+  readonly attemptOrdinal: number;
+  readonly operation: string;
+  readonly target: SeatEntityRef;
+  readonly result: EffectTargetResult;
+  readonly blockedBy: readonly SeatEntityRef[];
+  readonly reason: EffectOutcomeReason | null;
+  readonly projectedFrameIndex: number;
+}
+
+interface DerivedChildInsertionPoint {
+  readonly childToken: string;
+  readonly projectedFrameIndex: number;
+  readonly afterParentOutcomeOrdinal: number | null;
+  readonly beforeParentOutcomeOrdinal: number | null;
 }
 ```
 
+The planner derives the frame range and child insertion points by scanning
+trace entries in projected-array order. Indices address positions in
+`SeatTransactionFrame[]`, not canonical Frame numbers; canonical numbers may
+contain allowed gaps. A child insertion point records the child's start
+position relative to the surrounding parent target outcomes. No author derives
+this structure independently.
+
+For each child, `afterParentOutcomeOrdinal` is the greatest parent outcome
+ordinal occurring before the child's STARTED entry, or `null` when the child
+begins before the parent's first outcome. `beforeParentOutcomeOrdinal` is the
+least parent outcome ordinal occurring after the child's COMPLETED entry, or
+`null` when it completes after the parent's last outcome. Depth-first trace
+nesting requires the child's complete projected range to lie between those
+boundaries. A canonical Frame-number gap has no other meaning and cannot be
+used as an insertion signal.
+
 The index verifies unique tokens, valid parents, exact nesting, exact candidate
-order, outcome ordinals, completion checksums, and contiguous frame ranges for
-any requested grouped beat. It uses projected evidence only.
+order, contiguous outcome ordinals, completion checksums, and exact projected
+frame ranges for any requested grouped beat. Seat projection must retain the
+complete start/outcome/completion transcript for every invocation, using
+`HIDDEN` references where necessary. An incomplete invocation is a malformed
+block rejected before presentation and routed to `RESYNC_REQUIRED`; it is not
+silently reduced to a dispatch-only gap.
 
 ### Beat partition
 
 ```ts
 interface PresentationBeat {
   readonly id: string;
-  readonly frames: readonly [SeatPresentationFrame, ...SeatPresentationFrame[]];
+  readonly frames: readonly [SeatTransactionFrame, ...SeatTransactionFrame[]];
   readonly before: SeatVisibleMatchState;
   readonly after: SeatVisibleMatchState;
   readonly claim: BeatFrameClaim;
@@ -807,7 +934,7 @@ interface PresentationBeat {
 The planner starts with one beat per Frame. A typed multi-Frame author may
 replace a contiguous range only when:
 
-1. every Frame in the range is claimed exactly once;
+1. every projected Frame in the range is claimed exactly once;
 2. no Frame outside the range is claimed;
 3. every mechanical event and effect trace entry in the range has an explicit
    animation or dispatch disposition;
@@ -817,6 +944,10 @@ replace a contiguous range only when:
    snapshots before adoption;
 6. the authored order preserves the invocation tree's causal order;
 7. the grouping author passes its event-family-specific proof suite.
+8. every intermediate geometry is resolvable from a captured before rectangle,
+   a registered zone anchor, a final bound destination, or the shared pure
+   layout model. Until the shared layout model exists and passes DOM
+   conformance, a grouped beat may not require intermediate lane-slot geometry.
 
 The first required multi-Frame authors are:
 
@@ -832,17 +963,37 @@ that shape.
 ### Multi-Frame adoption
 
 A grouped beat is prepared while its first `before` state is mounted. The
-prepared owner must acquire all card/location/effect actors and visibility
-leases needed by every claimed Frame, including actors whose models first
-appear in an intermediate projected snapshot.
+prepared owner must preload every authorized model/effect and reserve every
+card/location/effect actor interval needed by the claimed Frames. Actors whose
+lifetimes do not overlap may reuse one pre-mounted pool slot according to the
+validated actor-liveness plan. Mounted sources and every seat-visible derived
+surface that would otherwise change at adoption acquire their required pixel
+or displayed-value leases before adoption.
 
 `PresentationDirector` then advances all claimed Frames in canonical order in
-one synchronous, non-painting state-adoption batch, crosses one reactive commit
-barrier, and binds the final canonical destinations. The actors retain sole
-visual ownership of every intermediate object while the compiled storyboard
-runs. The client remains interaction-locked. Individual Frames remain present
-in replay and diagnostics even though live DOM paints only the beat's actor
-choreography and final canonical state.
+one synchronous Solid `batch()` with no `await`, microtask, layout read, or
+rendering opportunity between advances. It crosses exactly one reactive commit
+barrier after the batch and then binds final canonical destinations. The actors
+retain sole visual ownership of every intermediate object while the compiled
+storyboard runs. The client remains interaction-locked. Individual Frames
+remain present in replay and diagnostics even though live DOM paints only the
+beat's actor choreography and final canonical state.
+
+Batch adoption may not visibly expose `beat.after` early. Every seat-visible
+surface whose displayed value differs between `beat.before`, any claimed
+intermediate snapshot, and `beat.after` must have exactly one disposition:
+
+- an owned visual/value track beginning from the currently displayed value;
+- a displayed-value lease that freezes the pre-adoption value until the owning
+  track begins and hands it off; or
+- an explicit non-visual disposition proving the value is not rendered for
+  that seat.
+
+This rule includes card cost/power text, lane totals, Energy, hand/deck counts,
+turn/header values, location counters, and any future derived UI. Canonical
+signals may contain final values after adoption, but renderers consult the
+presentation lease until synchronous handoff. An unowned visible value change
+during batch adoption is a compilation/claim failure.
 
 If an intermediate surface cannot be prepared without hidden information, the
 multi-Frame author is invalid for that seat and that shape must have a separate
@@ -886,38 +1037,81 @@ child effect repeats.
 For a source with 23 projected candidate cards, the destroy author consumes
 all 23 ordered outcomes. Assuming the trace contains no nested on-destroy
 subtree between those outcomes, it creates one presentation-commutative child
-program per candidate:
+program per candidate that has a legal visual disposition:
 
 ```ts
-const targetPrograms = invocation.outcomes.map((outcome) =>
-  outcome.result === 'AFFECTED'
-    ? sequence(
-        call('dagger-strike', {
-          from: cardAnchor(invocation.source, 'center'),
-          to: cardAnchor(outcome.target, 'center'),
-          timing: duration(260),
-          path: 'FAST_ARC',
-          effect: 'STEEL_DAGGER_TRAIL',
-        }),
-        call('card-bleed-destroy', {
-          target: outcome.target,
-          durationMs: milliseconds(420),
-          effect: 'CRIMSON_BLEED',
-        }),
-      )
-    : outcome.result === 'BLOCKED'
+function cardTargetGeometry(target: SeatEntityRef): AuthoredGeometryRef | null {
+  switch (target.kind) {
+    case 'CARD':
+      return entityAnchor(target, 'center');
+    case 'HIDDEN':
+      return target.observableAnchor === null
+        ? null
+        : observableAnchorGeometry(target.observableAnchor);
+    case 'LOCATION':
+    case 'LANE':
+    case 'PLAYER':
+    case 'ZONE':
+    case 'SYSTEM':
+      throw new PresentationContractError(
+        `Card-target operation received ${target.kind}`,
+      );
+  }
+}
+
+function daggerParams(
+  source: SeatEntityRef,
+  target: AuthoredGeometryRef,
+): MotionParams {
+  return {
+    from: entityAnchor(source, 'center'),
+    to: target,
+    timing: duration(260),
+    path: 'FAST_ARC',
+    easing: 'IMPACT_OUT',
+    effect: 'STEEL_DAGGER_TRAIL',
+  };
+}
+
+const diagnosticDispositions: DiagnosticDisposition[] = [];
+const visualTargetPrograms: AnimationNode[] = [];
+
+for (const outcome of invocation.outcomes) {
+  const target = cardTargetGeometry(outcome.target);
+  if (target === null || outcome.result === 'INVALIDATED' || outcome.result === 'NO_CHANGE') {
+    diagnosticDispositions.push({
+      outcome,
+      kind: target === null ? 'REDACTED_NO_VISUAL' : 'TARGET_NO_LONGER_PRESENT',
+    });
+    continue;
+  }
+
+  visualTargetPrograms.push(
+    outcome.result === 'AFFECTED'
       ? sequence(
-          call('dagger-strike', daggerParams(outcome.target)),
+          call('dagger-strike', daggerParams(invocation.source, target)),
+          call('card-bleed-destroy', {
+            target: outcome.target,
+            durationMs: milliseconds(420),
+            effect: 'CRIMSON_BLEED',
+          }),
+        )
+      : sequence(
+          call('dagger-strike', daggerParams(invocation.source, target)),
           call('blocked-impact', {
             target: outcome.target,
             blockers: outcome.blockedBy,
+            anonymousBlockerVisual: outcome.blockedBy.some(ref => ref.kind === 'HIDDEN'),
             reason: outcome.reason,
           }),
-        )
-      : call('target-no-longer-present', { outcome })
-);
+        ),
+  );
+}
 
-return stagger(milliseconds(55), targetPrograms);
+return parallel(
+  dispatchDiagnosticsAtTimeZero(diagnosticDispositions),
+  stagger(milliseconds(55), visualTargetPrograms),
+);
 ```
 
 The bleed for each affected target begins at that target's dagger impact; it
@@ -930,9 +1124,17 @@ finishes in approximately:
 
 It does not take `23 * 680ms`, and it does not launch 23 untracked callbacks.
 Blocked targets receive a visible blocked impact and never run the death
-routine. Invalidated/no-change targets receive only their explicitly authored
-evidence disposition. The final affected set must exactly equal projected
+routine. A hidden blocker is represented only by an anonymous impact on the
+legal target geometry. Invalidated/no-change and fully redacted targets receive
+only their explicitly authored zero-duration diagnostic disposition and do not
+consume a stagger slot. The final affected set must exactly equal projected
 `EFFECT_TARGET_RESOLVED(result: AFFECTED)` entries and the completion checksum.
+
+The 1,890 ms example assumes the stated absence of nested reactions between
+targets. When committed on-destroy or other nested work prevents sibling
+programs from being presentation-commutative, the author preserves the
+depth-first trace order and total beat time can grow linearly. That longer
+causal presentation is correct behavior, not a scheduler defect.
 
 The destroy author is operation-family code. It may not test for a Killmonger
 card definition ID.
@@ -1121,8 +1323,8 @@ interface CardGeometryTrackSpec {
   readonly kind: 'CARD_GEOMETRY';
   readonly id: string;
   readonly card: SeatCardToken;
-  readonly from: GeometryRef;
-  readonly to: GeometryRef;
+  readonly from: AuthoredGeometryRef;
+  readonly to: AuthoredGeometryRef;
   readonly easing: string;
   readonly opacity?: { readonly from: number; readonly to: number };
 }
@@ -1147,25 +1349,52 @@ interface ManagedEffectTrackSpec {
 Every relative keyframe time must fall within its owning step's inclusive
 `[0, durationMs]` range. A track fragment with no keyframes is invalid.
 
-Geometry references are semantic and resolved by the prepared presentation:
+During preparation, authored references are converted into epoch-specific
+references:
 
 ```ts
-type GeometryRef =
-  | { readonly kind: 'CAPTURED_SOURCE'; readonly card: SeatCardToken }
-  | { readonly kind: 'CANONICAL_DESTINATION'; readonly card: SeatCardToken }
-  | { readonly kind: 'ZONE'; readonly zone: ZoneAnchorKey }
-  | { readonly kind: 'BOARD_CENTER'; readonly card: SeatCardToken }
-  | { readonly kind: 'GENERATED_ORIGIN' };
+type PreparedGeometryRef =
+  | {
+      readonly kind: 'CAPTURED_SOURCE';
+      readonly card: SeatCardToken;
+      readonly sourceEpoch: GeometryEpoch;
+    }
+  | {
+      readonly kind: 'CANONICAL_DESTINATION';
+      readonly card: SeatCardToken;
+      readonly destinationEpoch: GeometryEpoch;
+    }
+  | {
+      readonly kind: 'INTERMEDIATE_LANE_SLOT';
+      readonly card: SeatCardToken;
+      readonly lane: LaneId;
+      readonly side: 'LOCAL' | 'REMOTE';
+      readonly projectedSnapshotIndex: number;
+    }
+  | { readonly kind: 'ZONE_ANCHOR'; readonly zone: ZoneAnchorKey }
+  | { readonly kind: 'VIEWPORT_POINT'; readonly x: Normalized; readonly y: Normalized }
+  | { readonly kind: 'GENERATED_ORIGIN'; readonly origin: GeneratedOriginPresetId };
+
+interface BoundGeometry {
+  readonly rect: FiniteReadonlyRect;
+  readonly anchorPoint: FinitePoint;
+  readonly geometryEpoch: GeometryEpoch | null;
+}
 ```
 
-There is no `UNKNOWN`, nullable, default rectangle, or `(0, 0)` geometry.
+The preparation binder chooses the source epoch for the first segment, a pure
+projected-layout result for every intermediate lane slot, and the final
+destination epoch for the last segment. The geometry binder then resolves each
+`PreparedGeometryRef` to `BoundGeometry` before compilation. There is no
+`UNKNOWN`, nullable, default rectangle, `(0, 0)` geometry, or runtime search for
+"whatever anchor currently exists."
 
 ### Cues
 
 ```ts
 type StoryboardCue =
   | AudioCue
-  | SurfaceSwapCue
+  | NoncriticalSurfaceSwapCue
   | HapticCue
   | CameraCue
   | DiagnosticCue;
@@ -1181,10 +1410,10 @@ interface AudioCue extends CueBase {
   readonly volume: number;
 }
 
-interface SurfaceSwapCue extends CueBase {
+interface NoncriticalSurfaceSwapCue extends CueBase {
   readonly kind: 'SURFACE_SWAP';
-  readonly target: VisualTargetRef;
-  readonly face: 'FACE_UP' | 'FACE_DOWN';
+  readonly surface: NoncriticalSurfaceId;
+  readonly variant: NoncriticalSurfaceVariantId;
 }
 
 interface HapticCue extends CueBase {
@@ -1205,6 +1434,13 @@ interface DiagnosticCue extends CueBase {
 
 Cue `atMs` is relative to the owning step and must fall within the step's
 inclusive interval.
+
+`NoncriticalSurfaceId` is generated only from surfaces whose correctness does
+not determine a card/location face, hidden identity, geometry, score, resource,
+or gameplay-readable value. Card/location face shells are deliberately
+unrepresentable by this cue type. Validation also rejects any generated
+noncritical-surface registration that resolves inside a card or location face
+actor.
 
 Cues are synchronous edge notifications. They may not:
 
@@ -1305,15 +1541,16 @@ computed-style default that can change during playback.
 
 ### Discontinuities
 
-A genuine instantaneous visual discontinuity, such as replacing a prepared
-back model with an authorized front model while the actor is edge-on, must be
-represented as an explicit cue. It may not be smuggled into two imperative
-timers.
+A permitted instantaneous noncritical visual discontinuity must be represented
+as an explicit cue. It may not be smuggled into two imperative timers.
 
-Where both faces can be mounted before playback, a two-sided renderer using
-`backface-visibility` is preferred because the face change then becomes a pure
-visual track. The actor and location surface contracts determine when this is
-possible without duplicating heavy render work.
+For card and location flips, a pre-mounted two-sided renderer using
+`backface-visibility` is mandatory. Both seat-authorized faces are ready before
+playback, and the face change is therefore a pure visual track sharing the
+master clock. A timing-sensitive JavaScript `SURFACE_SWAP` cue may not
+determine card/location face correctness. Surface-swap cues remain available
+only for noncritical surfaces whose contract explicitly permits a
+discontinuity.
 
 ### Easing
 
@@ -1405,8 +1642,11 @@ its concrete type and all browser resources inside it.
 5. acquire visibility leases for mounted sources;
 6. reserve required destination layout space;
 7. preload all authorized raster/surface content used by the beat;
-8. expand routine calls and build the immutable semantic storyboard;
-9. return one prepared resource owner.
+8. diff every rendered derived value across claimed snapshots and acquire its
+   required value lease or prove it is not rendered;
+9. expand routine calls, allocate actor-live intervals, and build the immutable
+   semantic storyboard;
+10. return one prepared resource owner.
 
 Preparation may be asynchronous for actual asset readiness. The director must
 await it before adopting any Frame in the beat. Asset preparation does not count as
@@ -1418,6 +1658,12 @@ Only `PresentationDirector` may adopt committed Frame state. For a one-Frame
 beat it adopts that Frame's `after` state. For a multi-Frame beat it advances
 every claimed Frame in canonical order inside one synchronous non-painting
 batch, leaving the live state at `beat.after`.
+
+The non-painting claim is architectural, not a hopeful timing assumption: the
+batch contains no `await`, queued microtask, layout read, observer callback, or
+other browser rendering opportunity. Every changed visible surface is already
+covered by an actor, visibility lease, or displayed-value lease before the
+batch begins.
 
 After adoption it must cross the existing pre-paint reactive commit barrier so
 Solid has mounted canonical destination surfaces. The source actor and source
@@ -1437,8 +1683,8 @@ prepared intermediate surfaces that the canonical DOM did not paint.
 6. start the compiled timeline once;
 7. await its one outcome;
 8. perform canonical visual handoff synchronously;
-9. release all actors, leases, reservations, effects, and inline animation
-   state;
+9. release all actors, visibility/value leases, reservations, effects, and
+   inline animation state;
 10. resolve only after cleanup is complete.
 
 No resource may be acquired outside the prepared owner and cleaned by another
@@ -1462,7 +1708,7 @@ if (transactionPrelude) await transactionPrelude.present(signal);
 const beats = planner.partition(timeline.frames);
 for (const beat of beats) {
   const prepared = await sink.prepareBeat(beat, signal);
-  cursor.advanceBatch(beat.frames);
+  batch(() => cursor.advanceBatch(beat.frames));
   await reactiveCommitBarrier();
   await prepared.presentAfterAdoption(signal);
 }
@@ -1470,8 +1716,11 @@ for (const beat of beats) {
 await sink.afterTransaction?.(signal);
 ```
 
-The exact implementation must still guard generation changes before and after
-every awaited boundary.
+`cursor.advanceBatch()` is synchronous, contains no `await`, microtask, DOM
+layout read, or foreign callback, and is called only inside the one Solid
+`batch()` shown above. Exactly one `reactiveCommitBarrier()` follows each beat
+batch. The exact implementation must still guard generation changes before and
+after every awaited boundary.
 
 The director may maintain a timeout watchdog as a defect detector. A watchdog:
 
@@ -1479,7 +1728,8 @@ The director may maintain a timeout watchdog as a defect detector. A watchdog:
 - is not normal completion;
 - may not resolve a presentation as successful;
 - may not select another visual implementation;
-- must cancel owned resources and enter an explicit presentation-failed state.
+- must cancel owned resources and enter the explicit `RESYNC_REQUIRED`
+  recovery path defined below.
 
 The normal playback watchdog budget must be derived from declared work after
 compilation:
@@ -1497,13 +1747,22 @@ budget, but expiration is still failure rather than permission to animate a
 placeholder.
 
 An explicit user/developer fast-forward is different from failure recovery. It
-may cancel presentation and deliberately adopt the transaction end state. Its
-use must be recorded in presentation diagnostics.
+must cancel/clean the active presentation owner, deliberately adopt the
+transaction `postState`, release the presentation-block lock, restore the
+interaction mode allowed by that post-state, and record its use in diagnostics.
 
 An unexpected compile, target, actor, timeout, or runner failure must not
-silently snap and continue playing later Frames. The interaction surface stays
-locked and exposes the failure diagnostically. A reload/resync is an explicit
-recovery action, not an animation fallback.
+silently snap and continue playing later Frames. It cancels and cleans the
+active owner, adopts the transaction `postState`, releases the
+presentation-block lock, enters `RESYNC_REQUIRED`, and requests a fresh
+seat-projected snapshot. Gameplay commands remain disabled by
+`RESYNC_REQUIRED` until that snapshot installs. This is protocol recovery, not
+successful presentation and not an alternate animation path.
+
+Queue invalidation, resync request/snapshot/ack messages, delivery epochs, and
+revision restart semantics are owned by the wire spec's “Snapshot, reconnect,
+and resync” contract. Presentation code may not invent a second recovery queue
+policy.
 
 ## WAAPI driver and master clock
 
@@ -1521,7 +1780,22 @@ interface AnimationTimelineDriver {
     clock: TimelineClock,
     animations: readonly TimelineAnimation[],
   ): void;
-  nextTick(): Promise<void>;
+  pauseTogether(
+    clock: TimelineClock,
+    animations: readonly TimelineAnimation[],
+  ): SuspendedTimeline;
+  resumeTogether(
+    suspended: SuspendedTimeline,
+    clock: TimelineClock,
+    animations: readonly TimelineAnimation[],
+  ): void;
+  subscribeWakeups(
+    onWakeup: (kind: 'ANIMATION_FRAME' | 'COARSE') => void,
+  ): () => void;
+}
+
+interface SuspendedTimeline {
+  readonly masterCurrentTimeMs: Milliseconds;
 }
 
 interface TimelineClock {
@@ -1581,7 +1855,10 @@ effects do not claim the same properties or completion contract.
 
 CSS and WAAPI do not execute arbitrary JavaScript at intermediate keyframes.
 The runner therefore owns one cue scheduler driven by the master animation's
-`currentTime`.
+`currentTime`. It uses both animation-frame wakeups and one coarse bounded
+wakeup timer. Neither wakeup is a clock: every dispatch decision samples the
+master time. The coarse wakeup prevents cue starvation in environments that
+throttle animation frames while still presenting the document.
 
 On each driver tick the scheduler:
 
@@ -1594,14 +1871,23 @@ On each driver tick the scheduler:
 
 The scheduler does not create one timer per cue.
 
+For every cue it records `dispatchedAtMasterTimeMs` and
+`latenessMs = dispatchedAtMasterTimeMs - atMs`. Product profiles declare a
+bounded cue-lateness tolerance; exceeding it is diagnostic evidence and a test
+failure, not permission to reorder or drop the cue.
+
 At normal completion it performs one final due-cue drain at total duration
 before handoff. On cancellation it dispatches no future cues.
 
 ### Visibility suspension
 
-When the document becomes hidden during a storyboard, the runner pauses the
-master and all visual tracks as one operation. It resumes them from the same
-timeline time when visible again.
+When the document becomes hidden during a storyboard, the runner first samples
+and stores the master `currentTime` once, then pauses the master and every
+visual track as one operation. On resume it samples one new
+`document.timeline.currentTime`, rebases the master and every track from the
+stored master time and that single origin, and restarts the cue wakeups. A
+track's independently sampled time is never authoritative and sequential
+`play()` calls may not establish independent origins.
 
 This prevents:
 
@@ -1679,9 +1965,12 @@ Examples:
 - location glow;
 - card reveal halo.
 
-Persistent effects derived from ongoing state are not committed beat storyboards. They
-remain state-reconciled render layers with explicit state ownership. They must
-not be mistaken for transient event VFX and must not delay beat completion.
+Persistent effects derived from ongoing state are not committed beat
+storyboards. They remain state-reconciled render layers with explicit state
+ownership, but their controlling values enter through the
+`PresentationReadModel` and participate in the surface-binding manifest and
+lease audit. They must not be mistaken for transient event VFX and must not
+delay beat completion.
 
 Particle systems may use an internal render loop, but their progress and
 termination for a managed transient effect must derive from the storyboard
@@ -1695,21 +1984,52 @@ effects.
 The play motion surface owns a fixed pool of pre-mounted card actors. An actor
 is a stable DOM node containing one mounted `CardSurface` renderer.
 
-The minimum card-actor capacity is 32. That bound covers the current maximum
-24 cards across six lane sides, the 23-target destroy proof, one source actor,
-and measured choreography headroom without allocating during playback.
-Capacity represents concurrently visible motion, not the total number of cards
-that may appear in a match.
+Pool sizing is derived from the same frozen
+`PlayerPresentationCapacityProfile` supplied to the kernel, runtime, and
+presentation at match bootstrap. For the standard ruleset, three active lanes
+times four cards per owner establishes a maximum of 24 simultaneously resident
+board cards. The standard presentation profile pre-mounts 32 card actors and
+32 general effect actors, but those values are accepted only because generated
+worst-case beat proofs show they cover the profile. The number 32 is a
+validated product choice, not the proof itself.
 
-The play motion surface also owns a separate minimum pool of 32 pre-mounted
-general effect actors for daggers, projectiles, beams, trails, shields, bursts,
-and similar transient visuals. Effect actors do not contain `CardSurface` and
-do not consume card actors. An effect preset selects a renderer already mounted
-inside an effect actor; it does not create arbitrary DOM during playback.
+Capacity represents the maximum number of overlapping live intervals, not the
+total number of cards or effects touched by a beat. Preparation expands the
+entire beat and creates an immutable plan:
+
+```ts
+interface ActorLeasePlan {
+  readonly cardAssignments: readonly ActorIntervalAssignment[];
+  readonly effectAssignments: readonly ActorIntervalAssignment[];
+  readonly maximumSimultaneousCardActors: number;
+  readonly maximumSimultaneousEffectActors: number;
+}
+
+interface ActorIntervalAssignment {
+  readonly semanticUseId: string;
+  readonly poolIndex: number;
+  readonly earliestStartMs: Milliseconds;
+  readonly latestEndMs: Milliseconds;
+}
+```
+
+The allocator sorts envelopes by
+`(earliestStartMs, latestEndMs, semanticUseId)`, releases an assignment when its
+half-open `[earliestStartMs, latestEndMs)` envelope has ended, and assigns the
+lowest available stable pool index. Zero-duration diagnostic dispositions do
+not allocate actors. Thus a 23-target stagger may reuse actors whose
+death/effect envelopes no longer overlap, but can never reuse one that could
+remain visible for any legal bound geometry.
+
+Effect actors do not contain `CardSurface` and do not consume card actors. An
+effect preset selects a renderer already mounted inside an effect actor; it
+does not create arbitrary DOM during playback.
 
 If future rules increase simultaneous board occupancy, the authoritative lane
-capacity constant and animation budget must be updated together and the
-worst-case actor proof rerun.
+capacity profile, generated worst-case choreography corpus, and derived pool
+minimum must be updated together. A browser-presented match whose profile
+exceeds its validated pool capacity is rejected before match creation; it
+cannot discover that mismatch during a turn.
 
 Actor exhaustion is a contract failure. It does not authorize DOM cloning,
 teleporting, popping, or actor creation outside the pool.
@@ -1768,6 +2088,140 @@ canonical visibility restoration occur synchronously in one handoff task.
 There is never a frame in which both representations are visibly painted or
 neither representation is prepared to paint.
 
+### Derived-value leases
+
+Card pixel ownership is not sufficient for an atomic multi-frame beat. Adopting
+all claimed Frames may immediately change counters and derived values in the
+canonical DOM even though the animation has not reached those moments. The
+play surface therefore owns one `PresentationValueLeaseRegistry` alongside the
+visibility registry.
+
+```ts
+// Current generated core families; this union is generated, not hand-edited.
+type PresentationValueKey =
+  | `card:${SeatCardToken}:power`
+  | `card:${SeatCardToken}:cost`
+  | `lane:${LaneId}:${'LOCAL' | 'REMOTE'}:total`
+  | `seat:${Seat}:energy`
+  | `seat:${Seat}:hand-count`
+  | `seat:${Seat}:deck-count`
+  | `turn:number`
+  | `turn:phase`
+  | `location:${LaneId}:counter:${string}`;
+
+interface PresentationValueLease<T> {
+  readonly key: PresentationValueKey;
+  readonly displayValue: T;
+  updateAtCue(nextValue: T): void;
+  handoffCanonical(): void;
+  cancel(): void;
+}
+
+interface PresentationValueLeaseRegistry {
+  acquire<T>(
+    key: PresentationValueKey,
+    initialDisplayValue: T,
+    ownerBeatId: string,
+  ): PresentationValueLease<T>;
+  displayedValue<T>(key: PresentationValueKey, canonicalValue: T): T;
+  assertNoOwner(key: PresentationValueKey): void;
+  assertEmpty(): void;
+}
+
+type PresentationSurfaceBindingManifest = Readonly<Record<
+  PresentationSurfaceBindingId,
+  PresentationSurfaceBindingDefinition<unknown>
+>>;
+
+type PresentationSurfaceDisposition =
+  | 'DISPLAYED_VALUE_LEASE'
+  | 'ACTOR_OWNED_PIXELS'
+  | 'PERSISTENT_VISUAL_STATE'
+  | 'NOT_RENDERED';
+
+type NonRenderedReason =
+  | 'SEAT_REDACTED'
+  | 'STATE_NOT_APPLICABLE'
+  | 'SURFACE_DISABLED_BY_PROFILE'
+  | 'OUTSIDE_ACTIVE_LAYOUT';
+
+interface PresentationSurfaceBindingDefinition<TValue> {
+  readonly bindingId: PresentationSurfaceBindingId;
+  readonly rendererModules: readonly RendererModuleId[];
+  readonly canonicalInputPaths: readonly SeatVisibleStateFieldPath[];
+  enumerate(
+    state: SeatVisibleMatchState,
+    viewerSeat: Seat,
+  ): readonly PresentationSurfaceInstance<TValue>[];
+}
+
+interface PresentationSurfaceInstance<TValue> {
+  readonly key: PresentationValueKey;
+  readonly disposition: PresentationSurfaceDisposition;
+  readonly canonicalValue: TValue;
+  readonly nonRenderedReason: NonRenderedReason | null;
+}
+
+interface PresentationReadModel {
+  value<K extends PresentationValueKey>(key: K): PresentationValueFor<K>;
+  surfaceDisposition(key: PresentationValueKey): PresentationSurfaceDisposition;
+}
+
+interface MountedPresentationSurfaceRegistry {
+  register(
+    bindingId: PresentationSurfaceBindingId,
+    key: PresentationValueKey,
+    rendererModule: RendererModuleId,
+  ): () => void;
+  snapshot(): readonly MountedPresentationSurface[];
+  assertMatches(expected: readonly PresentationSurfaceInstance<unknown>[]): void;
+}
+```
+
+The build generates one closed `PresentationSurfaceBindingManifest`, the
+`PresentationValueKey` union, and its `PresentationValueFor<K>` value mapping
+from registered binding declarations. The entries shown above are the required
+core families, not an escape hatch for future UI.
+Adding a new derived rendering—including a cards-remaining label, status badge,
+or ongoing-effect glow—requires a manifest binding and therefore extends the
+generated key union.
+
+Every play renderer receives committed match data only through
+`PresentationReadModel`; it cannot import, accept, or dereference raw
+`SeatVisibleMatchState`/canonical signals. The read model resolves an active
+presentation lease first and canonical state second. There is exactly one
+owner per key. A lease is acquired before the non-painting adoption batch,
+advances only through a compiled value track or exact cue, and hands off
+synchronously when its displayed value equals the beat's canonical final
+value.
+
+An AST/source architecture fence rejects direct committed-state reads anywhere
+in the play renderer module graph except generated binding selectors, the
+planner, and the state-only replay inspector. It also verifies that every
+manifest-listed renderer calls the read-model accessor for its registered
+surface. Persistent state-derived visual layers must register as
+`PERSISTENT_VISUAL_STATE` and read their controlling state through the same
+path; if that state changes inside a beat, the layer receives a value/visual
+lease or actor-owned track exactly like a text counter.
+
+During preparation the planner diffs every visible derived surface across all
+claimed snapshots. Each changing key must have exactly one of:
+
+- an actor/visual track that owns its pixels for the entire interval;
+- a `PresentationValueLease` and an authored value track/cue sequence; or
+- a manifest instance with disposition `NOT_RENDERED`, a non-null stable
+  reason, and no mounted renderer registration for that key.
+
+Preparation evaluates the manifest enumerators against `beat.before`, every
+claimed projected snapshot, and `beat.after`, then reconciles the expected
+rendered instances against the mounted surface registry. A missing registration
+for an expected rendered instance, a mounted instance declared `NOT_RENDERED`,
+or a direct raw-state read is a contract failure. This is the machine-checkable
+non-rendered proof; absence from the DOM by itself is not proof.
+
+An unowned changing visible value is a claim/compile failure. Cleanup asserts
+that no value lease, visibility lease, or actor assignment survives handoff.
+
 ### Face readiness
 
 Face-down actors are immediately paintable. Before a face-up reveal begins,
@@ -1779,6 +2233,68 @@ font loading, network response, or raster generation after the storyboard
 clock starts.
 
 ## Layout and geometry contract
+
+### Pure canonical layout model
+
+Intermediate lane geometry is calculated by the same pure layout model that
+places canonical lanes and card slots:
+
+```ts
+interface LaneLayoutInput {
+  readonly activeLaneOrder: readonly LaneId[];
+  readonly playfieldRect: FiniteReadonlyRect;
+}
+
+interface LaneSlotLayoutInput {
+  readonly lane: ProjectedLaneSnapshot;
+  readonly laneRect: FiniteReadonlyRect;
+  readonly constants: Readonly<LaneLayoutConstants>;
+}
+
+interface LaneLayoutConstants {
+  readonly laneWidthPx: PositiveFinite;
+  readonly laneHeightPx: PositiveFinite;
+  readonly laneGapPx: NonNegativeFinite;
+  readonly cardWidthPx: PositiveFinite;
+  readonly cardHeightPx: PositiveFinite;
+  readonly cardGapPx: NonNegativeFinite;
+  readonly locationBandHeightPx: PositiveFinite;
+  readonly localBand: Readonly<FiniteReadonlyRect>;
+  readonly remoteBand: Readonly<FiniteReadonlyRect>;
+  readonly restingRotationsDeg: readonly FiniteNumber[];
+}
+
+interface CardPlacement {
+  readonly rect: FiniteReadonlyRect;
+  readonly slotIndex: number;
+  readonly restingRotationDeg: FiniteNumber;
+  readonly zIndex: number;
+}
+
+function layoutActiveLanes(input: LaneLayoutInput): ReadonlyMap<LaneId, FiniteReadonlyRect>;
+
+function layoutLaneSlots(
+  input: LaneSlotLayoutInput,
+): ReadonlyMap<SeatCardToken, Readonly<CardPlacement>>;
+```
+
+These functions are deterministic, have no DOM/browser imports, and accept
+only projected snapshot data plus frozen layout constants. The canonical
+renderer consumes their output to set lane/card CSS variables or absolute
+placements. Prepared intermediate geometry consumes the exact same output for
+`INTERMEDIATE_LANE_SLOT`; it does not reimplement spacing, fan order, resting
+rotation, or one/two/three-lane centering.
+
+Until this model and its conformance proof exist, the planner must not group a
+beat that requires an intermediate lane-slot position. It must select a legal
+smaller beat boundary instead. Stable deck/hand/zone anchors do not require an
+intermediate lane-slot calculation.
+
+A real-browser conformance test renders the canonical board and compares each
+lane/card placement to the pure result within 0.5 CSS pixels for one, two, and
+three active lanes; zero through four cards on each lane side; every resting
+rotation preset; and the fixed 9:16 coordinate frame. A mismatch fails the
+layout contract.
 
 ### Source and destination epochs
 
@@ -1857,8 +2373,8 @@ For `LOCATION_REVEALED`:
 2. the canonical revealed map starts at opacity zero under lease;
 3. map fade and location flip start at the same absolute timeline time;
 4. they have the same authored total duration;
-5. the front location surface becomes visible only while the flipping actor is
-   edge-on or through an already-mounted two-sided surface;
+5. the already-mounted two-sided surface exposes the front only after the
+   flipping actor crosses edge-on;
 6. the map and card finish together;
 7. canonical handoff is synchronous;
 8. no location, tile, map, or lane disappears and remounts between phases.
@@ -1959,6 +2475,7 @@ interface PresentationAnimationProfile {
   readonly structuralMinimumMs: Milliseconds;
   readonly decorativeEffects: 'full' | 'reduced' | 'none';
   readonly playbackRate: number;
+  readonly cueLatenessToleranceMs: Milliseconds;
 }
 ```
 
@@ -1997,10 +2514,11 @@ Cancellation must synchronously or deterministically:
 3. cancel managed effects;
 4. suppress future cues;
 5. release visibility leases;
-6. release hand reservations;
-7. park actors;
-8. remove temporary inline styles and DOM;
-9. resolve a typed cancelled outcome, not successful completion.
+6. release presentation value leases;
+7. release hand reservations;
+8. park actors;
+9. remove temporary inline styles and DOM;
+10. resolve a typed cancelled outcome, not successful completion.
 
 ### Failure
 
@@ -2019,7 +2537,12 @@ Failures include:
 - watchdog timeout;
 - cleanup invariant failure.
 
-Failure is observable and interaction remains locked. The system must retain:
+Failure is observable. The active presentation owner is cancelled and cleaned,
+the transaction `postState` is adopted, the presentation-block lock is
+released, and the client enters `RESYNC_REQUIRED` while requesting a fresh
+seat-projected snapshot. Gameplay commands remain disabled because of that
+protocol state—not because a failed animation owner remains locked. The system
+must retain:
 
 - transaction ID;
 - simulation Frame;
@@ -2032,6 +2555,8 @@ Failure is observable and interaction remains locked. The system must retain:
 - the causative error.
 
 There is no `catch { continue }` around required presentation.
+There is also no alternate animation, pop-only path, or declaration of
+successful presentation during recovery.
 
 ### Cleanup invariants
 
@@ -2040,6 +2565,7 @@ After completion, cancellation, or failure:
 - no released actor is visible;
 - no actor remains assigned to a card;
 - no canonical visibility lease remains;
+- no presentation value lease remains;
 - no temporary location actor remains mounted;
 - no destination remains hidden;
 - no hand reservation remains;
@@ -2077,6 +2603,31 @@ frame.
 Canonical replay stores Frames, not compiled browser keyframes. Replay
 presentation uses the same storyboard registry, compiler, runner, and actors as
 live presentation. It does not maintain a second animation implementation.
+
+There are two intentionally different replay entry points:
+
+- **animated replay playback** feeds retained seat-projected atomic presentation
+  blocks through `TransactionPresentationPlanner` and the same director,
+  compiler, value/visibility leases, actor pools, and runner as live play;
+- **interactive frame scrubbing** is a state-only diagnostic view that installs
+  one selected `SeatPresentationFrame.after` snapshot and never starts an
+  animation, reserves an actor, or dispatches a cue.
+
+The replay UI must label these modes. Scrubbing is not evidence that an event
+has a second animation path, and animated playback may not call a scrub-only
+state installer between compiled beats.
+
+`MatchClient` retains the ordered, validated `SeatPresentationBlock` log for
+the current seat and match session after each block completes successfully or
+is explicitly fast-forwarded. A block that enters `RESYNC_REQUIRED` is not
+added; the installed snapshot begins a new replay-log segment. That seat-safe
+log is the sole local animated-replay input. An authority-backed replay may
+re-request the same ordered seat-projected blocks under existing replay
+authorization, but it cannot synthesize animation input from canonical state,
+scrubber snapshots, debug summaries, or final states. A block still pending in
+the live presentation queue is not replayable, and reconnect/resync records a
+new replay-log segment beginning at the installed snapshot revision rather than
+inventing animations for missed blocks.
 
 Developer replay may expose a presentation sidecar for the selected Frame:
 
@@ -2124,7 +2675,8 @@ For example, a destroy invocation may author:
 - a source emphasis track for the invoking card;
 - staggered target tracks for every candidate;
 - destroy effects only for affected targets;
-- blocked-impact effects for visible blocked targets.
+- blocked-impact effects for blocked targets with legal geometry, using an
+  anonymous target-centered treatment for redacted blockers.
 
 Those tracks form one storyboard for the owning beat. Presentation cannot add,
 remove, or reorder authoritative targets.
@@ -2163,16 +2715,26 @@ It must reject:
 - conflicting channel/property ownership;
 - undeclared semantic targets;
 - cue actions not in the closed union;
+- a `SURFACE_SWAP` registration targeting card/location faces or any
+  gameplay-readable surface;
 - asynchronous cue handlers;
 - managed effects without declared duration and cleanup ownership;
 - normal-profile required transfers with zero duration;
 - storyboards that request hidden canonical identity unavailable to the seat;
 - references to canonical engine IDs absent from seat projection;
 - unbounded actor requirements;
+- actor-live intervals exceeding the frozen ruleset/presentation capacity;
+- an exact bound interval that escapes its reserved min/max envelope;
+- changing rendered values without one exact visual/value owner;
+- a rendered surface absent from the generated binding manifest, a manifest
+  rendering missing its read-model registration, or a forbidden direct
+  committed-state read;
 - a final visual face inconsistent with `beat.after`;
 - a multi-Frame claim with a gap, overlap, or unclaimed Frame;
 - a grouped invocation whose trace nesting or completion checksum is invalid;
-- a routine-call cycle or an expansion-budget violation.
+- a routine-call cycle or an expansion-budget violation;
+- a content presentation recipe containing executable code, an unregistered
+  routine/preset ID, or an out-of-schema parameter.
 
 Build-time validation covers authored presets and sound/effect IDs. Runtime
 binding validation covers live DOM targets and geometry.
@@ -2213,7 +2775,9 @@ Generate bounded valid step lists and prove:
 - cue order is stable;
 - compilation does not mutate input;
 - compiling equal input twice yields structurally equal output;
-- invalid conflicting ownership never compiles.
+- invalid conflicting ownership never compiles;
+- every speed-timed exact interval is contained by the conservative envelope
+  generated from preceding/current min/max durations and overlap rules.
 
 ### Runner tests
 
@@ -2224,7 +2788,11 @@ Use an injected fake timeline driver to prove:
 - cues dispatch once when the clock crosses their time;
 - large clock jumps drain every due cue in stable order;
 - cancellation suppresses future cues;
-- pause/resume preserves current time and cue state;
+- pause samples one master time and resume rebases every track from one new
+  document-timeline origin;
+- animation-frame starvation still dispatches due cues from the coarse wakeup
+  using master time and records bounded lateness;
+- background/foreground cycles preserve cue state and never burst future cues;
 - debug playback rate changes clock rate, not authored offsets;
 - cleanup runs once after normal completion;
 - cleanup runs once after cancellation;
@@ -2254,6 +2822,21 @@ The next beat must not prepare before the current beat has completed handoff and
 cleanup. Every canonical Frame must be claimed exactly once even when a beat
 contains several Frames.
 
+For a grouped beat, instrumentation must additionally prove:
+
+- Frame adoption occurs inside one Solid `batch()` with no `await`, microtask,
+  DOM layout read, or foreign callback inside it;
+- exactly one `reactiveCommitBarrier()` occurs after the batch;
+- a request-animation-frame sentinel cannot observe an intermediate canonical
+  snapshot;
+- an entity that exists only in an intermediate snapshot is never rendered by
+  canonical DOM and is visible only through its prepared actor;
+- every changing rendered counter/value is held by an exact value lease until
+  its authored cue/track and canonical handoff.
+- a persistent ongoing-effect layer whose controlling state changes inside the
+  beat remains on its leased pre-adoption presentation state until the authored
+  transition/handoff; it cannot pop to `beat.after` at adoption.
+
 ### Routine-composition tests
 
 - routine registry rejects duplicate IDs and call cycles;
@@ -2268,8 +2851,8 @@ contains several Frames.
 
 ### Multi-target effect tests
 
-- a 23-target destroy compiles 23 dagger routines and the correct affected
-  death or blocked-impact routine for every outcome;
+- a fully observable 23-target destroy compiles 23 dagger routines and the
+  correct affected death or blocked-impact routine for every visual outcome;
 - each affected bleed starts at its own dagger impact time;
 - stagger offsets are exact and total duration matches the maximum child end;
 - blocked and indestructible cards never receive a death routine;
@@ -2277,6 +2860,11 @@ contains several Frames.
   actors until their authored death completes;
 - invocation completion counts match the compiled affected/blocked/
   invalidated/no-change dispositions;
+- a `HIDDEN` target with an observable anchor uses only that anchor;
+- a `HIDDEN` target without an observable anchor receives
+  `REDACTED_NO_VISUAL`, compiles no geometry, and consumes no stagger slot;
+- a `HIDDEN` blocker produces an anonymous target-centered blocked impact and
+  never exposes or binds blocker geometry;
 - no card definition ID participates in operation-family selection;
 - nested invocation traces remain in committed depth-first order;
 - Wong-like sibling invocations compile once per committed invocation token;
@@ -2286,12 +2874,28 @@ contains several Frames.
 - a draw-only trace does not compile a flip or reveal;
 - a committed draw -> play -> reveal chain uses the shared draw, transfer, and
   reveal routines exactly once each;
+- an entity created and destroyed within one block keeps one seat token, uses
+  its authorized intermediate model, and completes spawn/reveal/death before
+  actor cleanup even though it is absent from `postState`;
+- an identity-hidden transient entity exposes no front model and uses only its
+  permitted anchor/no-visual dispositions;
 - replay preserves every claimed canonical Frame and reports the owning beat.
+- animated replay consumes only retained/re-requested validated
+  `SeatPresentationBlock` objects; pending live blocks and scrubber snapshots
+  are rejected as replay input.
 
 ### Actor tests
 
 - actor nodes are pre-mounted and retain identity across sessions;
 - actor count is bounded;
+- generated worst-case ruleset/reaction beats compute actor/effect live
+  intervals and remain within the frozen profile's pool capacity;
+- the interval allocator reuses non-overlapping leases and never reuses
+  overlapping leases;
+- speed-timed actor assignments remain collision-free at all combinations of
+  declared minimum/maximum bound durations;
+- a ruleset capacity profile beyond the validated pool is rejected before
+  match creation;
 - source and destination leases are exact;
 - start, midpoint, apex, landing, and parked states are asserted;
 - face model changes only at the authored edge-on time;
@@ -2327,7 +2931,10 @@ Required observable-time tests:
 - cancellation before a cue prevents it;
 - cancellation after a cue does not replay it;
 - audio duration does not delay visual completion;
-- surface swap and audio at the same timestamp use stable authored order.
+- a permitted noncritical surface swap and audio at the same timestamp use
+  stable authored order;
+- card/location face targets are unrepresentable as surface-swap cues and a
+  forged critical-surface registration fails validation.
 
 ### Browser tests
 
@@ -2338,6 +2945,7 @@ exercise native WAAPI and visually or programmatically inspect:
 - intermediate computed transforms and opacity;
 - actual `finished` settlement;
 - background-tab pause/resume;
+- occluded/throttled cue wakeup without master-time drift;
 - no flash between visibility ownership handoffs;
 - normal and debug-slow profiles;
 - one opening draw;
@@ -2359,7 +2967,17 @@ Source-level tests must enforce:
 - only `waapiDriver.ts` constructs WAAPI `Animation`/`KeyframeEffect` objects or
   calls `Element.animate()` for committed presentation;
 - storyboard authors do not access the DOM;
+- content `presentation.json` recipes are schema-validated data and cannot
+  import or execute code;
+- generated presentation manifests contain only registered routine/preset IDs
+  and validated parameters;
 - `PresentationDirector` contains no event-type choreography;
+- play renderer modules cannot read committed match state outside the generated
+  presentation binding selectors/read model;
+- every displayed derived value and persistent state-derived visual has a
+  generated binding and mounted-registration conformance test;
+- `SeatAnimationEvent` remains a closed projected union; generic
+  `Record<string, JsonValue>` payloads are forbidden;
 - production storyboard, runner, card-reveal, location-reveal, card-motion,
   and turn-banner modules contain no `setTimeout` animation pacing;
 - no storyboard-owned CSS class declares an independent `animation-duration`;
@@ -2367,10 +2985,15 @@ Source-level tests must enforce:
   missing-anchor recovery branches;
 - `playSfx` is not optional at the runner boundary;
 - the event registry is exhaustive;
+- animated replay enters the same planner/director/compiler/runner path as live
+  play, while scrub mode never enters it;
 - the old animation entry points are absent after cutover.
 
-The director watchdog is the only permitted presentation timeout and must be
-identified by an explicit source-fence exception.
+The director watchdog is the only permitted presentation **completion**
+timeout and must be identified by an explicit source-fence exception. The cue
+scheduler's one coarse wakeup timer has a separate narrow exception: it only
+wakes a master-time sample, cannot complete/advance a storyboard, cannot own a
+cue deadline, and cannot be used as animation pacing.
 
 ### Required test command
 
@@ -2439,9 +3062,14 @@ independent timing.
 
 ### Checkpoint A — compiler and runner foundation
 
+Implementation evidence: [playgame-compiled-animation-timeline-checkpoint-a.md](./playgame-compiled-animation-timeline-checkpoint-a.md).
+Checkpoint A is implemented and proven without production event wiring.
+
 Build:
 
 - contracts and branded time validation;
+- generated closed `SeatAnimationEvent` payload union and exhaustive projected
+  event disposition registry;
 - typed animation AST and builder;
 - closed, schema-validated, acyclic routine registry;
 - `sequence`, `parallel`, `stagger`, `call`, and finite target mapping;
@@ -2477,11 +3105,13 @@ Replace:
 Build:
 
 - `TransactionPresentationPlanner` and exact Frame partition validation;
+- field-by-field wire materialization that preserves
+  `SeatTransactionFrame.effect` verbatim;
 - `PreparedBeatPresentation`;
 - awaited preparation before adoption;
 - transaction-prelude storyboard;
 - initial hidden-to-visible playfield ownership;
-- explicit presentation-failed state.
+- explicit `RESYNC_REQUIRED` recovery state and fresh seat-snapshot request.
 
 Exit proof:
 
@@ -2504,7 +3134,9 @@ Migrate:
 
 Delete:
 
-- toast removal timer for committed banners;
+- toast removal timer for the committed turn-banner path only; unrelated
+  noncommitted notification toasts retain their existing owner until separately
+  migrated;
 - turn banner hold timer;
 - location reveal waits and transition strings.
 
@@ -2515,9 +3147,9 @@ Exit proof:
 - no location/map/tile remount flash;
 - cancellation restores exact canonical visibility.
 
-### Checkpoint D — card transfer microanimations
+### Checkpoint D — wholesale card-motion mechanism cutover
 
-Migrate every transfer route:
+Migrate the complete card-motion mechanism in one checkpoint:
 
 - remote deck -> remote hand;
 - remote hand -> lane;
@@ -2527,13 +3159,21 @@ Migrate every transfer route:
 - lane -> hand;
 - lane/hand/deck -> discard/destroyed/banished;
 - transform/replace routes;
-- local private stage reconciliation.
+- local private stage reconciliation;
+- reveal enter, face turn, readable apex hold, and return;
+- reveal audio and pre-mounted two-sided face rendering;
+- simultaneous layout FLIP, exact final rotation, and final geometry;
+- pure intermediate lane-slot layout and its DOM conformance proof.
 
 Convert `CardMotionSession` from a transition/timer owner into an actor/lease
-and track-contribution owner.
+and track-contribution owner wholesale. It may not retain transition/timer
+methods for routes that happen to migrate later. The route list above is the
+acceptance matrix for one mechanism, not permission for route-by-route runtime
+ownership.
 
-Delete migrated `animateTo()` waits, CSS transition strings, and transfer
-duration guards.
+Delete all `CardMotionSession` `animateTo()` waits, CSS transition strings,
+midpoint/reveal waits, duration guards, unawaited layout-slide promises, and
+the old reveal-animation entry point in the same checkpoint.
 
 Exit proof:
 
@@ -2541,43 +3181,32 @@ Exit proof:
 - remote stage never teleports;
 - local hand interaction remains unchanged;
 - every route hands off with zero active actors/leases;
-- missing required anchors fail instead of popping.
-
-### Checkpoint E — card reveal cinematic and layout
-
-Migrate:
-
-- enter, face turn, apex hold, and return;
-- reveal audio;
-- simultaneous layout FLIP;
-- exact final rotation and geometry;
-- surface readiness before clock start.
-
-Delete:
-
-- reveal hold timers;
-- midpoint waits;
-- unawaited layout slide promises;
-- old reveal animation entry point.
-
-Exit proof:
-
+- the generated card-motion interval-envelope proof covers every route and
+  remains within the card-actor pool before the cutover is enabled;
+- missing required anchors fail instead of popping;
 - local and remote faces are readable at the apex;
 - face changes once at edge-on;
 - return has no final snap;
 - next reveal waits for handoff/cleanup;
 - layout movement and reveal remain synchronized.
 
-### Checkpoint F — transient VFX, audio, and lane topology
+### Checkpoint E — multi-frame effects, value leases, VFX, and lane topology
 
 Migrate:
 
 - power, destroy, transform, move trail, camera, and other transient VFX;
 - homogeneous multi-target effect beats and the invocation index;
+- all required displayed-value leases for card stats, lane totals, resources,
+  counts, turn/header, and location counters;
+- the generated surface-binding manifest, `PresentationReadModel`, mounted-surface
+  registry, and raw-state-read fence, migrating every play renderer to
+  read-model accessors;
 - the primitive, card/location, and shared-effect routine catalog;
 - all SFX phase labels to exact cue times;
 - runtime lane topology motion;
-- managed effect cleanup to the shared clock.
+- managed effect cleanup to the shared clock;
+- generated worst-case interval-envelope and capacity proofs for multi-target,
+  nested reaction, created-entity, VFX, and lane-topology choreography.
 
 Keep persistent state-derived card effects outside Frame duration.
 
@@ -2586,10 +3215,31 @@ Exit proof:
 - no transient presentation registry uses wall-clock cleanup deadlines;
 - every sound/effect ID validates;
 - the 23-target destroy and blocked-target proofs are green;
+- the complete generated actor/effect liveness proof is within the frozen
+  ruleset presentation profile before any multi-target author is enabled;
 - affected, blocked, invalidated, and unchanged visual dispositions match the
   projected trace exactly;
 - lane movement is awaited and initial setup remains non-animated;
 - pause/resume holds VFX and cues in sync.
+
+### Checkpoint F — replay and browser convergence
+
+Build:
+
+- animated replay entry through the same transaction planner, director,
+  compiler, leases, actor pools, and runner as live presentation;
+- explicitly state-only interactive frame scrubbing;
+- native-WAAPI browser coverage for every choreography route;
+- pause/resume rebasing, cue-starvation wakeups, and cue-lateness diagnostics.
+
+Exit proof:
+
+- animated replay and live play emit structurally equal storyboards for the
+  same projected block/profile/geometry class;
+- scrubbing starts zero animations and cues;
+- native-browser gates cover opening/later draw, remote stage, local/remote
+  reveal, location reveal, power, destroy, layout, and background/resume;
+- all actor/value/visibility ownership invariants are green.
 
 ### Checkpoint G — deletion and convergence
 

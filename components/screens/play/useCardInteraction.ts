@@ -353,7 +353,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     // until the new owner-visible lane endpoint is painted, while only the
     // sibling cards participate in the hand reflow.
     await nextPaint();
-    playCardLayoutSlide(oldRects, cardRefs);
+    void playCardLayoutSlide(oldRects, cardRefs);
     await animateGhostTo(drag);
   };
 

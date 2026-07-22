@@ -83,6 +83,11 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+const crossAdoptionBarrier = async (): Promise<void> => {
+  await Promise.resolve();
+  await Promise.resolve();
+};
+
 const cursorRecorder = (writes: string[]): PresentationCursor => ({
   advance: frame => writes.push(`advance:${frame.transactionId}:${frame.index}`),
   snapToEnd: value => writes.push(`snap:${value.transactionId}`),
@@ -93,12 +98,15 @@ describe('PresentationDirector', () => {
     vi.useRealTimers();
   });
 
-  it('is the sole iterator and advances each cursor frame before afterFrame', async () => {
+  it('is the sole iterator and lets each adopted frame commit before afterFrame', async () => {
     const order: string[] = [];
     const value = timeline('ordered');
     const director = new PresentationDirector({
       cursor: {
-        advance: frame => order.push(`advance:${frame.index}`),
+        advance: frame => {
+          order.push(`advance:${frame.index}`);
+          queueMicrotask(() => order.push(`adoptionCommitted:${frame.index}`));
+        },
         snapToEnd: () => order.push('snap'),
       },
       timeoutMs: 100,
@@ -120,13 +128,56 @@ describe('PresentationDirector', () => {
       'beforeTransaction:2',
       'beforeFrame:0',
       'advance:0',
+      'adoptionCommitted:0',
       'afterFrame:0:false',
       'beforeFrame:1',
       'advance:1',
+      'adoptionCommitted:1',
       'afterFrame:1:false',
       'afterTransaction',
     ]);
     expect(director.activeGeneration).toBeNull();
+  });
+
+  it('does not prepare or adopt the next frame until the current animation and cleanup settle', async () => {
+    const order: string[] = [];
+    const currentAnimation = deferred();
+    const director = new PresentationDirector({
+      cursor: {
+        advance: frame => order.push(`advance:${frame.index}`),
+        snapToEnd: () => order.push('snap'),
+      },
+      timeoutMs: 1_000,
+    });
+
+    const running = director.present(timeline('strictly-serial'), {
+      beforeFrame: frame => order.push(`prepare:${frame.index}`),
+      afterFrame: async (frame) => {
+        order.push(`animate:${frame.index}:start`);
+        if (frame.index === 0) await currentAnimation.promise;
+        order.push(`animate:${frame.index}:cleanup-complete`);
+      },
+    });
+
+    await crossAdoptionBarrier();
+    expect(order).toEqual([
+      'prepare:0',
+      'advance:0',
+      'animate:0:start',
+    ]);
+
+    currentAnimation.resolve();
+    await running;
+    expect(order).toEqual([
+      'prepare:0',
+      'advance:0',
+      'animate:0:start',
+      'animate:0:cleanup-complete',
+      'prepare:1',
+      'advance:1',
+      'animate:1:start',
+      'animate:1:cleanup-complete',
+    ]);
   });
 
   it('defers a failed-hook snap, snaps that generation once, and surfaces the error', async () => {
@@ -187,7 +238,7 @@ describe('PresentationDirector', () => {
       afterFrame: () => pending.promise,
     });
 
-    await Promise.resolve();
+    await crossAdoptionBarrier();
     expect(director.fastForward()).toBe(true);
     expect(director.fastForward()).toBe(false);
     await expect(first).resolves.toEqual({
@@ -201,7 +252,7 @@ describe('PresentationDirector', () => {
     });
     const afterNewRun = [...writes];
     pending.resolve();
-    await Promise.resolve();
+    await crossAdoptionBarrier();
 
     expect(writes).toEqual(afterNewRun);
     expect(writes).toEqual([
@@ -221,7 +272,7 @@ describe('PresentationDirector', () => {
     const oldRun = director.present(timeline('generation-old'), {
       afterFrame: () => pending.promise,
     });
-    await Promise.resolve();
+    await crossAdoptionBarrier();
 
     const newRun = director.present(timeline('generation-new', [4]), {});
     await expect(oldRun).resolves.toEqual({
@@ -234,7 +285,7 @@ describe('PresentationDirector', () => {
     });
     const afterNewRun = [...writes];
     pending.reject(new Error('stale animation rejection'));
-    await Promise.resolve();
+    await crossAdoptionBarrier();
 
     expect(writes).toEqual(afterNewRun);
     expect(writes.filter(write => write === 'snap:generation-old')).toHaveLength(1);
@@ -250,7 +301,7 @@ describe('PresentationDirector', () => {
     const cancelled = director.present(timeline('cancelled'), {
       afterFrame: () => cancelPending.promise,
     });
-    await Promise.resolve();
+    await crossAdoptionBarrier();
     expect(director.cancel()).toBe(true);
     await expect(cancelled).resolves.toMatchObject({ status: 'cancelled' });
     expect(writes.filter(write => write === 'snap:cancelled')).toHaveLength(1);
@@ -259,7 +310,7 @@ describe('PresentationDirector', () => {
     const disposed = director.present(timeline('disposed'), {
       afterFrame: () => disposePending.promise,
     });
-    await Promise.resolve();
+    await crossAdoptionBarrier();
     director.dispose();
     expect(director.activeGeneration).toBeNull();
     await expect(disposed).resolves.toMatchObject({ status: 'disposed' });

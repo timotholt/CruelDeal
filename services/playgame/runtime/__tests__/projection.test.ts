@@ -98,8 +98,11 @@ describe('seat-safe JSON projection', () => {
     )?.event?.data).toEqual({
       count: session.bootstrap.decks.LOCATIONS.entries.length,
     });
-    expect([...setupPacket.frames, ...openingPacket.frames]
-      .some(frame => frame.event?.type === 'GAMEPLAY_RNG_ADVANCED')).toBe(false);
+    const projectedEventTypes: readonly string[] = [
+      ...setupPacket.frames,
+      ...openingPacket.frames,
+    ].flatMap(frame => frame.event ? [frame.event.type] : []);
+    expect(projectedEventTypes).not.toContain('GAMEPLAY_RNG_ADVANCED');
     expect(setupJson).not.toContain('"locations"');
     expect(openingJson).not.toContain('"newOrder"');
     expect(openingJson).not.toContain('"cause"');

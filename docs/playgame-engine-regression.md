@@ -19,6 +19,7 @@ Each log ends with a per-gate duration and total wall-clock time.
 | `npm run test:engine:kernel` | Fast kernel/rules confidence | The permanent Phase 1.5 kernel and architecture contract: 33 files / 281 tests at its recorded baseline. |
 | `npm run test:engine:runtime` | Runtime and replay confidence | The complete runtime suite plus the deterministic property corpus at 200 cases per property. |
 | `npm run test:engine:authorities` | Match-client, authority, replay-debug, or presentation-block work | The complete player-facing contract against every registered authority test driver, plus block-delivery and debug replay presentation fences. |
+| `npm run test:presentation` | Presentation compiler, runner, animation, actor, director, or UI-interleaving work | The focused presentation contract, including compiled-timeline schedule/runner proofs and existing animation architecture regressions, without authentication or authority coupling. |
 | `npm run test:engine:regression` | Before handing off engine work or returning after a feature rebuild | Kernel, runtime, registered authority conformance, protocol conformance in TypeScript and Rust, generated-content drift, manifest validation, and the engine type boundary. |
 
 To see every individual Vitest test name while investigating a failure, append
@@ -40,6 +41,7 @@ npm run test:engine:runtime -- --reporter=verbose
 | Runtime properties | `runtime/__tests__/properties/engine-properties.test.ts` | At 200 cases per property: replay equality, exactly-once application, card provenance, per-commit fold equality, and independence from wall-clock/random sources. |
 | Runtime authority | `runtime/__tests__/*.test.ts`, `characterization/*`, `contracts/*` | Bootstrap validation, session/runtime ownership, local adapter access control, projected publication, opening behavior, and reconciliation remain intact. |
 | Authority independence | `client/matchClient.contract.test.ts`, `testing/authorityTestingArchitecture.test.ts`, `runtime/__tests__/localMatchSessionAdapter.test.ts`, `contexts/PlayProviders*.test.tsx`, `contexts/PlayUiInterleaving.test.tsx` | The same player-facing behaviors pass through every registered authority; no shared contract selects or imports a local implementation; clients consume one complete presentation block per public commit. |
+| Compiled presentation foundation | `presentation/storyboard/*.test.ts`, `presentation/choreography.test.ts`, `components/screens/play/playPresentationArchitecture.test.ts`, `contexts/PlayUiInterleaving.test.tsx` | Authored routine graphs flatten before runtime; schedules, property ownership, normalized tracks, cue order, shared-clock completion, cancellation, and source fences remain deterministic while the live cutover is still disabled. |
 | Content and protocol | `protocol/*.test.ts`, Rust `cruel-protocol`, manifest generators and validators | TypeScript/Rust schema agreement, generated-module freshness, and every active card/location definition remain valid. |
 
 The permanent kernel suite and the runtime suite report their actual file/test

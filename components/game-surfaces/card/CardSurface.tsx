@@ -1,4 +1,4 @@
-import { Match, onCleanup, Switch } from 'solid-js';
+import { createMemo, Match, onCleanup, Switch } from 'solid-js';
 import type { CardSurfaceModel } from '../contracts';
 import { CardBackSurface } from '../system/CardBackSurface';
 import { StaticBitmapLayer } from '../system/StaticBitmapLayer';
@@ -23,11 +23,15 @@ const CardContentFallback = (props: { model: CardSurfaceModel }) => {
 };
 
 export const CardSurface = (props: CardSurfaceProps) => {
-  const content = () => props.model.face.kind === 'front' ? props.model.face.content : null;
+  const model = createMemo(() => props.model);
+  const content = () => {
+    const face = model().face;
+    return face.kind === 'front' ? face.content : null;
+  };
   return (
     <svg
       ref={(element) => {
-        const unregister = registerCardSurfaceModel(element, () => props.model);
+        const unregister = registerCardSurfaceModel(element, model);
         onCleanup(unregister);
       }}
       class="card-renderer card-surface"
@@ -35,13 +39,13 @@ export const CardSurface = (props: CardSurfaceProps) => {
       preserveAspectRatio="none"
       overflow="visible"
       data-surface-kind="card"
-      data-surface-face={props.model.face.kind}
-      data-card-render-key={content()?.cacheKey ?? `back:card:${props.model.chrome.backStyle}:${props.model.chrome.chromeRevision}`}
+      data-surface-face={model().face.kind}
+      data-card-render-key={content()?.cacheKey ?? `back:card:${model().chrome.backStyle}:${model().chrome.chromeRevision}`}
     >
       <foreignObject x="0" y="0" width="500" height="700" overflow="visible">
         <div class="card-renderer__canvas card-surface__canvas" data-card-type={content()?.layout ?? ''}>
           <Switch>
-            <Match when={props.model.face.kind === 'back'}>
+            <Match when={model().face.kind === 'back'}>
               <CardBackSurface />
             </Match>
             <Match when={content()} keyed>
@@ -49,19 +53,20 @@ export const CardSurface = (props: CardSurfaceProps) => {
                 <StaticBitmapLayer
                   cacheKey={value.cacheKey}
                   load={() => cardBitmapCache.get(value)}
+                  peek={() => cardBitmapCache.peek(value.cacheKey)}
                   class="card-content-bitmap"
-                  fallback={<CardContentFallback model={props.model} />}
+                  fallback={<CardContentFallback model={model()} />}
                 />
               )}
             </Match>
           </Switch>
           <SystemBorderLayer
             surface="card"
-            tone={props.model.chrome.borderTone}
+            tone={model().chrome.borderTone}
             layout={content()?.layout}
           />
-          <StatLayer cost={props.model.cost} power={props.model.power} />
-          <StatusLayer statuses={props.model.statuses} />
+          <StatLayer cost={model().cost} power={model().power} />
+          <StatusLayer statuses={model().statuses} />
         </div>
       </foreignObject>
     </svg>

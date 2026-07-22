@@ -246,6 +246,19 @@ export class PresentationDirector {
         }
 
         this.#cursor.advance(frame);
+        // Cursor adoption is a reactive state write. Yield exactly one
+        // microtask so every DOM consumer of frame.after can commit its
+        // canonical surfaces before the sink resolves destination geometry.
+        // Microtasks complete before the browser's next paint, preserving the
+        // source actor's visual-ownership lease without exposing an adopted
+        // destination for one frame.
+        await nextMicrotask();
+        if (!this.#isCurrent(run)) {
+          return {
+            generation: run.generation,
+            status: run.stopReason ?? 'superseded',
+          };
+        }
         const startedAtMs = monotonicNow();
         let settlement: HookSettlement;
         try {

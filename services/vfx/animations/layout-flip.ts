@@ -83,9 +83,10 @@ export function playCardLayoutSlide(
   oldRects: Map<string, DOMRect>,
   cardElMap: Map<string, HTMLElement>,
   opts: LayoutSlideOpts = {},
-): void {
+): Promise<void> {
   const duration = opts.duration ?? 280;
   const easing = opts.easing ?? 'cubic-bezier(.4,0,.2,1)';
+  const slides: Promise<void>[] = [];
 
   for (const [id, oldRect] of oldRects) {
     const newEl = cardElMap.get(id);
@@ -108,20 +109,24 @@ export function playCardLayoutSlide(
     newEl.style.transition = mergedTransition;
     newEl.style.translate = '0px 0px';
 
-    const cleanup = () => {
-      restoreTransition(newEl, mergedTransition, previousTransition);
-      newEl.style.translate = '';
-    };
-    const onEnd = (e: TransitionEvent) => {
-      if (e.propertyName === 'translate') {
+    slides.push(new Promise((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         newEl.removeEventListener('transitionend', onEnd);
-        cleanup();
-      }
-    };
-    newEl.addEventListener('transitionend', onEnd);
-    setTimeout(() => {
-      newEl.removeEventListener('transitionend', onEnd);
-      cleanup();
-    }, duration + 100);
+        restoreTransition(newEl, mergedTransition, previousTransition);
+        newEl.style.translate = '';
+        resolve();
+      };
+      const onEnd = (event: TransitionEvent): void => {
+        if (event.target === newEl && event.propertyName === 'translate') finish();
+      };
+      const timeout = setTimeout(finish, duration + 100);
+      newEl.addEventListener('transitionend', onEnd);
+    }));
   }
+
+  return Promise.all(slides).then(() => undefined);
 }

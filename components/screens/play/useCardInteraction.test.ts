@@ -44,6 +44,7 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
     const emptySlot = document.createElement('div');
     source.className = 'hand-card-motion';
     source.dataset.cardId = 'pointer-card';
+    source.dataset.playMotionCard = 'pointer-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -83,7 +84,6 @@ describe.each(['mouse', 'pen', 'touch'] as const)('Pointer Events drag (%s)', (p
       frame,
       overlay,
       cardRefs,
-      zoneRefs: new Map(),
     });
     const stageCardInLane = vi.fn(() => new Promise<boolean>(() => undefined));
     const interaction = setupCardInteraction({
@@ -122,6 +122,7 @@ describe('pointer cancellation and threshold', () => {
     const visual = document.createElement('div');
     source.className = 'hand-card-motion';
     source.dataset.cardId = 'threshold-card';
+    source.dataset.playMotionCard = 'threshold-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -147,7 +148,7 @@ describe('pointer cancellation and threshold', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'threshold-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, zoneRefs: new Map() }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane,
       undoPendingCard: vi.fn(async () => false),
@@ -171,6 +172,7 @@ describe('pointer cancellation and threshold', () => {
     const visual = document.createElement('div');
     source.className = 'hand-card-motion';
     source.dataset.cardId = 'cancel-card';
+    source.dataset.playMotionCard = 'cancel-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -196,7 +198,7 @@ describe('pointer cancellation and threshold', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'cancel-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, zoneRefs: new Map() }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane,
       undoPendingCard: vi.fn(async () => false),
@@ -230,6 +232,7 @@ describe('pointer visual handoff', () => {
     const destination = document.createElement('div');
     source.className = 'hand-card-motion';
     source.dataset.cardId = 'pointer-card';
+    source.dataset.playMotionCard = 'pointer-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -240,6 +243,7 @@ describe('pointer visual handoff', () => {
     emptySlot.className = 'slot';
     destination.className = 'card lane-card facedown';
     destination.dataset.cardId = 'pointer-card';
+    destination.dataset.playMotionCard = 'pointer-card';
     attachTestCardSurface(destination);
     source.append(visual);
     lane.append(emptySlot);
@@ -266,7 +270,6 @@ describe('pointer visual handoff', () => {
       frame,
       overlay,
       cardRefs,
-      zoneRefs: new Map(),
     });
     const stageCardInLane = vi.fn(async () => {
       emptySlot.append(destination);
@@ -318,6 +321,7 @@ describe('tap-first card interaction', () => {
     const source = document.createElement('div');
     const visual = document.createElement('div');
     source.dataset.cardId = 'tap-disabled-card';
+    source.dataset.playMotionCard = 'tap-disabled-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -340,7 +344,7 @@ describe('tap-first card interaction', () => {
       isResolving: () => false,
       localHand: () => [{ id: 'tap-disabled-card', cost: 1 } as ResolvedCard],
       cardRefs,
-      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs, zoneRefs: new Map() }),
+      motionSurface: createPlayMotionSurface({ frame, overlay, cardRefs }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       stageCardInLane: vi.fn(async () => false),
       undoPendingCard: vi.fn(async () => false),
@@ -362,6 +366,7 @@ describe('tap-first card interaction', () => {
     const emptySlot = document.createElement('div');
     source.className = 'hand-card-motion';
     source.dataset.cardId = 'tap-card';
+    source.dataset.playMotionCard = 'tap-card';
     source.dataset.dragSource = 'hand';
     source.dataset.dragEnabled = 'true';
     visual.className = 'card';
@@ -396,7 +401,6 @@ describe('tap-first card interaction', () => {
         frame,
         overlay,
         cardRefs: new Map([['tap-card', source]]),
-        zoneRefs: new Map(),
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       tapToPlayEnabled: () => true,
@@ -424,6 +428,7 @@ describe('tap-first card interaction', () => {
     const hand = document.createElement('div');
     source.className = 'card lane-card';
     source.dataset.cardId = 'staged-card';
+    source.dataset.playMotionCard = 'staged-card';
     source.dataset.dragSource = 'lane';
     source.dataset.dragEnabled = 'true';
     attachTestCardSurface(source);
@@ -454,7 +459,6 @@ describe('tap-first card interaction', () => {
         frame,
         overlay,
         cardRefs,
-        zoneRefs: new Map(),
       }),
       laneCapacity: BOOTSTRAP_MANIFEST.constants.laneCapacity,
       tapToPlayEnabled: () => true,

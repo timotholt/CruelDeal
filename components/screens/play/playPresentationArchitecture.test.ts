@@ -354,7 +354,8 @@ describe('Phase 1.21 presentation architecture fences', () => {
 
     expect(vfxHost).toContain('const cardVfxRegistry = createCardVfxRegistry()');
     expect(vfxHost).not.toContain('ZoneAnchorKey');
-    expect(vfxHost).toContain('zoneRefs: Map<string, HTMLElement>');
+    expect(vfxHost).toContain('el.dataset.playMotionZone = key');
+    expect(vfxHost).not.toContain('zoneRefs: Map<string, HTMLElement>');
     expect(registry).toContain('export const createCardVfxRegistry');
     expect(registry).not.toContain('export const cardVfxRegistry');
     expect(presentationHost).toContain('readonly cardVfxRegistry: CardVfxRegistry');

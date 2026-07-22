@@ -12,6 +12,7 @@ import {
   captureCardVisual,
   normalizedCardRect,
 } from './createCardSurrogate';
+import { CARD_MOTION_ACTOR_CAPACITY } from './cardMotionActorPool';
 
 afterEach(() => {
   vi.useRealTimers();
@@ -66,12 +67,12 @@ const fixture = () => {
   frame.append(source, destination, overlay);
   document.body.append(frame);
   const cardId = 'motion-card' as CardId;
+  destination.dataset.playMotionCard = cardId;
   const cardRefs = new Map<string, HTMLElement>([[cardId, destination]]);
   const surface = createPlayMotionSurface({
     frame,
     overlay,
     cardRefs,
-    zoneRefs: new Map(),
   });
   return {
     frame,
@@ -87,6 +88,70 @@ const fixture = () => {
 };
 
 describe('governed card motion session', () => {
+  it('pre-mounts a bounded actor pool and reuses the same painted surface', async () => {
+    const { source, cardId, surface, overlay } = fixture();
+    const parkedActors = overlay.querySelectorAll<HTMLElement>('[data-card-motion-actor]');
+    expect(parkedActors).toHaveLength(CARD_MOTION_ACTOR_CAPACITY);
+    expect([...parkedActors].every(actor => actor.hidden)).toBe(true);
+
+    const snapshot = captureCardVisual(cardId, source);
+    const first = surface.cardMotion.begin({
+      cardId,
+      route: 'first-use',
+      basis: { kind: 'clone', snapshot },
+      startRect: snapshot.rect,
+      sourceElement: source,
+    });
+    const actor = first.surrogate;
+    const renderer = actor.querySelector('[data-surface-kind="card"]');
+    expect(actor.hidden).toBe(false);
+    expect(actor.dataset.cardMotionActorState).toBe('active');
+    await first.cancel('manual');
+    expect(actor.hidden).toBe(true);
+    expect(actor.dataset.cardMotionActorState).toBe('parked');
+
+    const second = surface.cardMotion.begin({
+      cardId,
+      route: 'second-use',
+      basis: { kind: 'clone', snapshot },
+      startRect: snapshot.rect,
+      sourceElement: source,
+    });
+    expect(second.surrogate).toBe(actor);
+    expect(second.surrogate.querySelector('[data-surface-kind="card"]')).toBe(renderer);
+    await second.cancel('manual');
+  });
+
+  it('fails loudly instead of dropping motion when the bounded actor pool is exhausted', async () => {
+    const { source, cardId, surface, overlay } = fixture();
+    const snapshot = captureCardVisual(cardId, source);
+    const sessions = Array.from({ length: CARD_MOTION_ACTOR_CAPACITY }, (_, index) => (
+      surface.cardMotion.begin({
+        cardId: `${cardId}:${index}`,
+        route: 'pool-capacity-proof',
+        basis: { kind: 'clone', snapshot },
+        startRect: snapshot.rect,
+      })
+    ));
+
+    expect(surface.cardMotion.activeSessionCount).toBe(CARD_MOTION_ACTOR_CAPACITY);
+    expect(overlay.querySelectorAll('[data-card-motion-actor-state="active"]')).toHaveLength(
+      CARD_MOTION_ACTOR_CAPACITY,
+    );
+    expect(() => surface.cardMotion.begin({
+      cardId: `${cardId}:overflow`,
+      route: 'pool-capacity-proof',
+      basis: { kind: 'clone', snapshot },
+      startRect: snapshot.rect,
+    })).toThrow('Card motion actor pool exhausted');
+
+    await Promise.all(sessions.map(session => session.cancel('manual')));
+    expect(surface.cardMotion.activeSessionCount).toBe(0);
+    expect(overlay.querySelectorAll('[data-card-motion-actor-state="parked"]')).toHaveLength(
+      CARD_MOTION_ACTOR_CAPACITY,
+    );
+  });
+
   it('preserves painted hand scale and the already-built canonical text', () => {
     const source = document.createElement('div');
     source.className = 'card';
@@ -120,7 +185,7 @@ describe('governed card motion session', () => {
       face: snapshot.face,
       sourceElement: source,
     });
-    const endpoint = canonicalCardEndpoint(cardId, surface.cardRefs);
+    const endpoint = canonicalCardEndpoint(cardId, surface.cardElement);
 
     const flight = session.animateTo(endpoint, {
       durationMs: 100,
@@ -199,6 +264,7 @@ describe('governed card motion session', () => {
 
     const remounted = document.createElement('div');
     remounted.className = 'card lane-card';
+    remounted.dataset.playMotionCard = cardId;
     attachSurface(remounted);
     remounted.style.visibility = '';
     remounted.getBoundingClientRect = destination.getBoundingClientRect;
@@ -262,7 +328,10 @@ describe('governed card motion session', () => {
     await vi.runAllTimersAsync();
     expect(surface.cardMotion.activeSessionCount).toBe(0);
     expect(surface.cardMotion.activeLeaseCount).toBe(0);
-    expect(overlay.childElementCount).toBe(0);
+    expect(overlay.querySelector('[data-card-motion-session]')).toBeNull();
+    expect(overlay.querySelectorAll('[data-card-motion-actor-state="parked"]')).toHaveLength(
+      CARD_MOTION_ACTOR_CAPACITY,
+    );
   });
 
   it('recovers a missing destination without stranding source visibility', async () => {

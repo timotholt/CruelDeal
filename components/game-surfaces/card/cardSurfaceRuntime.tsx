@@ -9,6 +9,7 @@ import type {
   SurfacePoint,
 } from '../contracts';
 import { CardSurface } from './CardSurface';
+import { cardBitmapCache } from './cardBitmapCache';
 import { mountBoundedSurfaceEffect } from '../system/boundedSurfaceEffect';
 
 export const hitTestCardSurface = (
@@ -44,8 +45,7 @@ export const mountCardSurface = (
   let disposed = false;
   let currentModel = initialModel;
   const playVfx = (cue: CardVfxCue): SurfaceEffectLease => {
-    let lease!: SurfaceEffectLease;
-    lease = mountBoundedSurfaceEffect(host, cue, () => effectLeases.delete(lease));
+    const lease = mountBoundedSurfaceEffect(host, cue, () => effectLeases.delete(lease));
     effectLeases.add(lease);
     return lease;
   };
@@ -80,3 +80,9 @@ export const identityFreeCardBackModel = (): CardSurfaceModel => Object.freeze({
   power: null,
   statuses: Object.freeze([]),
 });
+
+/** Ensures a face-up motion actor can paint its bitmap on its first visible frame. */
+export const prepareCardSurfaceModel = async (model: CardSurfaceModel): Promise<void> => {
+  if (model.face.kind !== 'front' || typeof createImageBitmap !== 'function') return;
+  await cardBitmapCache.get(model.face.content);
+};

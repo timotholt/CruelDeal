@@ -5,6 +5,7 @@ import type { RasterArtifact } from '../contracts';
 interface StaticBitmapLayerProps {
   readonly cacheKey: string;
   readonly load: () => Promise<RasterArtifact>;
+  readonly peek?: () => RasterArtifact | null;
   readonly class: string;
   readonly fallback: JSX.Element;
 }
@@ -25,23 +26,30 @@ const BitmapCanvas = (props: { artifact: RasterArtifact; class: string }) => {
       canvas.height = 0;
     }
   });
-  return <canvas ref={canvas} class={props.class} aria-hidden="true" />;
+  return (
+    <canvas
+      ref={(element) => { canvas = element; }}
+      class={props.class}
+      aria-hidden="true"
+    />
+  );
 };
 
 export const StaticBitmapLayer = (props: StaticBitmapLayerProps) => {
   const [artifact] = createResource(
-    () => props.cacheKey,
-    async () => {
+    () => ({ cacheKey: props.cacheKey, load: props.load }),
+    async ({ load }) => {
       if (typeof createImageBitmap !== 'function') return null;
       try {
-        return await props.load();
+        return await load();
       } catch {
         return null;
       }
     },
   );
+  const readyArtifact = () => props.peek?.() ?? artifact();
   return (
-    <Show when={artifact()} keyed fallback={props.fallback}>
+    <Show when={readyArtifact()} keyed fallback={props.fallback}>
       {(value) => <BitmapCanvas artifact={value} class={props.class} />}
     </Show>
   );

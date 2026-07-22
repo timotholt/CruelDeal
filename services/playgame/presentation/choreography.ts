@@ -1,4 +1,5 @@
 import type { LaneId, Owner } from '../engine/types/ids';
+import type { MatchEvent } from '../engine/types/events';
 import type {
   SeatAnimationEvent,
   SeatCardToken,
@@ -61,12 +62,10 @@ export type EventChoreographyDisposition =
   | 'location-reveal';
 
 /**
- * Exhaustive policy for the authoritative event alphabet.
- *
- * `not-projected` events are normally removed by the seat projection, but
- * remain explicit here because SeatAnimationEvent's public type uses the same
- * closed event-name union. Adding an engine event therefore cannot silently
- * inherit presentation behavior.
+ * Exhaustive policy for the canonical event alphabet. The seat projector
+ * produces a closed payload union for visible entries; canonical-only entries
+ * remain explicit as `not-projected` so a new engine event cannot inherit a
+ * presentation policy accidentally.
  */
 export const EVENT_CHOREOGRAPHY_DISPOSITIONS = Object.freeze({
   GAMEPLAY_RNG_ADVANCED: 'not-projected',
@@ -125,7 +124,7 @@ export const EVENT_CHOREOGRAPHY_DISPOSITIONS = Object.freeze({
   RECURSION_LIMIT_HIT: 'not-projected',
   INTENT_REJECTED: 'not-projected',
 } as const satisfies Record<
-  SeatAnimationEvent['type'],
+  MatchEvent['type'],
   EventChoreographyDisposition
 >);
 
@@ -158,7 +157,9 @@ const assertNever = (value: never): never => {
 export function describeEventChoreography(
   event: SeatAnimationEvent,
 ): EventChoreography {
-  const disposition = EVENT_CHOREOGRAPHY_DISPOSITIONS[event.type];
+  const disposition = (
+    EVENT_CHOREOGRAPHY_DISPOSITIONS as Readonly<Record<string, EventChoreographyDisposition>>
+  )[event.type];
   switch (disposition) {
     case 'not-projected':
     case 'dispatch-only':

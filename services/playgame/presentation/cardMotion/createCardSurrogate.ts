@@ -2,7 +2,6 @@ import type { CardSurfaceModel } from '@/components/game-surfaces/contracts';
 import { readCardSurfaceModel } from '@/components/game-surfaces/card/cardSurfaceRegistry';
 import {
   identityFreeCardBackModel,
-  mountCardSurface,
   type MountedCardSurface,
 } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import { cardRestingRotationDegrees } from '@/services/vfx/animations/card-resting-transform';
@@ -15,7 +14,7 @@ import type {
 } from './types';
 
 export interface CardMotionHost {
-  readonly cardRefs: Map<string, HTMLElement>;
+  cardElement(cardId: string): HTMLElement | null;
   toLocalRect(rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>): DOMRect;
   mountTemporary(element: HTMLElement): () => void;
 }
@@ -25,8 +24,8 @@ export interface CardMotionSurrogate {
   readonly restingShell: HTMLElement;
   readonly visual: HTMLElement;
   readonly surface: MountedCardSurface;
-  readonly unmount: () => void;
-  readonly frontModel: CardSurfaceModel | null;
+  frontModel: CardSurfaceModel | null;
+  release(): void;
 }
 
 export const canonicalVisualElement = (element: HTMLElement | null): HTMLElement | null => {
@@ -77,23 +76,23 @@ export const captureCardVisual = (
 
 export const canonicalCardEndpoint = (
   cardId: string,
-  cardRefs: Map<string, HTMLElement>,
+  cardElement: (cardId: string) => HTMLElement | null,
 ): CanonicalCardEndpoint => ({
   cardId,
-  resolveElement: () => canonicalVisualElement(cardRefs.get(cardId) ?? null),
+  resolveElement: () => canonicalVisualElement(cardElement(cardId)),
   resolveRect: () => {
-    const element = canonicalVisualElement(cardRefs.get(cardId) ?? null);
+    const element = canonicalVisualElement(cardElement(cardId));
     return element?.isConnected ? normalizedCardRect(element) : null;
   },
   resolveRotationDegrees: () => cardRestingRotationDegrees(
-    canonicalVisualElement(cardRefs.get(cardId) ?? null),
+    canonicalVisualElement(cardElement(cardId)),
   ),
   resolveModel: () => {
-    const element = canonicalVisualElement(cardRefs.get(cardId) ?? null);
+    const element = canonicalVisualElement(cardElement(cardId));
     return element ? readCardSurfaceModel(element) : null;
   },
   resolveFace: () => {
-    const element = canonicalVisualElement(cardRefs.get(cardId) ?? null);
+    const element = canonicalVisualElement(cardElement(cardId));
     const model = element ? readCardSurfaceModel(element) : null;
     return model ? faceOfModel(model) : 'faceUp';
   },
@@ -128,7 +127,7 @@ export const placeSurrogate = (
   surrogate.root.style.height = `${rect.height}px`;
 };
 
-const modelForBasis = (basis: SurrogateBasis): CardSurfaceModel => {
+export const cardModelForBasis = (basis: SurrogateBasis): CardSurfaceModel => {
   switch (basis.kind) {
     case 'clone':
       return basis.snapshot.model;
@@ -137,65 +136,4 @@ const modelForBasis = (basis: SurrogateBasis): CardSurfaceModel => {
     case 'synthetic-back':
       return identityFreeCardBackModel();
   }
-};
-
-export const createCardSurrogate = (
-  host: CardMotionHost,
-  options: {
-    sessionId: string;
-    cardId: string;
-    route: string;
-    basis: SurrogateBasis;
-    startRect: DOMRect;
-    rotationDegrees: number;
-    face: CardVisualFace;
-    zIndex?: number;
-    className?: string;
-  },
-): CardMotionSurrogate => {
-  const root = document.createElement('div');
-  root.className = `card-motion-surrogate ${options.className ?? ''}`.trim();
-  root.dataset.cardMotionSession = options.sessionId;
-  root.dataset.cardId = options.cardId;
-  root.dataset.motionRoute = options.route;
-  root.dataset.motionPhase = 'captured';
-  root.style.position = 'absolute';
-  root.style.margin = '0';
-  root.style.pointerEvents = 'none';
-  root.style.zIndex = String(options.zIndex ?? 180);
-  root.style.willChange = 'left, top, width, height, opacity';
-
-  const restingShell = document.createElement('div');
-  restingShell.className = 'card-motion-resting-shell';
-  restingShell.style.transform = `rotate(${options.rotationDegrees}deg)`;
-  const visual = document.createElement('div');
-  visual.className = 'card card-motion-visual';
-  restingShell.appendChild(visual);
-  root.appendChild(restingShell);
-
-  const initialModel = modelForBasis(options.basis);
-  const frontModel = initialModel.face.kind === 'front'
-    ? initialModel
-    : options.basis.kind === 'destination-surface'
-      ? options.basis.endpoint.resolveModel()
-      : null;
-  const surface = mountCardSurface(visual, initialModel);
-  const surrogate: CardMotionSurrogate = {
-    root,
-    restingShell,
-    visual,
-    surface,
-    frontModel: frontModel?.face.kind === 'front' ? frontModel : null,
-    unmount: () => {},
-  };
-  setSurrogateFace(surrogate, options.face);
-  placeSurrogate(host, surrogate, options.startRect);
-  const unmountTemporary = host.mountTemporary(root);
-  return {
-    ...surrogate,
-    unmount: () => {
-      surface.dispose();
-      unmountTemporary();
-    },
-  };
 };

@@ -24,7 +24,7 @@ export function prepareHandLayoutTransition(
     playAfterRender: () => {
       if (played) return;
       played = true;
-      queueMicrotask(() => playCardLayoutSlide(oldRects, cardRefs));
+      queueMicrotask(() => void playCardLayoutSlide(oldRects, cardRefs));
     },
   };
 }

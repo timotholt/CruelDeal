@@ -189,10 +189,15 @@ export type JsonValue =
   | readonly JsonValue[]
   | { readonly [key: string]: JsonValue };
 
-export interface SeatAnimationEvent {
-  readonly type: MatchEvent['type'];
-  readonly data: Readonly<Record<string, JsonValue>>;
-}
+/**
+ * Closed seat-safe animation payload union generated from the exhaustive
+ * projector below. Adding or changing a projected payload changes this union
+ * at its sole construction boundary; generic JSON event bags are not allowed.
+ */
+export type SeatAnimationEvent = Exclude<
+  ReturnType<typeof projectAnimationEventForSeat>,
+  null
+>;
 
 export type SeatEntityRef =
   | { readonly kind: 'CARD'; readonly token: SeatCardToken }
@@ -781,7 +786,7 @@ function cardEventVisible(
 export function projectAnimationEventForSeat(
   transition: CanonicalFrameTransition,
   viewerSeat: Seat,
-): SeatAnimationEvent | null {
+) {
   const event = transition.event;
   if (event === null) return null;
   const card = (id: string): SeatCardToken => cardToken(

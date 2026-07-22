@@ -228,6 +228,13 @@ type EffectTargetResult =
   | 'INVALIDATED'
   | 'NO_CHANGE';
 
+type EffectInvocationReason =
+  | 'NATURAL'
+  | 'RETRIGGER'
+  | 'REACTION'
+  | 'SCHEDULED'
+  | 'SYSTEM';
+
 type EffectOutcomeReason =
   | 'CANNOT_BE_DESTROYED'
   | 'CANNOT_BE_MOVED'
@@ -257,12 +264,7 @@ interface EffectInvocationStarted {
   readonly parentInvocationId: EffectInvocationId | null;
   readonly source: CanonicalEntityRef;
   readonly ability: AbilityRef;
-  readonly invocationReason:
-    | 'NATURAL'
-    | 'RETRIGGER'
-    | 'REACTION'
-    | 'SCHEDULED'
-    | 'SYSTEM';
+  readonly invocationReason: EffectInvocationReason;
   readonly depth: number;
   readonly candidates: readonly CanonicalEntityRef[];
 }
@@ -550,7 +552,19 @@ type SeatEntityRef =
   | { readonly kind: 'PLAYER'; readonly owner: Owner }
   | { readonly kind: 'ZONE'; readonly owner: Owner | null; readonly zone: string }
   | { readonly kind: 'SYSTEM'; readonly systemId: string }
-  | { readonly kind: 'HIDDEN'; readonly category: 'CARD' | 'LOCATION' | 'RULE' };
+  | {
+      readonly kind: 'HIDDEN';
+      readonly category: 'CARD' | 'LOCATION' | 'RULE';
+      readonly observableAnchor: SeatObservableAnchorRef | null;
+    };
+
+type SeatObservableAnchorRef =
+  | { readonly kind: 'ZONE'; readonly owner: Owner | null; readonly zone: string }
+  | {
+      readonly kind: 'LANE_SIDE';
+      readonly laneId: LaneId;
+      readonly owner: Owner | null;
+    };
 ```
 
 Projection rules:
@@ -567,6 +581,91 @@ Projection rules:
 - projection may remove authority-only frames, so player-visible canonical
   frame numbers can contain gaps;
 - projected frame order must remain strictly increasing.
+
+`observableAnchor` is default-deny metadata. It is populated only when the
+entity's containing zone or lane side is already observable to the seat. It
+never supplies a stable identity. A hidden hand target may therefore animate
+an identity-free hand-zone treatment; a completely secret target retains
+`observableAnchor: null` and receives an explicit redacted/no-visual
+presentation disposition.
+
+### Transaction-transient entities
+
+An entity may be created, staged/revealed, and destroyed or banished within one
+atomic transaction and therefore be absent from `SeatPresentationBlock.postState`.
+Projection still treats its intermediate lifetime as first-class:
+
+- the seat token issuer is match/seat scoped and independent of membership in
+  the final state, so every authorized reference to the same transient entity
+  uses one stable opaque token throughout the block;
+- each projected `after` snapshot includes the entity and every seat-authorized
+  surface field for exactly the Frames in which it is observable;
+- once identity has been legally shown to a seat inside the block, later trace
+  references for that seat may retain the same token even after the entity
+  leaves visible state; projection never asks presentation to rediscover the
+  model from `postState`;
+- if the entity is never identity/position observable, its trace references
+  remain `HIDDEN` with only a legal `observableAnchor` or `null`;
+- the prepared presentation copies any authorized intermediate model before
+  batch adoption and owns its actor until the authored exit/death handoff;
+- a transient entity's absence from `postState` is not permission to omit its
+  safe lifecycle Frames, collapse its trace, or replace its animation with a
+  final-state inference.
+
+Projection fixtures must cover created -> played -> revealed -> destroyed and
+created-hidden -> destroyed-without-reveal for both seats.
+
+### Seat-safe effect trace
+
+```ts
+type SeatAbilityRef =
+  | {
+      readonly kind: AbilityRef['kind'];
+      readonly ruleId: string;
+      readonly ruleIndex: number;
+    }
+  | { readonly kind: 'HIDDEN' };
+
+type SeatEffectTraceEntry =
+  | {
+      readonly kind: 'EFFECT_INVOCATION_STARTED';
+      readonly invocationToken: string;
+      readonly parentInvocationToken: string | null;
+      readonly source: SeatEntityRef;
+      readonly ability: SeatAbilityRef;
+      readonly invocationReason: EffectInvocationReason;
+      readonly depth: number;
+      readonly candidates: readonly SeatEntityRef[];
+    }
+  | {
+      readonly kind: 'EFFECT_TARGET_RESOLVED';
+      readonly invocationToken: string;
+      readonly attemptToken: string;
+      readonly attemptOrdinal: number;
+      readonly operation: string;
+      readonly target: SeatEntityRef;
+      readonly result: EffectTargetResult;
+      readonly blockedBy: readonly SeatEntityRef[];
+      readonly reason: EffectOutcomeReason | null;
+    }
+  | {
+      readonly kind: 'EFFECT_INVOCATION_COMPLETED';
+      readonly invocationToken: string;
+      readonly attempted: number;
+      readonly affected: number;
+      readonly blocked: number;
+      readonly invalidated: number;
+      readonly unchanged: number;
+    };
+```
+
+Seat projection retains every trace entry of a committed invocation. Safe
+opaque tokens and `HIDDEN` references make partial invocation projection
+unnecessary. If a block contains an invocation start without all ordered
+target outcomes and its matching completion, or contains an outcome/completion
+without its start, the block is malformed and is rejected before
+presentation. Authority-only frames may still be omitted, but effect-trace
+frames may not be omitted.
 
 ### Default-deny projection construction
 
@@ -651,6 +750,22 @@ The client must not apply a second gameplay reducer to reconstruct intermediate
 states. Each visible frame therefore carries its authoritative seat-safe
 after-state.
 
+`SeatAnimationEvent` is a closed discriminated union of projected event type
+and its exact seat-safe payload. The following generic shape is forbidden:
+
+```ts
+interface SeatAnimationEvent {
+  readonly type: MatchEvent['type'];
+  readonly data: Readonly<Record<string, JsonValue>>;
+}
+```
+
+The projection allowlist or its generator must define a payload type for every
+projected event. Events whose projector returns `null` are absent from the
+union and receive a `NOT_PROJECTED` presentation disposition. Adding or
+changing a projected field must fail the projector, wire-schema, presentation
+registry, and fixture typechecks until all four agree.
+
 ```ts
 interface SeatPresentationFrame {
   readonly index: number;
@@ -673,11 +788,32 @@ well; correctness is preferred over a client rules reducer. A later measured
 optimization may replace full after-states with a generic validated patch, but
 only if it retains identical authority and test coverage.
 
+The client materialization adapter preserves the projected trace verbatim:
+
+```ts
+interface SeatTransactionFrame {
+  readonly index: number;
+  readonly transactionId: string;
+  readonly frame: Frame;
+  readonly scope: TemporalScope;
+  readonly event: SeatAnimationEvent | null;
+  readonly effect: SeatEffectTraceEntry | null;
+  readonly before: SeatVisibleMatchState;
+  readonly after: SeatVisibleMatchState;
+}
+```
+
+`SeatTransactionFrame.effect` is not optional adapter metadata. It is required
+presentation evidence. `seatPresentationBlockToTransactionTimeline()` copies
+it field-by-field from the corresponding `SeatPresentationFrame`; dropping,
+reconstructing, or reading it from canonical authority is forbidden.
+
 ## Atomic presentation block
 
 ```ts
 interface SeatPresentationBlock {
   readonly version: 2;
+  readonly deliveryEpoch: string;
   readonly transactionId: string;
   readonly matchId: string;
   readonly viewerSeat: Seat;
@@ -698,11 +834,19 @@ Required behavior:
    publishing the block.
 2. One committed transaction is delivered as one complete block.
 3. There is no normal player API for subscribing to individual frames.
-4. The client validates the complete block before starting presentation.
+4. The client validates the complete block, including its active
+   `deliveryEpoch`, before starting presentation.
 5. Interaction locks before the first frame is presented.
 6. Presentation walks the supplied frames and never mutates gameplay truth.
-7. Animation failure, missing anchors, timeout, backgrounding, or user
-   fast-forward adopts `postState` and releases the lock.
+7. Explicit user/developer fast-forward cancels presentation, adopts
+   `postState`, records the fast-forward, and releases the interaction lock.
+   Backgrounding pauses the presentation clock and does not fast-forward.
+   Unexpected animation failure, missing required geometry/actors, timeout,
+   malformed trace, or budget failure cancels and cleans the beat, adopts
+   `postState`, releases the atomic-block lock, enters `RESYNC_REQUIRED`, and
+   requests a fresh seat snapshot. Gameplay commands remain unavailable until
+   resync succeeds. This is an observable recovery state, not successful
+   presentation and not permission to select another animation.
 8. Successful presentation also adopts `postState`; the last visible frame's
    `after` must equal it.
 9. The next command cannot be submitted until the block is closed.
@@ -775,6 +919,79 @@ client control flow.
 
 ## Snapshot, reconnect, and resync
 
+Resync is an explicit authenticated protocol, not a UI-side reload convention:
+
+```ts
+interface SeatResyncRequest {
+  readonly version: 2;
+  readonly requestId: string;
+  readonly matchId: string;
+  readonly lastAdoptedPublicRevision: PublicRevision;
+}
+
+interface SeatSnapshotEnvelope {
+  readonly version: 2;
+  readonly requestId: string;
+  readonly deliveryEpoch: string;
+  readonly matchId: string;
+  readonly viewerSeat: Seat;
+  readonly engineVersion: string;
+  readonly rulesetId: string;
+  readonly manifestVersion: string;
+  readonly contentRevision: string;
+  readonly publicRevision: PublicRevision;
+  readonly frame: Frame;
+  readonly planRevision: PlanRevision;
+  readonly state: SeatVisibleMatchState;
+  readonly stateHash: string;
+  readonly interactionStatus:
+    | 'PLANNING'
+    | 'WAITING'
+    | 'PRESENTING'
+    | 'RESYNC_REQUIRED'
+    | 'TERMINAL';
+}
+
+interface SeatSnapshotAck {
+  readonly version: 2;
+  readonly requestId: string;
+  readonly matchId: string;
+  readonly deliveryEpoch: string;
+  readonly installedPublicRevision: PublicRevision;
+}
+```
+
+The authenticated session supplies the seat for `SeatResyncRequest`; the
+client cannot choose it. The authority echoes `viewerSeat` in the snapshot so
+the client can reject a session/seat mismatch.
+
+Entering `RESYNC_REQUIRED` performs this exact sequence:
+
+1. increment the client presentation generation, cancel/clean the active
+   prepared owner, and discard every queued or partially prepared presentation
+   block;
+2. adopt the failed block's `postState` only as the temporary recovery display,
+   set `lastAdoptedPublicRevision` to that block's `publicRevision`, and keep
+   gameplay commands disabled;
+3. send one idempotent `SeatResyncRequest` containing the last adopted public
+   revision;
+4. the authority atomically captures a full seat snapshot at revision `R`,
+   starts a new opaque `deliveryEpoch`, and pauses later block delivery to that
+   seat until the matching `SeatSnapshotAck`;
+5. the client drops blocks from every prior epoch and drops/does not enqueue
+   any block received before the snapshot installs;
+6. after validating request, match, seat, versions, and checksum, install the
+   complete snapshot as one state replacement, set the expected public
+   revision to `R`, clear `RESYNC_REQUIRED`, and send the matching ack;
+7. after the ack, the authority delivers only complete blocks from the new
+   epoch in public-revision order, beginning with a block whose
+   `basePublicRevision === R` when such a block exists.
+
+A duplicate request returns the same retained snapshot envelope/epoch until it
+is acknowledged. A stale/mismatched ack changes nothing. A block with the
+wrong epoch or base revision is discarded and triggers another resync; it is
+never presented, folded, or double-applied.
+
 A seat snapshot contains:
 
 - protocol/engine/ruleset/content version agreement;
@@ -782,10 +999,13 @@ A seat snapshot contains:
 - current public revision and frame;
 - that seat's current private plan revision and private visible plan;
 - current seat-safe visible state;
-- interaction status (`PLANNING`, `WAITING`, `PRESENTING`, or `TERMINAL`).
+- interaction status (`PLANNING`, `WAITING`, `PRESENTING`,
+  `RESYNC_REQUIRED`, or `TERMINAL`).
 
 Reconnect policy:
 
+- the initial/reconnect snapshot establishes the only active
+  `deliveryEpoch` for subsequent blocks on that connection;
 - if no unpresented committed block is retained for the seat, adopt the latest
   snapshot and do not replay missed cosmetic animation;
 - if the authority retains one complete unacknowledged block and the client is
@@ -943,6 +1163,10 @@ every registered authority:
 - target invalidation during sequential resolution;
 - reconnect before, during, and after a retained block;
 - animation failure/fast-forward correction;
+- presentation failure with multiple queued blocks clears the queue, installs
+  one epoch-fenced snapshot, and resumes from exactly its public revision;
+- duplicate resync request, stale ack, pre-install block, old-epoch block, and
+  wrong-base-revision block behavior;
 - terminal match behavior;
 - developer replay authorization;
 - seat redaction.
@@ -1014,7 +1238,9 @@ blocks and Rust validates the same fixtures.
 2. Add authenticated seat-bound opaque command envelopes.
 3. Add durable-shape idempotent receipts and exact duplicate behavior.
 4. Add snapshot/block acknowledgement and whole-block reconnect policy.
-5. Add revision/checksum resync behavior.
+5. Add `SeatResyncRequest`, epoch-fenced `SeatSnapshotEnvelope`, and
+   `SeatSnapshotAck` with idempotent request retention.
+6. Add revision/checksum resync behavior and ordered post-ack block delivery.
 
 Exit: serialized loopback satisfies the complete remote-authority lifecycle
 without importing canonical state into the client.
@@ -1024,8 +1250,12 @@ without importing canonical state into the client.
 1. Make `MatchClient` consume complete `SeatPresentationBlock` objects.
 2. Build `SeatTransactionTimeline` directly from supplied projected states.
 3. Keep existing event animators unchanged.
-4. Add bounded fast-forward/post-state correction for every terminal path.
-5. Delete any client projected gameplay reducer or frame-stream subscription.
+4. Add explicit fast-forward and typed `RESYNC_REQUIRED` post-state recovery
+   for every terminal path; backgrounding pauses rather than fast-forwards.
+5. On resync, increment generation, cancel the active owner, discard every
+   queued/prepared block, reject old epochs, and atomically install the
+   validated snapshot before acknowledging it.
+6. Delete any client projected gameplay reducer or frame-stream subscription.
 
 Exit: direct and serialized authorities produce indistinguishable UI behavior
 and one atomic publication per committed transaction.
@@ -1055,6 +1285,8 @@ This architecture is complete only when:
 - public and private revision domains cannot stale or leak one another;
 - duplicate commands cannot duplicate state, RNG, frames, or presentation;
 - reconnect never resumes midway through a block;
+- resync never presents, folds, or double-applies a queued block from an old
+  delivery epoch;
 - canonical IDs and hidden authority data never cross the player boundary;
 - existing animation choreography remains green;
 - TypeScript and Rust pass the same protocol fixtures;

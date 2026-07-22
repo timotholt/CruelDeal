@@ -132,6 +132,12 @@ function laneCards(harness: Harness, lane: number): readonly string[] {
     ?.cards[harness.match.localSeat] ?? [];
 }
 
+function remoteLaneCards(harness: Harness, lane: number): readonly string[] {
+  return harness.ui.presentedState().lanes
+    .find(candidate => candidate.id === lane)
+    ?.cards[harness.match.remoteSeat] ?? [];
+}
+
 function firstLocationRevealed(harness: Harness): boolean {
   return harness.ui.presentedState().lanes[0]?.location?.face === 'FACE_UP';
 }
@@ -329,14 +335,40 @@ describe(`${authorityDriver.id} split play providers`, () => {
       type: string;
       token: string | null;
       owner: string | null;
+      lane: number | null;
       phase: string;
       locked: boolean;
       revealed: boolean | null;
+      presentBeforeFrame: boolean | null;
+      presentAfterFrame: boolean | null;
     }> = [];
     await presentOpeningImmediately(harness, {
+      beforeFrame: frame => {
+        if (
+          frame.event?.type !== 'CARD_STAGED'
+          || frame.event.data.owner !== harness.match.remoteSeat
+        ) return;
+        const lane = frame.event.data.lane as number;
+        const token = frame.event.data.card as string;
+        observations.push({
+          type: `${frame.event.type}:BEFORE`,
+          token,
+          owner: frame.event.data.owner,
+          lane,
+          phase: harness.ui.presentedState().phase,
+          locked: harness.ui.ui.isFlipped,
+          revealed: null,
+          presentBeforeFrame: remoteLaneCards(harness, lane).includes(token),
+          presentAfterFrame: null,
+        });
+      },
       afterFrame: frame => {
         const token = frame.event?.type === 'CARD_REVEALED'
+          || frame.event?.type === 'CARD_STAGED'
           ? frame.event.data.card as string
+          : null;
+        const lane = frame.event?.type === 'CARD_STAGED'
+          ? frame.event.data.lane as number
           : null;
         observations.push({
           type: frame.event?.type ?? 'REDACTED',
@@ -344,12 +376,17 @@ describe(`${authorityDriver.id} split play providers`, () => {
           owner: typeof frame.event?.data.owner === 'string'
             ? frame.event.data.owner
             : null,
+          lane,
           phase: harness.ui.presentedState().phase,
           locked: harness.ui.ui.isFlipped,
           revealed: token === null
             ? null
             : harness.ui.presentedState().cards
               .find(card => card.token === token)?.revealed ?? false,
+          presentBeforeFrame: null,
+          presentAfterFrame: lane === null || token === null
+            ? null
+            : remoteLaneCards(harness, lane).includes(token),
         });
       },
     });
@@ -384,6 +421,17 @@ describe(`${authorityDriver.id} split play providers`, () => {
     expect(remoteStageIndex).toBeGreaterThanOrEqual(0);
     expect(remoteStageIndex).toBeLessThan(resolutionStartIndex);
     expect(observations[remoteStageIndex]?.locked).toBe(true);
+    const remoteStage = observations[remoteStageIndex]!;
+    const beforeRemoteStage = observations.find(observation =>
+      observation.type === 'CARD_STAGED:BEFORE'
+      && observation.token === remoteStage.token
+    );
+    expect(beforeRemoteStage).toMatchObject({
+      presentBeforeFrame: false,
+    });
+    expect(remoteStage).toMatchObject({
+      presentAfterFrame: true,
+    });
 
     const revealFrames = timeline.frames
       .filter(frame => frame.event?.type === 'CARD_REVEALED');

@@ -46,8 +46,6 @@ export interface VfxContextValue {
   motionSurface: Accessor<PlayMotionSurface | null>;
   /** Live map of card instanceId -> current DOM element. */
   cardRefs: Map<string, HTMLElement>;
-  /** Live map of logical card zone anchor -> current DOM element. */
-  zoneRefs: Map<string, HTMLElement>;
   /** Card effects owned only by this mounted host. */
   cardVfxRegistry: CardVfxRegistry;
   /**
@@ -76,7 +74,6 @@ export const VfxHost = (props: VfxHostProps) => {
   const [board, setBoard] = createSignal<HTMLElement | null>(null);
   const [overlay, setOverlay] = createSignal<HTMLElement | null>(null);
   const cardRefs = new Map<string, HTMLElement>();
-  const zoneRefs = new Map<string, HTMLElement>();
   const cardVfxRegistry = createCardVfxRegistry();
   const motionSurface = createMemo<PlayMotionSurface | null>(() => {
     const frame = board();
@@ -86,7 +83,6 @@ export const VfxHost = (props: VfxHostProps) => {
       frame,
       overlay: motionOverlay,
       cardRefs,
-      zoneRefs,
     });
   });
 
@@ -111,6 +107,7 @@ export const VfxHost = (props: VfxHostProps) => {
   });
 
   const bindCardRef = (id: string) => (el: HTMLElement) => {
+    el.dataset.playMotionCard = id;
     cardRefs.set(id, el);
     onCleanup(() => {
       // Only delete if the stored element is still ours (defensive against
@@ -120,10 +117,10 @@ export const VfxHost = (props: VfxHostProps) => {
   };
 
   const bindZoneRef = (key: string) => (el: HTMLElement) => {
-    zoneRefs.set(key, el);
-    onCleanup(() => {
-      if (zoneRefs.get(key) === el) zoneRefs.delete(key);
-    });
+    // Logical zones are permanent authored DOM surfaces. Keep their identity
+    // on the element itself so geometry lookup cannot be invalidated by a
+    // stale imperative ref registry while the element remains mounted.
+    el.dataset.playMotionZone = key;
   };
 
   const value: VfxContextValue = {
@@ -131,7 +128,6 @@ export const VfxHost = (props: VfxHostProps) => {
     boardRef: board,
     motionSurface,
     cardRefs,
-    zoneRefs,
     cardVfxRegistry,
     bindCardRef,
     bindZoneRef,

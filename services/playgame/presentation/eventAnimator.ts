@@ -1,6 +1,8 @@
 import { captureCardRects, playCardLayoutSlide } from '@/services/vfx/animations/layout-flip';
-import { Timeline } from '@/services/vfx/timeline';
-import type { CardMotionCancelReason } from './cardMotion';
+import type {
+  CanonicalCardEndpoint,
+  CardMotionCancelReason,
+} from './cardMotion';
 import {
   canonicalVisualElement,
   captureCardVisual,
@@ -45,29 +47,6 @@ const waitFor = (ms: number, signal: AbortSignal): Promise<boolean> => {
   });
 };
 
-export const fallbackRectForZone = (
-  bounds: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
-  zone: CardZoneRef,
-  remoteSeat: PlayPresentationHost['remoteSeat'],
-): DOMRect => {
-  const width = 70;
-  const height = 100;
-  if (zone.kind === 'HAND' && zone.owner === remoteSeat) {
-    return new DOMRect(
-      bounds.left + bounds.width / 2 - width / 2,
-      bounds.top + 16,
-      width,
-      height,
-    );
-  }
-  return new DOMRect(
-    bounds.left + bounds.width / 2 - width / 2,
-    bounds.top + bounds.height / 2 - height / 2,
-    width,
-    height,
-  );
-};
-
 const playSfx = (
   host: PlayPresentationHost,
   cues: readonly SfxCue[],
@@ -90,29 +69,16 @@ const rectForZone = (
   zone: CardZoneRef,
 ): DOMRect => {
   const key = zoneAnchorKey(zone);
-  const registeredRect = key ? host.motionSurface.zoneRect(key) : null;
-  return registeredRect
-    ?? fallbackRectForZone(
-      host.motionSurface.frameRect(),
-      zone,
-      host.remoteSeat,
-    );
+  if (!key) throw new Error(`Card transfer zone ${zone.kind} has no authored anchor`);
+  const registeredRect = host.motionSurface.zoneRect(key);
+  if (!registeredRect) throw new Error(`Required card transfer anchor ${key} is unavailable`);
+  return registeredRect;
 };
 
 const generatedSourceRect = (host: PlayPresentationHost): DOMRect => {
   const generated = host.motionSurface.zoneRect('generated');
   if (generated) return generated;
-  const deck = host.motionSurface.zoneRect(`${host.localSeat}:deck`);
-  if (deck) return deck;
-  const bounds = host.motionSurface.frameRect();
-  const width = 70;
-  const height = 100;
-  return new DOMRect(
-    bounds.right + 20,
-    bounds.bottom - height - 40,
-    width,
-    height,
-  );
+  throw new Error('Required generated-card transfer anchor is unavailable');
 };
 
 const rectForTransferEndpoint = (
@@ -186,6 +152,17 @@ const excludeStructurallyAnimatedCards = (
   return layoutRects;
 };
 
+const currentCardElements = (
+  host: PlayPresentationHost,
+): Map<string, HTMLElement> => {
+  const elements = new Map<string, HTMLElement>();
+  for (const cardId of host.cardIds()) {
+    const element = host.cardElement(cardId);
+    if (element) elements.set(cardId, element);
+  }
+  return elements;
+};
+
 export interface PreparedEventAnimation {
   readonly frame: SeatTransactionFrame;
   readonly transfers: readonly CardTransfer[];
@@ -224,12 +201,11 @@ const createPreparedAnimation = (state: PreparedState): PreparedEventAnimation =
 };
 
 const shouldPrepareSourceBeforeAdoption = (
-  host: PlayPresentationHost,
   transfer: CardTransfer,
 ): boolean => (
-  (transfer.from.kind === 'LANE'
-    || (transfer.from.kind === 'HAND' && transfer.from.owner === host.localSeat))
-  && transfer.style.route !== 'layout-only'
+  transfer.style.route !== 'layout-only'
+  && transfer.from.kind !== 'GENERATED'
+  && transfer.from.kind !== 'OFFBOARD'
 );
 
 const prepareTransferBeforeAdoption = (
@@ -237,7 +213,7 @@ const prepareTransferBeforeAdoption = (
   transfer: CardTransfer,
   capturedCardRects: Map<string, DOMRect>,
 ): PreparedTransfer | null => {
-  if (!shouldPrepareSourceBeforeAdoption(host, transfer)) return null;
+  if (!shouldPrepareSourceBeforeAdoption(transfer)) return null;
   const source = rectForTransferEndpoint(
     host,
     transfer,
@@ -248,7 +224,22 @@ const prepareTransferBeforeAdoption = (
   const sourceEl = canonicalVisualElement(
     host.cardElement(transfer.cardId as string) ?? source.el,
   );
-  if (!sourceEl?.isConnected) return null;
+  if (!sourceEl?.isConnected) {
+    // Hidden and pile zones are authored anchors rather than canonical card
+    // surfaces. Acquire a real mounted actor at that anchor before adoption,
+    // just as local hand motion captures its mounted source before adoption.
+    // Its authorized identity is supplied by the adopted destination model.
+    const session = host.motionSurface.cardMotion.begin({
+      cardId: transfer.cardId,
+      route: `${transfer.from.kind}->${transfer.to.kind}`,
+      basis: { kind: 'synthetic-back' },
+      startRect: source.rect,
+      face: 'faceDown',
+      zIndex: transfer.style.zIndex,
+      className: 'transfer-flyer',
+    });
+    return { transfer, session };
+  }
   const snapshot = captureCardVisual(transfer.cardId, sourceEl);
   const initialFace = transfer.face === 'ownerVisible'
     ? resolveCardTransferFace(transfer.face, transfer.owner, host.localSeat)
@@ -295,7 +286,7 @@ export function prepareEventAnimation(
   );
 
   const oldRects = excludeStructurallyAnimatedCards(
-    captureCardRects(host.cardIds(), host.motionSurface.cardRefs),
+    captureCardRects(host.cardIds(), currentCardElements(host)),
     transfers,
   );
   const state: PreparedState = {
@@ -334,6 +325,29 @@ const isLocalHandEntry = (
   && transfer.to.owner === host.localSeat
 );
 
+const canonicalDestination = (
+  host: PlayPresentationHost,
+  transfer: CardTransfer,
+): CanonicalCardEndpoint | null => (
+  transfer.to.kind === 'LANE'
+  || (transfer.to.kind === 'HAND' && transfer.to.owner === host.localSeat)
+    ? host.motionSurface.cardMotion.endpoint(transfer.cardId)
+    : null
+);
+
+const assertCanonicalDestination = (
+  transfer: CardTransfer,
+  endpoint: CanonicalCardEndpoint,
+): void => {
+  const element = endpoint.resolveElement();
+  const rect = endpoint.resolveRect();
+  if (!element?.isConnected || !rect) {
+    throw new Error(
+      `Required canonical card destination ${String(transfer.cardId)} in ${transfer.to.kind} is unavailable`,
+    );
+  }
+};
+
 const basisForLogicalSource = (
   host: PlayPresentationHost,
   transfer: CardTransfer,
@@ -352,21 +366,6 @@ const basisForLogicalSource = (
     : { kind: 'destination-surface', endpoint };
 };
 
-const playAnchorPop = async (
-  state: PreparedState,
-  anchor: HTMLElement,
-  signal: AbortSignal,
-): Promise<void> => {
-  const timeline = new Timeline();
-  timeline.add(anchor, 'vfx-pop', { 'scale-start': '0.92' }, 220, 0);
-  const cleanup = (): void => timeline.clear();
-  state.cleanups.add(cleanup);
-  timeline.play();
-  await waitFor(240, signal);
-  cleanup();
-  state.cleanups.delete(cleanup);
-};
-
 const animateOneTransfer = async (
   state: PreparedState,
   transfer: CardTransfer,
@@ -375,39 +374,38 @@ const animateOneTransfer = async (
 ): Promise<void> => {
   const { host, oldRects } = state;
   if (signal.aborted) return;
-  const source = rectForTransferEndpoint(
-    host,
-    transfer,
-    transfer.from,
-    oldRects,
-    'from',
-  );
-  const destination = rectForTransferEndpoint(
-    host,
-    transfer,
-    transfer.to,
-    oldRects,
-    'to',
-  );
-
-  if (transfer.style.route === 'anchor-to-anchor') {
-    const key = zoneAnchorKey(transfer.to);
-    const anchor = key ? host.zoneElement(key) : null;
-    if (anchor?.isConnected) await playAnchorPop(state, anchor, signal);
-    return;
-  }
-
+  const preparedSession = state.preparedTransfers.get(transfer)?.session ?? null;
+  // A source captured before adoption is the authoritative visual source for
+  // this transfer. Re-resolving it after adoption is both redundant and
+  // incorrect for removals: the canonical source is supposed to be gone by
+  // the time a destroy/discard/banish animation runs.
+  const source = preparedSession
+    ? null
+    : rectForTransferEndpoint(
+        host,
+        transfer,
+        transfer.from,
+        oldRects,
+        'from',
+      );
   if (isLocalHandEntry(host, transfer)) {
     host.handSlots.release([transfer.cardId as string]);
   }
 
-  const endpoint = transfer.to.kind === 'LANE'
-    || (transfer.to.kind === 'HAND' && transfer.to.owner === host.localSeat)
-    ? host.motionSurface.cardMotion.endpoint(transfer.cardId)
-    : null;
+  const endpoint = canonicalDestination(host, transfer);
+  if (endpoint) assertCanonicalDestination(transfer, endpoint);
+  const logicalDestination = endpoint
+    ? null
+    : rectForTransferEndpoint(
+        host,
+        transfer,
+        transfer.to,
+        oldRects,
+        'to',
+      );
   const sourceRect = transfer.from.kind === 'GENERATED'
     ? generatedSourceRect(host)
-    : source.rect;
+    : source?.rect;
   const transferFace = resolveCardTransferFace(
     transfer.face,
     transfer.owner,
@@ -417,12 +415,14 @@ const animateOneTransfer = async (
     || transfer.from.kind === 'DECK'
     || (transfer.from.kind === 'HAND' && transfer.from.owner === host.remoteSeat)
     || (transfer.to.kind === 'HAND' && transfer.to.owner === host.remoteSeat);
-  const session = state.preparedTransfers.get(transfer)?.session
+  const session = preparedSession
     ?? host.motionSurface.cardMotion.begin({
       cardId: transfer.cardId,
       route: `${transfer.from.kind}->${transfer.to.kind}`,
       basis: basisForLogicalSource(host, transfer),
-      startRect: sourceRect,
+      startRect: sourceRect ?? (() => {
+        throw new Error(`Transfer ${transfer.reason} has no captured or authored source rect`);
+      })(),
       face: sourceIsProtected ? 'faceDown' : endpoint?.resolveFace() ?? 'faceUp',
       zIndex: transfer.style.zIndex,
       className: 'transfer-flyer',
@@ -435,7 +435,7 @@ const animateOneTransfer = async (
   if (useTransferSfx && transfer.style.sfx) host.playSfx?.(transfer.style.sfx);
 
   const target = endpoint ?? {
-    rect: destination.rect,
+    rect: logicalDestination!.rect,
     rotationDegrees: 0,
     ...(transferFace === null ? {} : { face: transferFace }),
   };
@@ -519,7 +519,13 @@ export async function animatePreparedEvent(
     host.handSlots.reserve(reservedHandCards);
     playVfx(host, choreography);
     playSfx(host, choreography.sfx, 'after-dispatch');
-    playCardLayoutSlide(state.oldRects, host.motionSurface.cardRefs);
+    // Reflow may run alongside the structural transfer for this frame, but it
+    // is still owned by this frame. The director must not advance until both
+    // the transfer and every surviving-card slide have cleaned up.
+    const layoutSlide = playCardLayoutSlide(
+      state.oldRects,
+      currentCardElements(host),
+    );
     if (reservedHandCards.length > 0) {
       const completed = await waitFor(HAND_SLOT_RESERVE_MS, executionSignal);
       if (!completed) return;
@@ -535,6 +541,7 @@ export async function animatePreparedEvent(
         choreography.sfx.length === 0,
       );
     }
+    await layoutSlide;
     if (!executionSignal.aborted) {
       playSfx(host, choreography.sfx, 'on-complete');
       completed = true;

@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Compiled Storyboard Native WAAPI Proof</title>
+    <style>
+      body { background: #080b10; color: #e8f6ff; font: 16px monospace; padding: 32px; }
+      .stage { display: grid; gap: 24px; width: 480px; padding: 32px; border: 1px solid #2a475c; }
+      .actor { width: 120px; height: 120px; display: grid; place-items: center; border: 2px solid #64d8ff; background: #152735; }
+      #proof-first { opacity: 0; }
+      pre { margin-top: 32px; white-space: pre-wrap; }
+      body[data-status="passed"] h1 { color: #55e6a5; }
+      body[data-status="failed"] h1 { color: #ff657a; }
+    </style>
+  </head>
+  <body data-status="loading">
+    <h1>Native WAAPI proof</h1>
+    <div class="stage">
+      <div id="proof-first" class="actor">opacity</div>
+      <div id="proof-second" class="actor">transform</div>
+    </div>
+    <pre id="proof-output">Compiling…</pre>
+    <script type="module" src="/services/playgame/presentation/storyboard/browserProof.ts"></script>
+  </body>
+</html>

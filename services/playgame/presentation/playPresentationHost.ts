@@ -151,9 +151,9 @@ export const createPlayPresentationHost = (
   cardStatReadModel: options.cardStatReadModel,
   handSlots: options.handSlots,
   cardVfxRegistry: options.cardVfxRegistry,
-  cardIds: () => [...options.motionSurface.cardRefs.keys()],
-  cardElement: cardId => options.motionSurface.cardRefs.get(cardId) ?? null,
-  zoneElement: key => options.motionSurface.zoneRefs.get(key) ?? null,
+  cardIds: () => options.motionSurface.cardIds(),
+  cardElement: cardId => options.motionSurface.cardElement(cardId),
+  zoneElement: key => options.motionSurface.zoneElement(key),
   ...(options.playSfx ? { playSfx: options.playSfx } : {}),
   playVfx: options.playVfx ?? (cue => playCardVfxCue(options.cardVfxRegistry, cue)),
 });

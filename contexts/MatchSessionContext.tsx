@@ -29,7 +29,6 @@ import type {
 } from '@/services/playgame/runtime/projection';
 import {
   applySeatPresentationBlock,
-  overlaySeatPrivatePlan,
 } from '@/services/playgame/runtime/projection';
 import type { DebugReplayTimeline } from '@/services/playgame/debug/replayContracts';
 
@@ -223,12 +222,7 @@ export const MatchSessionProvider = (props: {
         return true;
       },
       refreshSnapshot,
-      presentationStateForFrame:
-        frame => overlaySeatPrivatePlan(
-          frame.after,
-          snapshot().state,
-          localSeat,
-        ),
+      presentationStateForFrame: frame => frame.after,
       acknowledgePresentationBlock: async (block) => {
         await client.acknowledgePresentationBlock({
           version: 2,

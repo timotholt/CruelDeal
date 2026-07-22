@@ -354,7 +354,6 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
 
     await expect(harness.match.actions.endTurn()).resolves.toBe(true);
 
-    expect(hookStarted).toBe(true);
     expect(published).toHaveLength(1);
     expect(published[0]?.frames.some(
       frame => frame.event?.type === 'TURN_RESOLUTION_STARTED',
@@ -362,6 +361,12 @@ describe(`${authorityDriver.id} PlayUi committed-transaction interleavings`, () 
     expect(harness.match.snapshot().state.turn).toBe(2);
     expect(harness.match.snapshot().state).toEqual(published[0]?.postState);
     expect(harness.ui.isResolving()).toBe(true);
+    expect(hookStarted).toBe(false);
+
+    await new Promise<void>(
+      resolve => requestAnimationFrame(() => setTimeout(resolve, 0)),
+    );
+    expect(hookStarted).toBe(true);
 
     expect(harness.ui.actions.requestPresentationFastForward()).toBe(true);
     await waitForIdle(harness);

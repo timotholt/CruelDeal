@@ -31,6 +31,7 @@ export interface LogicalCardEndpoint {
   readonly rect: DOMRect;
   readonly rotationDegrees?: number;
   readonly face?: CardVisualFace;
+  readonly model?: CardSurfaceModel;
 }
 
 export type CardMotionEndpoint = CanonicalCardEndpoint | LogicalCardEndpoint;
@@ -82,8 +83,11 @@ export interface CardMotionDiagnostic {
   readonly cardId: string;
   readonly route: string;
   readonly phase: CardMotionPhase;
+  readonly atMs: number;
   readonly kind:
     | 'started'
+    | 'motion-started'
+    | 'face-swapped'
     | 'lease-acquired'
     | 'lease-released'
     | 'landed'
@@ -91,4 +95,11 @@ export interface CardMotionDiagnostic {
     | 'recovered'
     | 'completed';
   readonly detail?: string;
+  readonly rect?: Readonly<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  }>;
+  readonly durationMs?: number;
 }

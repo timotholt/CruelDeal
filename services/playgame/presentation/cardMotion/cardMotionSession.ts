@@ -1,13 +1,14 @@
 import {
   canonicalCardEndpoint,
-  createCardSurrogate,
   placeSurrogate,
   setSurrogateFace,
   setSurrogateModel,
   type CardMotionHost,
   type CardMotionSurrogate,
 } from './createCardSurrogate';
+import { createCardMotionActorPool } from './cardMotionActorPool';
 import { CanonicalVisibilityRegistry } from './canonicalVisibility';
+import { prepareCardSurfaceModel } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import type {
   CanonicalCardEndpoint,
   CardMotionCancelReason,
@@ -43,7 +44,7 @@ const endpointFace = (
 );
 
 const endpointModel = (endpoint: CardMotionEndpoint) => (
-  isCanonicalEndpoint(endpoint) ? endpoint.resolveModel() : null
+  isCanonicalEndpoint(endpoint) ? endpoint.resolveModel() : endpoint.model ?? null
 );
 
 export interface BeginCardMotionOptions {
@@ -97,6 +98,7 @@ class MotionSession implements CardMotionSession {
     private readonly record: (diagnostic: CardMotionDiagnostic) => void,
     sourceElement: HTMLElement | null,
     face: CardVisualFace,
+    startRect: DOMRect,
   ) {
     this.currentFace = face;
     if (sourceElement) {
@@ -104,7 +106,7 @@ class MotionSession implements CardMotionSession {
       this.recordDiagnostic('lease-acquired', 'source');
     }
     this.setPhase('surrogate-active');
-    this.recordDiagnostic('started');
+    this.recordDiagnostic('started', undefined, startRect);
   }
 
   get surrogate(): HTMLElement {
@@ -140,6 +142,15 @@ class MotionSession implements CardMotionSession {
     const changesFace = targetFace !== this.currentFace;
     const halfDurationMs = Math.max(1, durationMs / 2);
     const midpointScale = (scaleFrom + scaleTo) / 2;
+    const landingModel = endpointModel(endpoint);
+    const modelToPrepare = landingModel?.face.kind === 'front'
+      ? landingModel
+      : this.visual.frontModel;
+    if (modelToPrepare?.face.kind === 'front') {
+      await prepareCardSurfaceModel(modelToPrepare);
+      if (this.terminalResult) return this.terminalResult;
+    }
+    this.recordDiagnostic('motion-started', undefined, rect, durationMs);
     this.visual.root.style.opacity = String(style.opacityFrom ?? 1);
     // Both canonical faces rest unmirrored. A face change uses two 90-degree
     // halves with an edge-on artwork swap instead of leaving the back at 180
@@ -170,7 +181,7 @@ class MotionSession implements CardMotionSession {
       // change without exposing either image for an extra frame.
       await this.wait(halfDurationMs);
       if (this.terminalResult) return this.terminalResult;
-      const targetModel = endpointModel(endpoint);
+      const targetModel = landingModel;
       if (targetModel && (
         (targetFace === 'faceDown' && targetModel.face.kind === 'back')
         || (targetFace === 'faceUp' && targetModel.face.kind === 'front')
@@ -180,6 +191,7 @@ class MotionSession implements CardMotionSession {
         setSurrogateFace(this.visual, targetFace);
       }
       this.currentFace = targetFace;
+      this.recordDiagnostic('face-swapped', targetFace);
       this.visual.visual.style.transition = 'none';
       this.visual.visual.style.transform = `rotateY(-90deg) scale(${midpointScale})`;
       void this.visual.visual.offsetWidth;
@@ -190,7 +202,7 @@ class MotionSession implements CardMotionSession {
     await landingWait;
     if (this.terminalResult) return this.terminalResult;
     this.setPhase('landed');
-    this.recordDiagnostic('landed');
+    this.recordDiagnostic('landed', undefined, rect);
     return null;
   }
 
@@ -262,7 +274,7 @@ class MotionSession implements CardMotionSession {
     this.visual.root.style.removeProperty('will-change');
     this.visual.restingShell.style.removeProperty('transition');
     this.visual.visual.style.removeProperty('transition');
-    this.visual.unmount();
+    this.visual.release();
   }
 
   private wait(ms: number): Promise<void> {
@@ -285,14 +297,29 @@ class MotionSession implements CardMotionSession {
     this.visual.root.dataset.motionPhase = phase;
   }
 
-  private recordDiagnostic(kind: CardMotionDiagnostic['kind'], detail?: string): void {
+  private recordDiagnostic(
+    kind: CardMotionDiagnostic['kind'],
+    detail?: string,
+    rect?: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
+    durationMs?: number,
+  ): void {
     this.record({
       sessionId: this.id,
       cardId: this.cardId,
       route: this.route,
       phase: this.currentPhase,
+      atMs: performance.now(),
       kind,
       ...(detail ? { detail } : {}),
+      ...(rect ? {
+        rect: {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        },
+      } : {}),
+      ...(durationMs === undefined ? {} : { durationMs }),
     });
   }
 }
@@ -300,6 +327,7 @@ class MotionSession implements CardMotionSession {
 export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => {
   const sessions = new Map<string, MotionSession>();
   const leases = new CanonicalVisibilityRegistry();
+  const actors = createCardMotionActorPool(host);
   const diagnosticEntries: CardMotionDiagnostic[] = [];
   let nextSessionId = 1;
   let disposed = false;
@@ -323,7 +351,7 @@ export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => 
     get diagnostics() {
       return diagnosticEntries;
     },
-    endpoint: (cardId) => canonicalCardEndpoint(cardId, host.cardRefs),
+    endpoint: (cardId) => canonicalCardEndpoint(cardId, host.cardElement),
     begin: (options) => {
       if (disposed) throw new Error('Cannot begin card motion in a disposed scope');
       const existing = sessions.get(options.cardId);
@@ -335,7 +363,7 @@ export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => 
         ?? (options.basis.kind === 'clone' ? options.basis.snapshot.face : 'faceDown');
       const rotationDegrees = options.rotationDegrees
         ?? (options.basis.kind === 'clone' ? options.basis.snapshot.rotationDegrees : 0);
-      const surrogate = createCardSurrogate(host, {
+      const surrogate = actors.acquire({
         sessionId,
         cardId: options.cardId,
         route: options.route,
@@ -357,6 +385,7 @@ export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => 
         record,
         options.sourceElement ?? null,
         face,
+        options.startRect,
       );
       sessions.set(options.cardId, session);
       return session;
@@ -369,6 +398,7 @@ export const createCardMotionScope = (host: CardMotionHost): CardMotionScope => 
       disposed = true;
       for (const session of [...sessions.values()]) void session.cancel('screen-disposed');
       leases.releaseAll();
+      actors.dispose();
     },
   };
 };

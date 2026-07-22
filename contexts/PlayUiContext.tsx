@@ -10,6 +10,7 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction } from 'solid-js/store';
 import { useMatchSession } from './MatchSessionContext';
+import { continueAfterIntentPendingPaint } from '@/services/playgame/client/intentSubmission';
 import type {
   SeatPresentationBlock,
   SeatTransactionTimeline,
@@ -96,6 +97,7 @@ export const PlayUiProvider = (props: {
   const blockQueue: SeatPresentationBlock[] = [];
   let draining = false;
   let disposed = false;
+  let presentationPreludePending: Promise<void> | null = null;
 
   const adoptFrame = (
     frame: SeatTransactionTimeline['frames'][number],
@@ -149,6 +151,9 @@ export const PlayUiProvider = (props: {
       setReplayClientActivity({ kind: 'PLAYING_ANIMATIONS' });
     });
     try {
+      const prelude = presentationPreludePending;
+      presentationPreludePending = null;
+      if (prelude) await prelude;
       while (!disposed && presentationSink && blockQueue.length > 0) {
         const block = blockQueue.shift()!;
         const timeline = seatPresentationBlockToTransactionTimeline(block);
@@ -177,6 +182,7 @@ export const PlayUiProvider = (props: {
 
   const enqueueBlock = (block: SeatPresentationBlock): void => {
     if (disposed) return;
+    let needsResolutionPreludePaint = false;
     batch(() => {
       setPresentationBusy(true);
       setTurnFlowRunning(true);
@@ -186,9 +192,13 @@ export const PlayUiProvider = (props: {
         // Remote CARD_STAGED frames canonically precede resolution start, but
         // the local lock beat must paint before any hidden opposing card flies.
         setUi('isFlipped', true);
+        needsResolutionPreludePaint = true;
       }
     });
     blockQueue.push(block);
+    if (needsResolutionPreludePaint && !presentationPreludePending) {
+      presentationPreludePending = continueAfterIntentPendingPaint();
+    }
     void drainPresentationQueue();
   };
 

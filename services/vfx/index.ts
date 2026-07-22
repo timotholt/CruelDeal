@@ -2,7 +2,7 @@
  * Public VFX surface. Import from `@/services/vfx` rather than deep paths.
  *
  * Example:
- *   import { VFXEngine, vfxSfx, revealCardCinematic } from '@/services/vfx';
+ *   import { VFXEngine, vfxSfx } from '@/services/vfx';
  */
 
 export { VFXEngine, lerp, rand, pick } from './engine';
@@ -25,12 +25,6 @@ export { defaultTheme, detectQuality, qualityScale } from './theme';
 export type { VfxTheme, EasingFn, QualityLevel, ShakeConfig } from './theme';
 
 export { vfxSfx } from './sfx';
-
-export { revealCardCinematic, revealPendingCinematic } from './animations/reveal-cinematic';
-export type {
-  RevealCinematicOpts,
-  RevealPendingCinematicOpts,
-} from './animations/reveal-cinematic';
 
 export { captureCardRects, playCardLayoutSlide } from './animations/layout-flip';
 export type { LayoutSlideOpts } from './animations/layout-flip';

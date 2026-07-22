@@ -24,6 +24,7 @@
     "test:engine:kernel": "npm run test:playgame:phase15",
     "test:engine:runtime": "npm run test:playgame:phase0",
     "test:engine:authorities": "vitest run services/playgame/client/matchClient.contract.test.ts services/playgame/testing/authorityTestingArchitecture.test.ts services/playgame/runtime/__tests__/characterization/live-opening.contract.test.ts services/playgame/runtime/__tests__/localMatchSessionAdapter.test.ts services/playgame/runtime/__tests__/phase3b-opening-authority.test.ts services/playgame/debug/replayPresentation.test.ts components/screens/play/playPresentationArchitecture.test.ts contexts/PlayProviders.architecture.test.ts contexts/PlayProviders.test.tsx contexts/PlayUiInterleaving.test.tsx",
+    "test:presentation": "vitest run services/playgame/presentation components/screens/play/playPresentationArchitecture.test.ts contexts/PlayUiInterleaving.test.tsx",
     "test:engine:regression": "node scripts/playgame/test-engine-regression.mjs",
     "verify:playgame:phase15": "node scripts/playgame/verify-phase15.mjs",
     "test:playgame:manifest": "tsx services/playgame/engine/manifest/manifest.test.ts",

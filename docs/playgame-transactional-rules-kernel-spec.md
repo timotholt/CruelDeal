@@ -1564,6 +1564,37 @@ schedule, activation, and optional reveal/reaction as one transaction.
 Minimum/maximum lane count and topology-position rules are operation policy,
 not reducer guesses.
 
+For every player-presentable ruleset those bounds are normative manifest
+contract, not an unconstrained test convention:
+
+```ts
+interface PlayerPresentationCapacityProfile {
+  readonly maximumActiveLaneCount: number;
+  readonly laneCapacityPerOwner: number;
+  readonly resolutionBudget: Readonly<ResolutionBudget>;
+}
+```
+
+The standard ruleset declares `maximumActiveLaneCount: 3` and consumes
+`manifest.constants.laneCapacity: 4`, yielding at most 24 simultaneously
+board-resident cards across both owners. Its `resolutionBudget` is the exact
+finite budget the kernel will enforce for that match, including maximum work
+items, events, reactions, effect depth, and created entities. Match bootstrap
+validates these values and supplies the same frozen capacity profile to the
+kernel, runtime, and presentation bootstrap. A ruleset, resolution-budget, or
+manifest change that exceeds the client's generated and validated presentation
+capacity is rejected before match creation; it cannot commit a legal match
+that the client is structurally unable to present.
+
+`laneCapacityPerOwner` is the presentation-profile name for the same value as
+`manifest.constants.laneCapacity`; bootstrap requires exact equality and does
+not maintain two independently configurable capacities.
+
+Unlimited-capacity or nonstandard-lane test fixtures remain valid headless
+kernel tests, but they are not player-presentable rulesets unless they declare
+and pass a corresponding presentation capacity profile. Tests that intentionally
+change these bounds must not be mistaken for production UI capacity proof.
+
 ##### C5A-4c — Callers, Setup, Protocol, and Exit
 
 Location setup retains deterministic weighted selection and scoped RNG, then
