@@ -4,6 +4,10 @@ Designer-specified 2026-07-17. Presentation MUST match this sequence
 exactly. Any presentation change to /play turn resolution is validated
 against this document.
 
+The visible order in this document remains authoritative. Animation timing,
+clock ownership, completion, cancellation, failure, and cleanup are governed
+by `docs/playgame-compiled-animation-timeline-spec.md`.
+
 ## Sequence
 
 1. **Local lock.** The bottom (local) player's cards played during the
@@ -33,5 +37,6 @@ energy) paces in frame order as committed.
 - Effect-driven moves (e.g. a location relocating a card) animate as card
   transfers (FLIP between rects) with VFX chosen by the event's
   cause (effectKind/sourceId). Never teleport.
-- Animations are best-effort and bounded: a missing anchor or timeout
-  advances the walk without changing the sequence's ORDER.
+- Required animations are strict and bounded. A missing anchor, compilation
+  failure, or timeout is an observable presentation failure; it does not
+  authorize a pop, teleport, skipped beat, or silent advance.
