@@ -25,7 +25,8 @@ export type VisualTargetRef =
   | { readonly kind: 'LOCATION_MAP'; readonly lane: number }
   | { readonly kind: 'LANE'; readonly lane: number }
   | { readonly kind: 'PLAYFIELD' }
-  | { readonly kind: 'TURN_BANNER' };
+  | { readonly kind: 'TURN_BANNER' }
+  | { readonly kind: 'TURN_BANNER_BACKGROUND' };
 
 export type VisualChannel =
   | 'layout'
@@ -207,6 +208,7 @@ export function visualTargetKey(target: VisualTargetRef): string {
       return `${target.kind}:${target.lane}`;
     case 'PLAYFIELD':
     case 'TURN_BANNER':
+    case 'TURN_BANNER_BACKGROUND':
       return target.kind;
   }
 }

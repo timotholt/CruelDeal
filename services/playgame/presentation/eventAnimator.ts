@@ -53,7 +53,7 @@ const playSfx = (
   timing: SfxCue['timing'],
 ): void => {
   for (const cue of cues) {
-    if (cue.timing === timing) host.playSfx?.(cue.name);
+    if (cue.timing === timing) host.playSfx(cue.name);
   }
 };
 
@@ -432,7 +432,7 @@ const animateOneTransfer = async (
     await session.cancel('presentation-invalidated');
     return;
   }
-  if (useTransferSfx && transfer.style.sfx) host.playSfx?.(transfer.style.sfx);
+  if (useTransferSfx && transfer.style.sfx) host.playSfx(transfer.style.sfx);
 
   const target = endpoint ?? {
     rect: logicalDestination!.rect,

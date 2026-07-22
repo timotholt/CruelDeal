@@ -57,7 +57,9 @@ describe('Phase 1.22 governed card-motion architecture fences', () => {
   it('keeps the presentation sink as an awaited dispatcher, not an animation implementation', () => {
     const sink = source('../playPresentationSink.ts');
     expect(sink).toContain('await animateCardReveal(');
-    expect(sink).toContain('await animateLocationReveal(');
+    expect(sink).toContain('prepareLocationRevealAnimation(host, browser, frame)');
+    expect(sink).toContain('await resources.location.present(signal)');
+    expect(sink).toContain('await resources.turnBanner.present(signal)');
     expect(sink).not.toContain('cardMotion.begin(');
     expect(sink).not.toContain("style.transform = 'rotateY(");
   });

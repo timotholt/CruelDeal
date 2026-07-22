@@ -53,6 +53,7 @@ const presentationHost = (
       reserve: vi.fn(),
       release: vi.fn(),
     },
+    playSfx: vi.fn(),
   });
 
 const projectedMoveFrame = (): SeatTransactionFrame => {

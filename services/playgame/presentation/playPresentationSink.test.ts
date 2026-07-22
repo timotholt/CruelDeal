@@ -24,6 +24,7 @@ import { mountLocationSurface } from '@/components/game-surfaces/location/locati
 import { REVEAL_CINEMATIC_TIMING } from './timing';
 import type { Frame } from '../engine/types/timeline';
 import type { PresentationBeat } from './transactionPresentationPlanner';
+import { FakeWaapiDriver } from './storyboard/waapiDriver';
 
 type SplitEventType<T, D> = T extends string ? { readonly type: T; readonly data: D } : never;
 type ProjectedEvent = SeatAnimationEvent extends infer E
@@ -174,11 +175,21 @@ const fixture = () => {
   let tileElement: HTMLElement | null = null;
   const dismissToast = vi.fn();
   const toastElement = document.createElement('div');
-  const showToast = vi.fn(() => ({ element: toastElement, dismiss: dismissToast }));
+  const toastBackgroundElement = document.createElement('div');
+  const showToast = vi.fn(() => ({
+    element: toastElement,
+    backgroundElement: toastBackgroundElement,
+    dismiss: dismissToast,
+  }));
+  const timelineDrivers: FakeWaapiDriver[] = [];
   const browser: PlayPresentationBrowserPort = {
-    document,
     playfieldRoot: root,
     playfield: root,
+    createTimelineDriver: () => {
+      const driver = new FakeWaapiDriver();
+      timelineDrivers.push(driver);
+      return driver;
+    },
     locationMap: () => mapElement,
     locationTile: () => tileElement,
     showToast,
@@ -201,6 +212,7 @@ const fixture = () => {
     playSfx,
     showToast,
     dismissToast,
+    timelineDrivers,
     setMap: (element: HTMLElement | null) => {
       mapElement = element;
     },
@@ -343,6 +355,7 @@ describe('browser play presentation sink', () => {
       const animation = prepared.presentAfterAdoption(controller.signal);
       expect(test.showToast).toHaveBeenCalledWith('TURN 4', {
         durationMs: 2_100,
+        autoDismiss: false,
       });
 
       controller.abort('fast-forward');
@@ -415,9 +428,7 @@ describe('browser play presentation sink', () => {
     expect(test.motionSurface.cardMotion.activeLeaseCount).toBe(0);
   });
 
-  it('fades the map while flipping a stable location clone into the adopted tile', async () => {
-    vi.useFakeTimers();
-    try {
+  it('fades the map while flipping a prebuilt two-sided actor into the adopted tile', async () => {
       const test = fixture();
       const map = document.createElement('div');
       const hiddenTile = document.createElement('div');
@@ -435,42 +446,50 @@ describe('browser play presentation sink', () => {
         lane: 0,
         location: 'location:test',
         defId,
-      });
+      }, state({
+        lanes: [{
+          id: 0 as import('../engine/types/ids').LaneId,
+          status: 'ACTIVE',
+          location: {
+            token: 'seat-location:test' as import('../runtime/projection').SeatLocationToken,
+            face: 'FACE_UP',
+            revealAtTurn: 1,
+            defId,
+          },
+          cards: { P0: [], P1: [] },
+          power: { P0: 0, P1: 0 },
+        }],
+      }));
 
       const prepared = await test.sink.prepareBeat(
         beat(location),
         new AbortController().signal,
       );
       expect(map.style.opacity).toBe('0');
-      expect(map.style.transition).toBe('none');
       expect(hiddenTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
         .toBe('hidden');
       const actor = test.overlay.querySelector<HTMLElement>('.location');
       expect(actor).not.toBeNull();
       expect(actor?.style.transform).toBe('rotateY(0deg)');
-      expect(actor?.style.transition).toBe('');
+      expect(actor?.querySelectorAll('.location-motion-face')).toHaveLength(2);
+      expect(actor?.querySelector('[data-surface-face="back"]')).not.toBeNull();
+      expect(actor?.querySelector('[data-surface-face="front"]')).not.toBeNull();
 
       hiddenTile.remove();
       test.root.prepend(revealedTile);
       test.setTile(revealedTile);
       const animation = prepared.presentAfterAdoption(new AbortController().signal);
-      expect(map.style.opacity).toBe('1');
-      expect(map.style.transition).toContain('700ms');
-      expect(actor?.style.transform).toBe('rotateY(90deg)');
-      expect(actor?.style.transition).toContain('350ms');
-      await vi.advanceTimersByTimeAsync(350);
-      expect(test.overlay.querySelector('.location')).not.toBeNull();
-      expect(test.overlay.querySelector('[data-surface-face="front"]')).not.toBeNull();
-      await vi.runAllTimersAsync();
+      const driver = test.timelineDrivers.at(-1)!;
+      expect(driver.animations.map(item => item.id).sort()).toEqual([
+        'location-map-fade:opacity',
+        'location-two-sided-flip:transform',
+      ]);
+      driver.advanceTo(700);
       await animation;
 
       expect(map.style.opacity).toBe('');
-      expect(map.style.transition).toBe('');
       expect(revealedTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
         .toBe('');
-    } finally {
-      vi.useRealTimers();
-    }
   });
 
   it('restores location styles and removes the flip clone when aborted', async () => {
@@ -489,7 +508,20 @@ describe('browser play presentation sink', () => {
         lane: 0,
         location: 'location:test',
         defId: Object.keys(BOOTSTRAP_MANIFEST.locations)[0]!,
-      });
+      }, state({
+        lanes: [{
+          id: 0 as import('../engine/types/ids').LaneId,
+          status: 'ACTIVE',
+          location: {
+            token: 'seat-location:test' as import('../runtime/projection').SeatLocationToken,
+            face: 'FACE_UP',
+            revealAtTurn: 1,
+            defId: Object.keys(BOOTSTRAP_MANIFEST.locations)[0]!,
+          },
+          cards: { P0: [], P1: [] },
+          power: { P0: 0, P1: 0 },
+        }],
+      }));
       const controller = new AbortController();
       const prepared = await test.sink.prepareBeat(beat(location), controller.signal);
       const animation = prepared.presentAfterAdoption(controller.signal);
@@ -502,7 +534,6 @@ describe('browser play presentation sink', () => {
         .toBe('');
       expect(tile.style.transform).toBe('');
       expect(map.style.opacity).toBe('');
-      expect(map.style.transition).toBe('');
     } finally {
       vi.useRealTimers();
     }

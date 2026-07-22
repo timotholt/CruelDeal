@@ -84,7 +84,7 @@ export const animateCardReveal = async (
     preparation.width,
     preparation.height,
   );
-  host.playSfx?.('reveal');
+  host.playSfx('reveal');
   const centerResult = await session.animateTo({
     rect: centerRect,
     rotationDegrees: preparation.rotationDegrees,

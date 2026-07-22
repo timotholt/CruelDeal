@@ -37,6 +37,8 @@ import {
 } from '@/services/playgame/presentation/handReservations';
 import { startOpeningPresentation } from '@/services/playgame/presentation/openingPresentation';
 import { createPlayPresentationHost } from '@/services/playgame/presentation/playPresentationHost';
+import { createNativeTimelineDriverFactory } from '@/services/playgame/presentation/storyboard/waapiDriver';
+import { vfxSfx } from '@/services/vfx';
 import { createPlayPresentationSink } from '@/services/playgame/presentation/playPresentationSink';
 import { showToast } from '@/services/playgame/toast';
 import {
@@ -272,6 +274,7 @@ export const PlayBoard = (props: PlayBoardProps) => {
         reserve: cards => reserveHandSlots({ setUi }, cards),
         release: cardIds => releaseHandSlots({ setUi }, cardIds),
       },
+      playSfx: vfxSfx,
     });
     const sink = createPlayPresentationSink({
       host,
@@ -281,9 +284,9 @@ export const PlayBoard = (props: PlayBoardProps) => {
         setEndGamePromptVisible: value => setUi('showEndGamePrompt', value),
       },
       browser: {
-        document,
         playfieldRoot: playRoot,
         playfield: playfieldEl,
+        createTimelineDriver: createNativeTimelineDriverFactory(document),
         locationMap: lanePresentationRefs.mapElement,
         locationTile: lanePresentationRefs.tileElement,
         showToast: (message, options) =>

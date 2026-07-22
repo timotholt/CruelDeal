@@ -41,6 +41,18 @@ interface NativeTimelineHandle extends TimelineAnimation {
 
 export type NativeTargetResolver = (targetKey: string) => Element;
 
+export type TimelineDriverFactory = (
+  targets: ReadonlyMap<string, Element>,
+) => AnimationTimelineDriver;
+
+export const createNativeTimelineDriverFactory = (
+  document: Document,
+): TimelineDriverFactory => targets => new NativeWaapiDriver(document, targetKey => {
+  const target = targets.get(targetKey);
+  if (!target) throw new Error(`Compiled timeline target ${targetKey} is unavailable`);
+  return target;
+});
+
 export class NativeWaapiDriver implements AnimationTimelineDriver {
   readonly #document: Document;
   readonly #resolveTarget: NativeTargetResolver;

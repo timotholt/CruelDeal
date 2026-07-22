@@ -13,6 +13,7 @@ export interface ShowToastOpts {
 
 export interface ToastHandle {
   readonly element: HTMLElement;
+  readonly backgroundElement: HTMLElement;
   dismiss(): void;
 }
 
@@ -23,25 +24,29 @@ export function showToast(
   opts: ShowToastOpts = {},
 ): ToastHandle {
   const t = document.createElement('div');
+  const background = document.createElement('div');
+  background.className = 'toast-background';
   t.className = 'toast';
   if (message.startsWith('TURN')) t.classList.add('turn-msg');
   t.textContent = message;
   const duration = opts.duration ?? 1100;
   t.style.setProperty('--toast-duration', `${duration}ms`);
+  background.style.setProperty('--toast-duration', `${duration}ms`);
   area.classList.add('has-message');
-  area.appendChild(t);
+  area.append(background, t);
   let dismissed = false;
   const dismiss = (): void => {
     if (dismissed) return;
     dismissed = true;
     if (timeout !== null) clearTimeout(timeout);
     t.remove();
+    background.remove();
     if (!area.querySelector('.toast')) area.classList.remove('has-message');
   };
   const timeout = opts.autoDismiss === false
     ? null
     : setTimeout(dismiss, duration + 100);
-  return { element: t, dismiss };
+  return { element: t, backgroundElement: background, dismiss };
 }
 
 /**

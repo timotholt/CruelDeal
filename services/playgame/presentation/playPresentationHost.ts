@@ -29,7 +29,7 @@ export interface PlayPresentationHost {
   cardIds(): readonly string[];
   cardElement(cardId: string): HTMLElement | null;
   zoneElement(key: ZoneAnchorKey): HTMLElement | null;
-  playSfx?(name: string): void;
+  playSfx(name: string): void;
   playVfx?(cue: VfxCue): void;
 }
 
@@ -41,7 +41,7 @@ export interface CreatePlayPresentationHostOptions {
   readonly cardStatReadModel: CardStatReader;
   readonly handSlots: PresentationHandSlots;
   readonly cardVfxRegistry: CardVfxRegistry;
-  readonly playSfx?: (name: string) => void;
+  readonly playSfx: (name: string) => void;
   readonly playVfx?: (cue: VfxCue) => void;
 }
 
@@ -154,6 +154,6 @@ export const createPlayPresentationHost = (
   cardIds: () => options.motionSurface.cardIds(),
   cardElement: cardId => options.motionSurface.cardElement(cardId),
   zoneElement: key => options.motionSurface.zoneElement(key),
-  ...(options.playSfx ? { playSfx: options.playSfx } : {}),
+  playSfx: options.playSfx,
   playVfx: options.playVfx ?? (cue => playCardVfxCue(options.cardVfxRegistry, cue)),
 });

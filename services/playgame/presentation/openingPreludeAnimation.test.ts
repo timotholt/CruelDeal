@@ -5,7 +5,7 @@ import { createOpeningPreludeStoryboard } from './openingPreludeAnimation';
 
 const budget = {
   maximumPrimitiveSteps: 4,
-  maximumVisualTracks: 3,
+  maximumVisualTracks: 5,
   maximumTimedCues: 0,
   maximumAuthoredRoutineDepth: 16 as const,
   maximumCardActors: 0,
@@ -32,7 +32,7 @@ describe('compiled opening transaction prelude', () => {
       ]);
     expect(timeline.totalDurationMs).toBe(5_150);
     expect(timeline.tracks.map(track => track.targetKey).sort())
-      .toEqual(['PLAYFIELD', 'TURN_BANNER']);
+      .toEqual(['PLAYFIELD', 'TURN_BANNER', 'TURN_BANNER_BACKGROUND']);
 
     const playfield = timeline.tracks.find(track => track.targetKey === 'PLAYFIELD');
     expect(playfield?.keyframes.map(keyframe => [keyframe.atMs, keyframe.value]))

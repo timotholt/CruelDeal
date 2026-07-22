@@ -11,7 +11,6 @@ import {
   type PreparedEventAnimation,
 } from './eventAnimator';
 import type { PlayPresentationHost } from './playPresentationHost';
-import { eventNumber } from './projectedEvent';
 import {
   animateCardReveal,
   cancelCardRevealAnimation,
@@ -19,8 +18,6 @@ import {
   type CardRevealPreparation,
 } from './cardRevealAnimation';
 import {
-  animateLocationReveal,
-  cleanupLocationReveal,
   prepareLocationRevealAnimation,
   type LocationRevealBrowserPort,
   type LocationRevealPreparation,
@@ -31,33 +28,24 @@ import {
   OPENING_PRELUDE_DURATION_MS,
   prepareOpeningPrelude,
 } from './openingPreludeAnimation';
+import {
+  prepareTurnBanner,
+  type PreparedTurnBanner,
+  type TurnBannerBrowserPort,
+} from './turnBannerAnimation';
 
 const TURN_RESOLUTION_LOCK_HOLD_MS = 100;
-const TURN_BANNER_DURATION_MS = 2_100;
-const TURN_BANNER_HOLD_MS = 1_200;
 const LEGACY_BEAT_DECLARED_DURATION_MS = 15_000;
-
-export interface PresentationToastHandle {
-  readonly element: HTMLElement;
-  dismiss(): void;
-}
 
 export interface PlayPresentationUiPort {
   setLockedResult(result: SeatVisibleMatchState['result']): void;
   setEndGamePromptVisible(value: boolean): void;
 }
 
-export interface PlayPresentationBrowserPort extends LocationRevealBrowserPort {
-  readonly document: Document;
+export interface PlayPresentationBrowserPort
+  extends LocationRevealBrowserPort, TurnBannerBrowserPort {
   readonly playfieldRoot: HTMLElement;
   readonly playfield: HTMLElement;
-  showToast(
-    message: string,
-    options: {
-      readonly durationMs: number;
-      readonly autoDismiss?: boolean;
-    },
-  ): PresentationToastHandle | null;
 }
 
 export interface CreatePlayPresentationSinkOptions {
@@ -72,6 +60,7 @@ interface FrameResources {
   readonly eventAnimation: PreparedEventAnimation;
   readonly reveal: CardRevealPreparation | null;
   readonly location: LocationRevealPreparation | null;
+  readonly turnBanner: PreparedTurnBanner | null;
   readonly cleanups: Set<() => void>;
 }
 
@@ -108,21 +97,25 @@ export const createPlayPresentationSink = (
     let eventAnimation: PreparedEventAnimation | null = null;
     let reveal: CardRevealPreparation | null = null;
     let location: LocationRevealPreparation | null = null;
+    let turnBanner: PreparedTurnBanner | null = null;
     try {
       eventAnimation = prepareEventAnimation(host, frame);
       reveal = prepareCardRevealAnimation(host, frame);
       location = prepareLocationRevealAnimation(host, browser, frame);
+      turnBanner = prepareTurnBanner(browser, frame);
       return {
         frame,
         eventAnimation,
         reveal,
         location,
+        turnBanner,
         cleanups: new Set(),
       };
     } catch (error) {
       eventAnimation?.dispose('presentation-invalidated');
       if (reveal) cancelCardRevealAnimation(reveal, 'presentation-invalidated');
-      if (location) cleanupLocationReveal(location);
+      location?.cancel();
+      turnBanner?.cancel();
       throw error;
     }
   };
@@ -139,7 +132,8 @@ export const createPlayPresentationSink = (
     } else {
       resources.eventAnimation.dispose();
     }
-    if (resources.location) cleanupLocationReveal(resources.location);
+    resources.location?.cancel();
+    resources.turnBanner?.cancel();
     for (const cleanup of [...resources.cleanups]) cleanup();
     resources.cleanups.clear();
   };
@@ -161,7 +155,9 @@ export const createPlayPresentationSink = (
       beatId: beat.id,
       firstFrame: beat.frames[0].frame,
       lastFrame: beat.frames.at(-1)!.frame,
-      declaredDurationMs: LEGACY_BEAT_DECLARED_DURATION_MS,
+      declaredDurationMs: resources.turnBanner?.declaredDurationMs
+        ?? resources.location?.declaredDurationMs
+        ?? LEGACY_BEAT_DECLARED_DURATION_MS,
       presentAfterAdoption: async (signal): Promise<PresentationOutcome> => {
         if (settled || disposed || signal.aborted) {
           settle(true);
@@ -181,14 +177,12 @@ export const createPlayPresentationSink = (
                 break;
 
               case 'TURN_STARTED': {
-                const turn = eventNumber(frame.event, 'turn') ?? frame.after.turn;
-                const toast = browser.showToast(`TURN ${turn}`, {
-                  durationMs: TURN_BANNER_DURATION_MS,
-                });
-                if (toast) resources.cleanups.add(() => toast.dismiss());
-                const held = await waitFor(TURN_BANNER_HOLD_MS, signal);
-                if (held && toast) resources.cleanups.clear();
-                break;
+                if (!resources.turnBanner) {
+                  throw new Error('TURN_STARTED has no prepared banner owner');
+                }
+                const outcome = await resources.turnBanner.present(signal);
+                completed = outcome === 'COMPLETED';
+                return outcome;
               }
 
               case 'MATCH_ENDED':
@@ -198,7 +192,9 @@ export const createPlayPresentationSink = (
 
               case 'LOCATION_REVEALED':
                 if (resources.location) {
-                  await animateLocationReveal(browser, resources.location, signal);
+                  const outcome = await resources.location.present(signal);
+                  completed = outcome === 'COMPLETED';
+                  return outcome;
                 }
                 break;
 
@@ -238,9 +234,9 @@ export const createPlayPresentationSink = (
         throw new Error('Opening transaction preparation received mixed transactions');
       }
       const owner = prepareOpeningPrelude(transactionId, {
-        document: browser.document,
         root: browser.playfieldRoot,
         playfield: browser.playfield,
+        createTimelineDriver: browser.createTimelineDriver,
         createTitle: () => {
           const title = browser.showToast('CRUEL DEAL', {
             durationMs: OPENING_PRELUDE_DURATION_MS,
