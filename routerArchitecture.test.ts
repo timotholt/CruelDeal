@@ -45,6 +45,16 @@ describe('router architecture', () => {
     });
   });
 
+  it('isolates mounted route surfaces from descendant reactive state', () => {
+    const routeSource = source('./router.tsx');
+
+    expect(routeSource).toContain('component: () => untrack(() => (');
+    expect(routeSource).toContain('<ClassicPlayScreen');
+    expect(routeSource).not.toContain(
+      "component: () => <ClassicPlayScreen allowDebugSetup={import.meta.env.DEV}",
+    );
+  });
+
   it('isolates development screens behind the Vite lazy module catalog', () => {
     const routeSource = source('./router.tsx');
     const splitScreens = [

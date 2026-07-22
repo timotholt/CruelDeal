@@ -15,6 +15,7 @@ import {
   lazy,
   Show,
   Suspense,
+  untrack,
   useContext,
   type Component,
   type JSX,
@@ -342,7 +343,16 @@ const playRoute = createRoute({
   getParentRoute: () => authenticatedLayoutRoute,
   path: '/play',
   staticData: { screen: 'PLAY', surface: 'play' },
-  component: () => <ClassicPlayScreen allowDebugSetup={import.meta.env.DEV} onExit={() => router.navigate({ to: '/' })} />,
+  // Route insertion must not capture play-state signals read while the game
+  // tree is constructed. Otherwise each presentation frame briefly removes
+  // and reinserts the entire 9:16 root, invalidating animation ownership and
+  // producing a full-board flash.
+  component: () => untrack(() => (
+    <ClassicPlayScreen
+      allowDebugSetup={import.meta.env.DEV}
+      onExit={() => router.navigate({ to: '/' })}
+    />
+  )),
 });
 
 const cityMapRoute = createRoute({
