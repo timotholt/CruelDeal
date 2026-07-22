@@ -17,12 +17,19 @@ import {
   removeTestLocation,
 } from '../engine/testkit/runtimeFixture';
 import {
+  annotateReplayEffectJson,
   annotateReplayEventJson,
   createReplayActorResolver,
   createReplayNameResolver,
+  describeReplayEffect,
   describeReplayCause,
   describeReplayStep,
 } from './replayPresentation';
+import type { EffectTraceEntry } from '../engine/types/effectTrace';
+import {
+  effectAttemptId,
+  effectInvocationId,
+} from '../engine/types/effectTrace';
 
 const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST, {
   P0: Array.from({ length: 4 }, () => ({ defId: 'bone-market' })),
@@ -31,10 +38,18 @@ const state = createInitialMatchState('replay-presentation', BOOTSTRAP_MANIFEST,
 const cardId = state.hand.P0[0];
 const location = locationCardAtLane(state, 0)!;
 
-const step = (event: MatchEvent): ReplayStep => ({
+const step = (
+  event: MatchEvent | null,
+  effect: EffectTraceEntry | null = null,
+): ReplayStep => ({
   cursor: 1,
   transactionId: 'p0-tx',
-  framedEvent: { frame: asFrame(1), scope: { turn: 1, phase: 'ACTION' }, event },
+  canonicalFrame: {
+    frame: asFrame(1),
+    scope: { turn: 1, phase: 'ACTION' },
+    event,
+    effect,
+  },
   frame: asFrame(1),
   scope: { turn: 1, phase: 'ACTION' },
   event,
@@ -42,7 +57,7 @@ const step = (event: MatchEvent): ReplayStep => ({
 });
 const steps: ReplayStep[] = [{
   cursor: 0,
-  framedEvent: null,
+  canonicalFrame: null,
   frame: GENESIS_FRAME,
   scope: null,
   event: null,
@@ -106,6 +121,53 @@ describe('replay debug presentation', () => {
       .toBe("Player 1's Bone Market gained 2 power - caused by Bone Market (P0).");
     expect(annotateReplayEventJson(step(event), names)).toContain(`// Bone Market (P0)`);
     expect(event).toEqual(snapshot);
+  });
+
+  it('summarizes and annotates canonical effect trace entries', () => {
+    const invocationId = effectInvocationId('tx', 0);
+    const started: EffectTraceEntry = {
+      kind: 'EFFECT_INVOCATION_STARTED',
+      invocationId,
+      parentInvocationId: null,
+      source: { kind: 'CARD', cardId },
+      ability: { kind: 'ON_REVEAL', ruleId: 'card:test', ruleIndex: 0 },
+      invocationReason: 'NATURAL',
+      depth: 0,
+      candidates: [
+        { kind: 'CARD', cardId },
+        { kind: 'LOCATION', locationId: location.id },
+      ],
+    };
+    expect(describeReplayEffect(step(null, started), names, actors))
+      .toBe('Bone Market (P0) began On reveal 1: 2 targets selected.');
+    expect(annotateReplayEffectJson(step(null, started), names, actors))
+      .toContain('// Bone Market (P0)');
+
+    const blocked: EffectTraceEntry = {
+      kind: 'EFFECT_TARGET_RESOLVED',
+      invocationId,
+      attemptId: effectAttemptId(invocationId, 0),
+      attemptOrdinal: 0,
+      operation: 'DESTROY',
+      target: { kind: 'CARD', cardId },
+      result: 'BLOCKED',
+      blockedBy: [{ kind: 'LOCATION', locationId: location.id }],
+      reason: 'CANNOT_BE_DESTROYED',
+    };
+    expect(describeReplayEffect(step(null, blocked), names, actors))
+      .toBe(`Attempt 1: DESTROY on Bone Market (P0) — blocked by ${BOOTSTRAP_MANIFEST.locations[location.defId].name} (left lane) (cannot be destroyed).`);
+
+    const completed: EffectTraceEntry = {
+      kind: 'EFFECT_INVOCATION_COMPLETED',
+      invocationId,
+      attempted: 2,
+      affected: 1,
+      blocked: 1,
+      invalidated: 0,
+      unchanged: 0,
+    };
+    expect(describeReplayEffect(step(null, completed), names, actors))
+      .toBe('Effect completed: 1 affected, 1 blocked, 0 invalidated, 0 unchanged.');
   });
 
   it('decodes card, location, spell-cleanup, and generic system causes', () => {

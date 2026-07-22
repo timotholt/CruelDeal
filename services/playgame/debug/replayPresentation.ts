@@ -1,6 +1,10 @@
 import type { Manifest } from '../engine/manifest/types';
 import type { ReplayStep } from '../engine/replay';
 import type { EffectRef } from '../engine/types/ability';
+import type {
+  CanonicalEntityRef,
+  EffectTraceEntry,
+} from '../engine/types/effectTrace';
 import type { CardId, LocationCardInstanceId } from '../engine/types/ids';
 import type { MatchEvent } from '../engine/types/events';
 import type { MatchState } from '../engine/types/state';
@@ -187,6 +191,67 @@ const slotLabel = (slot: number): string => SLOT_LABELS[slot] ?? `slot ${slot}`;
 const signedChange = (delta: number, positive: string, negative: string): string => (
   delta >= 0 ? `${positive} ${delta}` : `${negative} ${Math.abs(delta)}`
 );
+
+function entityLabel(
+  state: MatchState,
+  ref: CanonicalEntityRef,
+  names: ReplayNameResolver,
+  actors: ReplayActorResolver,
+): string {
+  switch (ref.kind) {
+    case 'CARD':
+      return names.cardNameWithOwner(state, ref.cardId);
+    case 'LOCATION': {
+      const lane = names.locationLane(state, ref.locationId);
+      return lane === undefined
+        ? names.locationName(state, ref.locationId)
+        : `${names.locationName(state, ref.locationId)} (${laneLabel(lane)})`;
+    }
+    case 'LANE':
+      return laneLabel(ref.laneId);
+    case 'PLAYER':
+      return actors.playerLabel(ref.owner);
+    case 'ZONE':
+      return `${ref.owner ? `${actors.playerLabel(ref.owner)} ` : ''}${humanizeToken(ref.zone).toLowerCase()}`;
+    case 'SYSTEM':
+      return `system ${ref.systemId}`;
+  }
+}
+
+function abilityLabel(effect: Extract<EffectTraceEntry, {
+  readonly kind: 'EFFECT_INVOCATION_STARTED';
+}>): string {
+  return `${humanizeToken(effect.ability.kind)} ${effect.ability.ruleIndex + 1}`;
+}
+
+export function describeReplayEffect(
+  step: ReplayStep | null,
+  names: ReplayNameResolver,
+  actors: ReplayActorResolver,
+): string | null {
+  const effect = step?.canonicalFrame?.effect;
+  if (!step || !effect) return null;
+  switch (effect.kind) {
+    case 'EFFECT_INVOCATION_STARTED': {
+      const source = entityLabel(step.state, effect.source, names, actors);
+      const count = effect.candidates.length;
+      return `${source} began ${abilityLabel(effect)}: ${count} target${count === 1 ? '' : 's'} selected.`;
+    }
+    case 'EFFECT_TARGET_RESOLVED': {
+      const target = entityLabel(step.state, effect.target, names, actors);
+      const blockers = effect.blockedBy.map(blocker =>
+        entityLabel(step.state, blocker, names, actors)
+      );
+      const blockedBy = blockers.length === 0
+        ? ''
+        : ` by ${blockers.join(', ')}`;
+      const reason = effect.reason ? ` (${humanizeToken(effect.reason).toLowerCase()})` : '';
+      return `Attempt ${effect.attemptOrdinal + 1}: ${effect.operation} on ${target} — ${humanizeToken(effect.result).toLowerCase()}${blockedBy}${reason}.`;
+    }
+    case 'EFFECT_INVOCATION_COMPLETED':
+      return `Effect completed: ${effect.affected} affected, ${effect.blocked} blocked, ${effect.invalidated} invalidated, ${effect.unchanged} unchanged.`;
+  }
+}
 
 export function describeReplayStep(
   step: ReplayStep | null,
@@ -433,6 +498,43 @@ export function annotateReplayEventJson(
     .map((line) => {
       const match = line.match(/"(lane|fromLane|toLane)":\s*(0|1|2)/);
       return match ? `${line}  // ${laneLabel(Number(match[2]))}` : line;
+    })
+    .join('\n');
+}
+
+/**
+ * Pretty-printed effect JSON with canonical entity names appended as comments.
+ * Display-only; exported replay JSON remains undecorated.
+ */
+export function annotateReplayEffectJson(
+  frame: ReplayStep | null,
+  names: ReplayNameResolver,
+  actors: ReplayActorResolver,
+): string {
+  const effect = frame?.canonicalFrame?.effect;
+  if (!frame || !effect) return '';
+  const raw = JSON.stringify(effect, null, 2);
+  return raw
+    .split('\n')
+    .map((line) => {
+      const card = line.match(/"(cardId)":\s*"([^"]+)"/);
+      if (card) {
+        const id = card[2] as CardId;
+        const name = names.cardNameWithOwner(frame.state, id);
+        return name && name !== id ? `${line}  // ${name}` : line;
+      }
+      const location = line.match(/"(locationId)":\s*"([^"]+)"/);
+      if (location) {
+        const id = location[2] as LocationCardInstanceId;
+        const lane = names.locationLane(frame.state, id);
+        const name = `${names.locationName(frame.state, id)}${lane === undefined ? '' : `, ${laneLabel(lane)}`}`;
+        return name && name !== id ? `${line}  // ${name}` : line;
+      }
+      const lane = line.match(/"(laneId)":\s*(0|1|2)/);
+      if (lane) return `${line}  // ${laneLabel(Number(lane[2]))}`;
+      const owner = line.match(/"(owner)":\s*"(P0|P1)"/);
+      if (owner) return `${line}  // ${actors.playerLabel(owner[2])}`;
+      return line;
     })
     .join('\n');
 }

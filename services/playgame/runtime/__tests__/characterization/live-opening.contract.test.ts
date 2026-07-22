@@ -15,11 +15,10 @@ describe('current live opening contract', () => {
     const opening = initialization.opening;
 
     expect(opening.frames.length).toBeGreaterThan(0);
-    expect(new Set(opening.frames.map(frame => frame.transactionId)))
-      .toEqual(new Set([opening.transactionId]));
-    expect(opening.revision).toBe(opening.baseRevision + 1);
-    expect(opening.finalState.hands.P0).toHaveLength(4);
-    expect(opening.finalState.hands.P1).toHaveLength(4);
+    expect(opening.transactionId).toContain(':tx:');
+    expect(opening.publicRevision).toBe(opening.basePublicRevision + 1);
+    expect(opening.postState.hands.P0).toHaveLength(4);
+    expect(opening.postState.hands.P1).toHaveLength(4);
 
     const drawnOwners = opening.frames.flatMap(frame => (
       frame.event?.type === 'CARD_DRAWN'

@@ -74,8 +74,10 @@ import type {
 import type { DebugReplayTimeline } from '../debug/replayContracts';
 import {
   annotateReplayEventJson,
+  annotateReplayEffectJson,
   createReplayActorResolver,
   createReplayNameResolver,
+  describeReplayEffect,
   describeReplayStep,
 } from '../debug/replayPresentation';
 
@@ -279,13 +281,16 @@ export class LocalMatchSessionAdapter implements MatchClient {
         frame: step.frame,
         scope: step.scope,
         event: step.event,
+        effect: step.canonicalFrame?.effect ?? null,
         state: projectMatchStateForSeat(
           step.state,
           this.#viewerSeat,
           this.#manifest,
         ),
         description: describeReplayStep(step, names, actors),
+        effectDescription: describeReplayEffect(step, names, actors),
         annotatedEventJson: annotateReplayEventJson(step, names),
+        annotatedEffectJson: annotateReplayEffectJson(step, names, actors),
       };
     });
     return {

@@ -1,4 +1,5 @@
 import type { ReplayStepDescription } from './replayPresentation';
+import type { EffectTraceEntry } from '../engine/types/effectTrace';
 import type { MatchEvent } from '../engine/types/events';
 import type { Frame, TemporalScope } from '../engine/types/timeline';
 import type { SeatVisibleMatchState } from '../runtime/projection';
@@ -17,10 +18,14 @@ export interface DebugReplayStep {
   readonly frame: Frame;
   readonly scope: TemporalScope | null;
   readonly event: MatchEvent | null;
+  readonly effect: EffectTraceEntry | null;
   readonly state: SeatVisibleMatchState;
   readonly description: ReplayStepDescription;
+  readonly effectDescription: string | null;
   /** Display-only JSON with authority-resolved card/location name comments. */
   readonly annotatedEventJson: string;
+  /** Display-only JSON with authority-resolved effect entity comments. */
+  readonly annotatedEffectJson: string;
 }
 
 export interface DebugReplayTimeline {

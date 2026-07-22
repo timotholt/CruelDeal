@@ -1,6 +1,6 @@
 # Effect-Resolution Timeline and Player Wire Implementation Checkpoint
 
-Status: in progress  
+Status: complete  
 Started: 2026-07-21  
 Governing spec:
 `docs/playgame-effect-resolution-timeline-and-wire-spec.md`
@@ -45,7 +45,7 @@ Do not edit, stage, delete, or otherwise absorb those paths into this phase.
 - [x] Slice 3: authority/player protocol split and seat projection
 - [x] Slice 4: public/private revisions, receipts, and resync
 - [x] Slice 5: MatchClient and presentation-block cutover
-- [ ] Slice 6: replay UI, authority matrix, Rust parity, and full gates
+- [x] Slice 6: replay UI, authority matrix, Rust parity, and full gates
 
 ## Proven Slice 0–1 implementation
 
@@ -116,8 +116,14 @@ The shared fix belongs in the kernel work loop and operation planners:
 
 ## Last proven state
 
+- `npm run test:engine:regression` passes in 2m 30s.
+  - Log: `.test-logs/engine/engine-regression-2026-07-22T00-17-53-824Z.log`
+  - Stable link: `.test-logs/engine/latest.log`
 - `npm run typecheck:playgame` passes.
 - Focused Slice 5 client/provider/presentation tests pass: 10 files, 90 tests.
+- Expanded authority/replay gate passes: 10 files, 95 tests.
+- TypeScript protocol tests pass: 2 files, 32 tests.
+- Rust protocol tests pass: 2 tests.
 - Focused Slice 4 runtime/protocol/adapter tests pass: 73 tests.
 - `npm run protocol:schema:check` passes.
 - `npm run test:engine:kernel` passes: 34 files, 284 tests.
@@ -155,8 +161,9 @@ The shared fix belongs in the kernel work loop and operation planners:
 
 ## Next concrete action
 
-Complete Slice 6: replay UI conformance, authority matrix cleanup, Rust parity
-verification, and final handoff gates.
+The effect-resolution timeline and player-wire implementation checkpoint is
+complete. Next work should start from the next architecture checkpoint/spec,
+not by reopening this migration.
 
 ## Proven Slice 5 implementation
 
@@ -176,3 +183,25 @@ verification, and final handoff gates.
 - `MatchSessionContext` applies contiguous blocks strictly and has a bounded
   setup/opening visual-lag adoption path when authority has advanced beyond
   the visual setup cursor.
+
+## Proven Slice 6 implementation
+
+- Developer replay steps now carry the canonical `EffectTraceEntry`, a typed
+  effect summary, and annotated effect JSON behind the authorized debug
+  capability.
+- The replay drawer renders effect summaries and raw effect JSON alongside
+  mechanical event summaries/JSON.
+- Effect summaries resolve canonical card, location, lane, player, zone, and
+  system references through the same replay name resolver used by mechanical
+  events.
+- Replay presentation tests prove invocation-start, target-resolution
+  affected/blocked style copy, blocker name resolution, and invocation
+  completion summaries.
+- The registered authority gate now includes match-client contract,
+  authority architecture, live opening, local adapter, opening authority,
+  replay presentation, PlayUi architecture, provider, and interleaving suites.
+- The durable engine regression map documents replay effect presentation and
+  atomic block-delivery coverage.
+- TypeScript protocol, Rust protocol, content drift, manifest validation,
+  engine typechecking, kernel, runtime properties, and authority matrix all
+  pass through `npm run test:engine:regression`.

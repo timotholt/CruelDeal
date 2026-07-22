@@ -29,6 +29,8 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
   ));
   const eventJson = createMemo(() =>
     props.selectedStep?.annotatedEventJson ?? '');
+  const effectJson = createMemo(() =>
+    props.selectedStep?.annotatedEffectJson ?? '');
   const selectedTiming = createMemo(() => {
     const step = props.selectedStep;
     if (!step?.transactionId) return null;
@@ -206,6 +208,15 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                 <div class="replay-panel__event">{selectedDescription().summary}</div>
               </div>
 
+              <Show when={props.selectedStep?.effectDescription}>
+                {(summary) => (
+                  <div class="replay-panel__summary replay-panel__summary--effect">
+                    <div class="replay-panel__section-title">Effect trace</div>
+                    <div class="replay-panel__event">{summary()}</div>
+                  </div>
+                )}
+              </Show>
+
               <Show when={props.selectedStep}>
                 {(step) => (
                   <div class="replay-panel__stats">
@@ -220,7 +231,11 @@ export const ReplayDrawer = (props: ReplayDrawerProps) => {
                 <pre class="replay-panel__json">{eventJson()}</pre>
               </Show>
 
-              <Show when={props.selectedStep?.event}>
+              <Show when={props.selectedStep?.effect}>
+                <pre class="replay-panel__json">{effectJson()}</pre>
+              </Show>
+
+              <Show when={props.selectedStep?.event || props.selectedStep?.effect}>
                 <div class="replay-panel__timings">
                   <div class="replay-panel__section-title">Live frame timing</div>
                   <div class="replay-panel__timing-grid">
