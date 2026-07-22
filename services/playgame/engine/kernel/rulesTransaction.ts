@@ -167,6 +167,8 @@ import type {
   StagePlayCommand,
   TransformCardCommand,
 } from './types';
+import type { KernelResolutionStep } from './resolutionTrace';
+import { describeAuthoredEffectInvocation } from './rulesResolutionTrace';
 
 export interface LaneTopologySemantics {
   readonly eventType: LaneTopologyEvent['type'];
@@ -370,6 +372,7 @@ export interface RulesTransactionResult {
     MatchEvent,
     CanonicalRulesSemantics
   >[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly usage: KernelBudgetUsage;
 }
 
@@ -1019,6 +1022,8 @@ export function resolveRulesWorkTransaction(
           options.baseDepth,
         ),
       interpretEffect: (candidate, work) => {
+        const planned = (():
+          KernelStepResult<KernelWorkExpansion<CanonicalRulesWork>> => {
         if (
           'kind' in work.effect
           && work.effect.kind === 'RESOLVE_STAGED_REVEAL_TIMING'
@@ -1139,6 +1144,16 @@ export function resolveRulesWorkTransaction(
           });
         }
         return options.expandEffect(candidate, work.effect, work.context);
+        })();
+        if (planned.ok === false) return planned;
+        const resolution = describeAuthoredEffectInvocation(
+          work,
+          planned.value,
+        );
+        return kernelStepSuccess({
+          ...planned.value,
+          ...(resolution === null ? {} : { resolution }),
+        });
       },
       applyCandidate: (candidate, event) => {
         try {
@@ -1169,6 +1184,7 @@ export function resolveRulesWorkTransaction(
     state: result.value.state,
     events: result.value.transitions.map(({ event }) => event),
     transitions: result.value.transitions,
+    resolutionSteps: result.value.resolutionSteps,
     usage: result.value.usage,
   };
 }

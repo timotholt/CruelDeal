@@ -1,7 +1,8 @@
 import type { Manifest } from './manifest/types';
 import { executeRulesCommands } from './effects/rulesInterpreter';
 import { createRng } from './rng';
-import { appendGameplayRngAdvance } from './rng/transaction';
+import { appendGameplayRngResolution } from './rng/transaction';
+import type { KernelResolutionStep } from './kernel/resolutionTrace';
 import type { MatchEvent } from './types/events';
 import type { MatchState } from './types/state';
 import type { CardId } from './types/ids';
@@ -10,6 +11,7 @@ import { activeLaneIds, locationCardAtLane } from './laneTopology';
 export interface OpeningTransaction {
   readonly transactionId: string;
   readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
 }
 
 /**
@@ -41,6 +43,22 @@ export function buildOpeningTransaction(
   }
 
   const events: MatchEvent[] = [];
+  const resolutionSteps: KernelResolutionStep[] = [];
+  const append = (
+    result: {
+      readonly events: readonly MatchEvent[];
+      readonly resolutionSteps: readonly KernelResolutionStep[];
+    },
+  ): void => {
+    const transitionOffset = events.length;
+    events.push(...result.events);
+    resolutionSteps.push(...result.resolutionSteps.map(step => ({
+      transitionIndex: step.transitionIndex === null
+        ? null
+        : step.transitionIndex + transitionOffset,
+      effect: step.effect,
+    })));
+  };
   let state = genesis;
   const openingRng = createRng(genesis.rng);
   for (const owner of ['P0', 'P1'] as const) {
@@ -67,7 +85,7 @@ export function buildOpeningTransaction(
       { rng: openingRng.scope(`opening-hand:${owner}`) },
       manifest,
     );
-    events.push(...draw.events);
+    append(draw);
     state = draw.state;
   }
 
@@ -98,7 +116,7 @@ export function buildOpeningTransaction(
     }], {
       rng: openingRng.scope(`opening:location:${location.id}`),
     }, manifest);
-    events.push(...reveal.events);
+    append(reveal);
     state = reveal.state;
   }
 
@@ -120,7 +138,7 @@ export function buildOpeningTransaction(
       { rng: openingRng.scope(`turn-start-draw:${owner}`) },
       manifest,
     );
-    events.push(...draw.events);
+    append(draw);
     state = draw.state;
   }
 
@@ -130,10 +148,16 @@ export function buildOpeningTransaction(
   }], {
     rng: openingRng.scope('complete-setup'),
   }, manifest);
-  events.push(...completed.events);
+  append(completed);
+
+  const committed = appendGameplayRngResolution(genesis, openingRng, {
+    events,
+    resolutionSteps,
+  });
 
   return Object.freeze({
     transactionId: `opening:${genesis.rng.seed}`,
-    events: appendGameplayRngAdvance(genesis, openingRng, events),
+    events: committed.events,
+    resolutionSteps: committed.resolutionSteps,
   });
 }

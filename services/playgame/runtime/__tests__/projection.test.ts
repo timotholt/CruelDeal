@@ -3,22 +3,22 @@ import { describe, expect, it } from 'vitest';
 import { buildDebugMatchBootstrap } from '../../debug/buildDebugBootstrap';
 import { DEBUG_DECKS } from '../../debug/debugDecks';
 import { BOOTSTRAP_MANIFEST } from '../../engine/manifest/bootstrap';
-import type { EventTransition } from '../../engine/transactionTimeline';
+import type { CanonicalFrameTransition } from '../../engine/transactionTimeline';
 import type { MatchEvent } from '../../engine/types/events';
 import { mkPendingEffectId } from '../../engine/types/ids';
 import { asFrame } from '../../engine/types/timeline';
 import {
-  CRUEL_DEAL_PROTOCOL_VERSION,
-  validateProtocolMessage,
-  validateSeatCommittedTransactionWire,
+  PLAYER_WIRE_PROTOCOL_VERSION,
+  validatePlayerWireMessage,
+  validateSeatPresentationBlockWire,
   validateSeatMatchSnapshotWire,
 } from '../../protocol';
 import { MatchSession } from '../matchSession';
 import type { CommittedTransactionRecord } from '../contracts';
 import {
-  applySeatCommittedTransaction,
+  applySeatPresentationBlock,
+  projectPresentationBlockForSeat,
   projectSnapshotForSeat,
-  projectTransactionForSeat,
 } from '../projection';
 
 function sessionFixture(seed = 'seat-projection-fixture'): MatchSession {
@@ -33,17 +33,21 @@ describe('seat-safe JSON projection', () => {
     const state = session.runtime.state();
     const snapshot = projectSnapshotForSeat(
       session.bootstrap.matchId,
-      session.runtime.revision(),
+      session.runtime.publicRevision(),
+      session.runtime.planRevision('P0'),
       state,
       'P0',
       BOOTSTRAP_MANIFEST,
+      session.runtime.interactionStatus('P0'),
     );
     const otherSeatSnapshot = projectSnapshotForSeat(
       session.bootstrap.matchId,
-      session.runtime.revision(),
+      session.runtime.publicRevision(),
+      session.runtime.planRevision('P1'),
       state,
       'P1',
       BOOTSTRAP_MANIFEST,
+      session.runtime.interactionStatus('P1'),
     );
     const json = JSON.stringify(snapshot);
     const parsed = JSON.parse(json);
@@ -74,30 +78,28 @@ describe('seat-safe JSON projection', () => {
   it('filters authority bookkeeping and secret order from animation events', () => {
     const session = sessionFixture('seat-event-fixture');
     const { setup, opening } = session.runtime.initialization();
-    const setupPacket = projectTransactionForSeat(
-      setup.transaction,
-      setup.transitions,
+    const setupPacket = projectPresentationBlockForSeat(
+      setup,
       'P0',
       BOOTSTRAP_MANIFEST,
     );
-    const openingPacket = projectTransactionForSeat(
-      opening.transaction,
-      opening.transitions,
+    const openingPacket = projectPresentationBlockForSeat(
+      opening,
       'P0',
       BOOTSTRAP_MANIFEST,
     );
     const setupJson = JSON.stringify(setupPacket);
     const openingJson = JSON.stringify(openingPacket);
 
-    expect(validateSeatCommittedTransactionWire(setupPacket).ok).toBe(true);
-    expect(validateSeatCommittedTransactionWire(openingPacket).ok).toBe(true);
-    expect(setupPacket.events.find(
-      frame => frame.event.type === 'LOCATION_DECK_INITIALIZED',
-    )?.event.data).toEqual({
+    expect(validateSeatPresentationBlockWire(setupPacket).ok).toBe(true);
+    expect(validateSeatPresentationBlockWire(openingPacket).ok).toBe(true);
+    expect(setupPacket.frames.find(
+      frame => frame.event?.type === 'LOCATION_DECK_INITIALIZED',
+    )?.event?.data).toEqual({
       count: session.bootstrap.decks.LOCATIONS.entries.length,
     });
-    expect([...setupPacket.events, ...openingPacket.events]
-      .some(frame => frame.event.type === 'GAMEPLAY_RNG_ADVANCED')).toBe(false);
+    expect([...setupPacket.frames, ...openingPacket.frames]
+      .some(frame => frame.event?.type === 'GAMEPLAY_RNG_ADVANCED')).toBe(false);
     expect(setupJson).not.toContain('"locations"');
     expect(openingJson).not.toContain('"newOrder"');
     expect(openingJson).not.toContain('"cause"');
@@ -107,62 +109,49 @@ describe('seat-safe JSON projection', () => {
   it('encodes a seat commit as one atomic ordered message with a post-state', () => {
     const session = sessionFixture('seat-atomic-message-fixture');
     const opening = session.runtime.initialization().opening;
-    const packet = projectTransactionForSeat(
-      opening.transaction,
-      opening.transitions,
+    const packet = projectPresentationBlockForSeat(
+      opening,
       'P0',
       BOOTSTRAP_MANIFEST,
     );
     const message = {
-      protocolVersion: CRUEL_DEAL_PROTOCOL_VERSION,
-      kind: 'SEAT_COMMITTED_TRANSACTION',
+      protocolVersion: PLAYER_WIRE_PROTOCOL_VERSION,
+      kind: 'SEAT_PRESENTATION_BLOCK',
       payload: packet,
     };
 
-    expect(validateProtocolMessage(message).ok).toBe(true);
+    expect(validatePlayerWireMessage(message).ok).toBe(true);
     expect(Object.keys(packet).sort()).toEqual([
-      'baseRevision',
-      'events',
-      'frame',
+      'basePublicRevision',
+      'firstFrame',
+      'frames',
+      'lastFrame',
       'matchId',
       'postState',
-      'revision',
+      'postStateHash',
+      'preState',
+      'publicRevision',
       'transactionId',
       'version',
       'viewerSeat',
     ]);
-    expect(packet.events.length).toBeGreaterThan(1);
-    expect(packet.events.map(event => event.frame)).toEqual(
-      [...packet.events].map(event => event.frame).sort((left, right) => left - right),
+    expect(packet.frames.length).toBeGreaterThan(1);
+    expect(packet.frames.map(frame => frame.frame)).toEqual(
+      [...packet.frames].map(frame => frame.frame).sort((left, right) => left - right),
     );
-    expect(JSON.stringify(packet)).not.toMatch(/"before"|"after"|"frames"|"finalState"/);
+    expect(JSON.stringify(packet)).not.toMatch(/"before"|"finalState"/);
 
     const withoutPostState = Object.fromEntries(
       Object.entries(packet).filter(([key]) => key !== 'postState'),
     );
-    expect(validateProtocolMessage({
+    expect(validatePlayerWireMessage({
       ...message,
       payload: withoutPostState,
     }).ok).toBe(false);
-    expect(validateProtocolMessage({
+    expect(validatePlayerWireMessage({
       ...message,
-      payload: packet.events[0],
+      payload: packet.frames[0],
     }).ok).toBe(false);
-
-    const outOfOrder = {
-      ...packet,
-      events: [...packet.events].reverse(),
-    };
-    const genesis = projectSnapshotForSeat(
-      session.bootstrap.matchId,
-      packet.baseRevision,
-      opening.transitions[0]!.before,
-      'P0',
-      BOOTSTRAP_MANIFEST,
-    );
-    expect(() => applySeatCommittedTransaction(genesis, outOfOrder)).toThrow(
-      /invalid projected frame/,
-    );
   });
 
   it('filters stable pending-effect identity events without projecting their payloads', () => {
@@ -211,29 +200,32 @@ describe('seat-safe JSON projection', () => {
       ...afterScheduled,
       timeline: { frame: secondFrame, scope },
     };
-    const framedEvents = events.map((event, index) => ({
+    const frames = events.map((event, index) => ({
       frame: index === 0 ? firstFrame : secondFrame,
       scope,
       event,
+      effect: null,
     }));
-    const transitions: readonly EventTransition[] = [
+    const transitions: readonly CanonicalFrameTransition[] = [
       {
         index: 0,
         transactionId: 'pending-projection-tx',
-        framedEvent: framedEvents[0]!,
+        canonicalFrame: frames[0]!,
         frame: firstFrame,
         scope,
         event: events[0]!,
+        effect: null,
         before,
         after: afterScheduled,
       },
       {
         index: 1,
         transactionId: 'pending-projection-tx',
-        framedEvent: framedEvents[1]!,
+        canonicalFrame: frames[1]!,
         frame: secondFrame,
         scope,
         event: events[1]!,
+        effect: null,
         before: afterScheduled,
         after: afterConsumed,
       },
@@ -241,27 +233,30 @@ describe('seat-safe JSON projection', () => {
     const transaction: CommittedTransactionRecord = {
       transactionId: 'pending-projection-tx',
       matchId: session.bootstrap.matchId,
-      baseRevision: session.runtime.revision(),
-      revision: session.runtime.revision() + 1,
+      baseRevision: session.runtime.publicRevision(),
+      revision: session.runtime.publicRevision() + 1,
       intent: {
         matchId: session.bootstrap.matchId,
         seat: 'SYSTEM',
         intentId: 'pending-projection',
       },
-      framedEvents,
+      frames,
       rngDrawsBefore: before.rng.draws,
       rngDrawsAfter: before.rng.draws,
     };
 
-    const projected = projectTransactionForSeat(
-      transaction,
-      transitions,
+    const projected = projectPresentationBlockForSeat(
+      {
+        transaction,
+        transitions,
+        finalState: afterConsumed,
+      },
       'P0',
       BOOTSTRAP_MANIFEST,
     );
-    expect(projected.events).toEqual([]);
+    expect(projected.frames).toEqual([]);
     expect(JSON.stringify(projected)).not.toContain(pendingEffectId);
-    expect(validateSeatCommittedTransactionWire(projected).ok).toBe(true);
+    expect(validateSeatPresentationBlockWire(projected).ok).toBe(true);
   });
 
   it('reconnects from a snapshot plus a projected transaction suffix', () => {
@@ -269,34 +264,36 @@ describe('seat-safe JSON projection', () => {
     const genesis = projectSnapshotForSeat(
       session.bootstrap.matchId,
       0,
+      0,
       session.runtime.genesis(),
       'P0',
       BOOTSTRAP_MANIFEST,
+      'PLANNING',
     );
     const { setup, opening } = session.runtime.initialization();
-    const setupPacket = projectTransactionForSeat(
-      setup.transaction,
-      setup.transitions,
+    const setupPacket = projectPresentationBlockForSeat(
+      setup,
       'P0',
       BOOTSTRAP_MANIFEST,
     );
-    const openingPacket = projectTransactionForSeat(
-      opening.transaction,
-      opening.transitions,
+    const openingPacket = projectPresentationBlockForSeat(
+      opening,
       'P0',
       BOOTSTRAP_MANIFEST,
     );
 
-    const current = applySeatCommittedTransaction(
-      applySeatCommittedTransaction(genesis, setupPacket),
+    const current = applySeatPresentationBlock(
+      applySeatPresentationBlock(genesis, setupPacket),
       openingPacket,
     );
     const fresh = projectSnapshotForSeat(
       session.bootstrap.matchId,
-      session.runtime.revision(),
+      session.runtime.publicRevision(),
+      session.runtime.planRevision('P0'),
       session.runtime.state(),
       'P0',
       BOOTSTRAP_MANIFEST,
+      session.runtime.interactionStatus('P0'),
     );
 
     expect(current).toEqual(fresh);

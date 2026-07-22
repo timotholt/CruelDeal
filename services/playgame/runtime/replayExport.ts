@@ -1,9 +1,9 @@
 import type { Manifest } from '../engine/manifest/types';
 import type { ReplayResult, ReplayStep } from '../engine/replay';
 import { currentFrame } from '../engine/timeline';
-import { foldFramedEvents } from '../engine/transactionTimeline';
+import { foldCanonicalFrames } from '../engine/transactionTimeline';
 import { GENESIS_FRAME } from '../engine/types/timeline';
-import { assertProtocolPayload } from '../protocol';
+import { assertAuthorityPayload } from '../protocol';
 import type { MatchState } from '../engine/types/state';
 import type {
   MatchRuntimeRecordExport,
@@ -123,7 +123,7 @@ export function renderRuntimeRecord(
 
   const steps: ReplayStep[] = [{
     cursor: 0,
-    framedEvent: null,
+    canonicalFrame: null,
     frame: GENESIS_FRAME,
     scope: null,
     event: null,
@@ -150,18 +150,18 @@ export function renderRuntimeRecord(
     if (transaction.revision !== transaction.baseRevision + 1) {
       throw new Error(`Runtime replay transaction ${transaction.transactionId} has a non-contiguous commit revision`);
     }
-    if (transaction.framedEvents.length === 0) {
+    if (transaction.frames.length === 0) {
       throw new Error(`Runtime replay transaction ${transaction.transactionId} has no framed events`);
     }
-    assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
+    assertAuthorityPayload('COMMITTED_TRANSACTION', transaction);
     if (transaction.rngDrawsBefore !== state.rng.draws) {
       throw new Error(`Runtime replay transaction ${transaction.transactionId} has the wrong RNG start cursor`);
     }
 
-    const built = foldFramedEvents({
+    const built = foldCanonicalFrames({
       transactionId: transaction.transactionId,
       initialState: state,
-      framedEvents: transaction.framedEvents,
+      frames: transaction.frames,
       manifest,
     });
     if (transaction.rngDrawsAfter !== built.finalState.rng.draws) {
@@ -171,7 +171,7 @@ export function renderRuntimeRecord(
       steps.push({
         cursor: steps.length,
         transactionId: transaction.transactionId,
-        framedEvent: frame.framedEvent,
+        canonicalFrame: frame.canonicalFrame,
         frame: frame.frame,
         scope: frame.scope,
         event: frame.event,
@@ -218,7 +218,7 @@ export function reconcileRuntimeRecord(
     replayedFrame: currentFrame(replayed),
     transactionCount: replay.transactions.length,
     eventCount: replay.transactions.reduce(
-      (total, transaction) => total + transaction.framedEvents.length,
+      (total, transaction) => total + transaction.frames.length,
       0,
     ),
     checkpointCount: debugCheckpoints.length,

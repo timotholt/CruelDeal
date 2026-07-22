@@ -40,6 +40,14 @@ const tagged = (
   { type: { const: type }, ...properties },
   ['type', ...required],
 );
+const kinded = (
+  kind: string,
+  properties: Readonly<Record<string, JsonSchema>> = {},
+  required: readonly string[] = [],
+): JsonSchema => object(
+  { kind: { const: kind }, ...properties },
+  ['kind', ...required],
+);
 
 const CORE_BOUNDARY_EVENT_TYPES = [
   'TURN_RESOLUTION_STARTED',
@@ -146,19 +154,19 @@ const OTHER_EVENT_TYPES = PROTOCOL_MATCH_EVENT_TYPES.filter(
 
 const protocolMessage = (kind: string, payload: string): JsonSchema => object(
   {
-    protocolVersion: { const: 1 },
+    protocolVersion: { const: 2 },
     kind: { const: kind },
     payload: ref(payload),
   },
   ['protocolVersion', 'kind', 'payload'],
 );
 
-export const PROTOCOL_SCHEMA = {
+export const AUTHORITY_PROTOCOL_SCHEMA = {
   $schema: 'https://json-schema.org/draft/2020-12/schema',
-  $id: 'https://cruel-deal.local/protocol/cruel-deal-protocol-v1.schema.json',
-  title: 'CruelDealProtocolMessageV1',
-  description: 'Language-neutral structural boundary for Cruel Deal protocol v1.',
-  $ref: '#/$defs/ProtocolMessage',
+  $id: 'https://cruel-deal.local/protocol/cruel-deal-authority-record-v2.schema.json',
+  title: 'CruelDealAuthorityRecordMessageV2',
+  description: 'Trusted authority record boundary for Cruel Deal protocol v2.',
+  $ref: '#/$defs/AuthorityRecordMessage',
   $defs: {
     SafeInteger: integer(0),
     SafeSignedInteger: {
@@ -589,13 +597,187 @@ export const PROTOCOL_SCHEMA = {
         ref('OtherMatchEvent'),
       ],
     },
-    FramedEvent: object(
+    CanonicalEntityRef: {
+      oneOf: [
+        kinded('CARD', { cardId: string() }, ['cardId']),
+        kinded('LOCATION', { locationId: string() }, ['locationId']),
+        kinded('LANE', { laneId: ref('LaneId') }, ['laneId']),
+        kinded('PLAYER', { owner: ref('Seat') }, ['owner']),
+        kinded('ZONE', {
+          owner: { oneOf: [ref('Seat'), { type: 'null' }] },
+          zone: string(),
+        }, ['owner', 'zone']),
+        kinded('SYSTEM', { systemId: string() }, ['systemId']),
+      ],
+    },
+    AbilityRef: object(
+      {
+        kind: {
+          enum: [
+            'ON_REVEAL',
+            'ONGOING',
+            'TRIGGERED',
+            'LOCATION',
+            'SPELL',
+            'SYSTEM',
+          ],
+        },
+        ruleId: string(),
+        ruleIndex: ref('SafeInteger'),
+      },
+      ['kind', 'ruleId', 'ruleIndex'],
+    ),
+    EffectInvocationReason: {
+      enum: ['NATURAL', 'RETRIGGER', 'REACTION', 'SCHEDULED', 'SYSTEM'],
+    },
+    EffectTargetResult: {
+      enum: ['AFFECTED', 'BLOCKED', 'INVALIDATED', 'NO_CHANGE'],
+    },
+    EffectOutcomeReason: {
+      enum: [
+        'CANNOT_BE_DESTROYED',
+        'CANNOT_BE_MOVED',
+        'CANNOT_GAIN_POWER',
+        'CANNOT_LOSE_POWER',
+        'CANNOT_BE_REVEALED',
+        'LANE_FULL',
+        'HAND_FULL',
+        'EMPTY_DECK',
+        'TARGET_LEFT_ZONE',
+        'TARGET_NO_LONGER_MATCHES',
+        'SOURCE_INACTIVE',
+        'ALREADY_SATISFIED',
+        'EMPTY_SELECTION',
+        'RULE_REPLACED_OPERATION',
+        'OTHER_RULE',
+      ],
+    },
+    EffectInvocationStarted: kinded(
+      'EFFECT_INVOCATION_STARTED',
+      {
+        invocationId: string(),
+        parentInvocationId: { oneOf: [string(), { type: 'null' }] },
+        source: ref('CanonicalEntityRef'),
+        ability: ref('AbilityRef'),
+        invocationReason: ref('EffectInvocationReason'),
+        depth: ref('SafeInteger'),
+        candidates: array(ref('CanonicalEntityRef')),
+      },
+      [
+        'invocationId',
+        'parentInvocationId',
+        'source',
+        'ability',
+        'invocationReason',
+        'depth',
+        'candidates',
+      ],
+    ),
+    EffectTargetResolved: kinded(
+      'EFFECT_TARGET_RESOLVED',
+      {
+        invocationId: string(),
+        attemptId: string(),
+        attemptOrdinal: ref('SafeInteger'),
+        operation: string(),
+        target: ref('CanonicalEntityRef'),
+        result: ref('EffectTargetResult'),
+        blockedBy: array(ref('CanonicalEntityRef')),
+        reason: { oneOf: [ref('EffectOutcomeReason'), { type: 'null' }] },
+      },
+      [
+        'invocationId',
+        'attemptId',
+        'attemptOrdinal',
+        'operation',
+        'target',
+        'result',
+        'blockedBy',
+        'reason',
+      ],
+    ),
+    EffectInvocationCompleted: kinded(
+      'EFFECT_INVOCATION_COMPLETED',
+      {
+        invocationId: string(),
+        attempted: ref('SafeInteger'),
+        affected: ref('SafeInteger'),
+        blocked: ref('SafeInteger'),
+        invalidated: ref('SafeInteger'),
+        unchanged: ref('SafeInteger'),
+      },
+      [
+        'invocationId',
+        'attempted',
+        'affected',
+        'blocked',
+        'invalidated',
+        'unchanged',
+      ],
+    ),
+    EffectTraceEntry: {
+      oneOf: [
+        ref('EffectInvocationStarted'),
+        ref('EffectTargetResolved'),
+        ref('EffectInvocationCompleted'),
+      ],
+    },
+    CanonicalFrame: object(
       {
         frame: ref('EventFrame'),
         scope: ref('TemporalScope'),
-        event: ref('MatchEvent'),
+        event: { oneOf: [ref('MatchEvent'), { type: 'null' }] },
+        effect: { oneOf: [ref('EffectTraceEntry'), { type: 'null' }] },
       },
-      ['frame', 'scope', 'event'],
+      ['frame', 'scope', 'event', 'effect'],
+      {
+        oneOf: [
+          {
+            properties: {
+              event: ref('MatchEvent'),
+              effect: { type: 'null' },
+            },
+          },
+          {
+            properties: {
+              event: { type: 'null' },
+              effect: {
+                oneOf: [
+                  ref('EffectInvocationStarted'),
+                  ref('EffectInvocationCompleted'),
+                ],
+              },
+            },
+          },
+          {
+            properties: {
+              event: ref('MatchEvent'),
+              effect: {
+                allOf: [
+                  ref('EffectTargetResolved'),
+                  { type: 'object', properties: { result: { const: 'AFFECTED' } } },
+                ],
+              },
+            },
+          },
+          {
+            properties: {
+              event: { type: 'null' },
+              effect: {
+                allOf: [
+                  ref('EffectTargetResolved'),
+                  {
+                    type: 'object',
+                    properties: {
+                      result: { enum: ['BLOCKED', 'INVALIDATED', 'NO_CHANGE'] },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
     ),
     RuntimeIntent: {
       oneOf: [
@@ -615,11 +797,19 @@ export const PROTOCOL_SCHEMA = {
         matchId: string(),
         seat: ref('Seat'),
         intentId: string(),
-        expectedRevision: ref('SafeInteger'),
+        expectedPublicRevision: ref('SafeInteger'),
+        expectedPlanRevision: ref('SafeInteger'),
         intentSeq: ref('SafeInteger'),
         intent: ref('RuntimeIntent'),
       },
-      ['matchId', 'seat', 'intentId', 'expectedRevision', 'intent'],
+      [
+        'matchId',
+        'seat',
+        'intentId',
+        'expectedPublicRevision',
+        'expectedPlanRevision',
+        'intent',
+      ],
     ),
     DeckEntry: object(
       { defId: string(), variantId: string() },
@@ -712,7 +902,7 @@ export const PROTOCOL_SCHEMA = {
         baseRevision: ref('SafeInteger'),
         revision: ref('SafeInteger'),
         intent: ref('CommittedIntentIdentity'),
-        framedEvents: array(ref('FramedEvent'), { minItems: 1 }),
+        frames: array(ref('CanonicalFrame'), { minItems: 1 }),
         rngDrawsBefore: ref('SafeInteger'),
         rngDrawsAfter: ref('SafeInteger'),
       },
@@ -722,228 +912,16 @@ export const PROTOCOL_SCHEMA = {
         'baseRevision',
         'revision',
         'intent',
-        'framedEvents',
+        'frames',
         'rngDrawsBefore',
         'rngDrawsAfter',
       ],
     ),
-    SeatVisibleCard: object(
-      {
-        token: string(),
-        owner: ref('Seat'),
-        zone: {
-          enum: ['HAND', 'LANE', 'DISCARD', 'DESTROYED', 'BANISHED'],
-        },
-        lane: {
-          anyOf: [ref('LaneId'), { type: 'null' }],
-        },
-        revealed: { type: 'boolean' },
-        defId: string(),
-        variantId: string(),
-        cost: ref('SafeSignedInteger'),
-        power: ref('SafeSignedInteger'),
-        tags: array(string()),
-        counters: object({}, [], {
-          additionalProperties: ref('SafeSignedInteger'),
-        }),
-      },
-      ['token', 'owner', 'zone', 'lane', 'revealed'],
-    ),
-    SeatVisibleLocation: object(
-      {
-        token: string(),
-        face: { enum: ['FACE_DOWN', 'FACE_UP'] },
-        revealAtTurn: {
-          anyOf: [ref('PositiveInteger'), { type: 'null' }],
-        },
-        defId: string(),
-      },
-      ['token', 'face', 'revealAtTurn'],
-    ),
-    SeatVisibleLane: object(
-      {
-        id: ref('LaneId'),
-        status: {
-          enum: ['CREATING', 'ACTIVE', 'DESTROYING', 'DESTROYED'],
-        },
-        location: {
-          anyOf: [ref('SeatVisibleLocation'), { type: 'null' }],
-        },
-        cards: object(
-          {
-            P0: array(string()),
-            P1: array(string()),
-          },
-          ['P0', 'P1'],
-        ),
-        power: object(
-          {
-            P0: ref('SafeSignedInteger'),
-            P1: ref('SafeSignedInteger'),
-          },
-          ['P0', 'P1'],
-        ),
-      },
-      ['id', 'status', 'location', 'cards', 'power'],
-    ),
-    SeatVisibleMatchState: object(
-      {
-        turn: ref('SafeInteger'),
-        phase: {
-          enum: [
-            'SETUP',
-            'AWAITING_INTENT',
-            'RESOLVING',
-            'BETWEEN_TURNS',
-            'ENDED',
-          ],
-        },
-        priority: ref('Seat'),
-        energy: object(
-          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
-          ['P0', 'P1'],
-        ),
-        maxEnergy: object(
-          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
-          ['P0', 'P1'],
-        ),
-        nextTurnEnergyBonus: object(
-          { P0: ref('SafeSignedInteger'), P1: ref('SafeSignedInteger') },
-          ['P0', 'P1'],
-        ),
-        deckCounts: object(
-          { P0: ref('SafeInteger'), P1: ref('SafeInteger') },
-          ['P0', 'P1'],
-        ),
-        locationDeckCount: ref('SafeInteger'),
-        hands: object(
-          { P0: array(string()), P1: array(string()) },
-          ['P0', 'P1'],
-        ),
-        cards: array(ref('SeatVisibleCard')),
-        lanes: array(ref('SeatVisibleLane')),
-        stagedCards: array(string()),
-        discard: object(
-          { P0: array(string()), P1: array(string()) },
-          ['P0', 'P1'],
-        ),
-        destroyed: object(
-          { P0: array(string()), P1: array(string()) },
-          ['P0', 'P1'],
-        ),
-        banished: object(
-          { P0: array(string()), P1: array(string()) },
-          ['P0', 'P1'],
-        ),
-        banishedCounts: object(
-          { P0: ref('SafeInteger'), P1: ref('SafeInteger') },
-          ['P0', 'P1'],
-        ),
-        result: {
-          anyOf: [ref('MatchResult'), { type: 'null' }],
-        },
-      },
-      [
-        'turn',
-        'phase',
-        'priority',
-        'energy',
-        'maxEnergy',
-        'nextTurnEnergyBonus',
-        'deckCounts',
-        'locationDeckCount',
-        'hands',
-        'cards',
-        'lanes',
-        'stagedCards',
-        'discard',
-        'destroyed',
-        'banished',
-        'banishedCounts',
-        'result',
-      ],
-    ),
-    SeatMatchSnapshot: object(
-      {
-        version: { const: 1 },
-        matchId: string(),
-        revision: ref('SafeInteger'),
-        frame: ref('SafeInteger'),
-        viewerSeat: ref('Seat'),
-        state: ref('SeatVisibleMatchState'),
-      },
-      ['version', 'matchId', 'revision', 'frame', 'viewerSeat', 'state'],
-    ),
-    SeatAnimationEvent: object(
-      {
-        type: { enum: PROTOCOL_MATCH_EVENT_TYPES },
-        data: {
-          type: 'object',
-          additionalProperties: true,
-        },
-      },
-      ['type', 'data'],
-    ),
-    SeatFramedAnimationEvent: object(
-      {
-        frame: ref('EventFrame'),
-        scope: ref('TemporalScope'),
-        event: ref('SeatAnimationEvent'),
-      },
-      ['frame', 'scope', 'event'],
-    ),
-    SeatCommittedTransaction: object(
-      {
-        version: { const: 1 },
-        transactionId: string(),
-        matchId: string(),
-        baseRevision: ref('SafeInteger'),
-        revision: ref('SafeInteger'),
-        frame: ref('SafeInteger'),
-        viewerSeat: ref('Seat'),
-        events: array(ref('SeatFramedAnimationEvent')),
-        postState: ref('SeatVisibleMatchState'),
-      },
-      [
-        'version',
-        'transactionId',
-        'matchId',
-        'baseRevision',
-        'revision',
-        'frame',
-        'viewerSeat',
-        'events',
-        'postState',
-      ],
-    ),
-    SeatResyncRequest: object(
-      {
-        version: { const: 1 },
-        matchId: string(),
-        viewerSeat: ref('Seat'),
-        knownRevision: ref('SafeInteger'),
-        knownFrame: ref('SafeInteger'),
-      },
-      ['version', 'matchId', 'viewerSeat', 'knownRevision', 'knownFrame'],
-    ),
-    SeatResyncResponse: object(
-      {
-        version: { const: 1 },
-        snapshot: ref('SeatMatchSnapshot'),
-        transactions: array(ref('SeatCommittedTransaction')),
-      },
-      ['version', 'snapshot', 'transactions'],
-    ),
-    ProtocolMessage: {
+    AuthorityRecordMessage: {
       oneOf: [
         protocolMessage('MATCH_BOOTSTRAP', 'MatchBootstrap'),
-        protocolMessage('INTENT_ENVELOPE', 'IntentEnvelope'),
-        protocolMessage('FRAMED_EVENT', 'FramedEvent'),
+        protocolMessage('CANONICAL_FRAME', 'CanonicalFrame'),
         protocolMessage('COMMITTED_TRANSACTION', 'CommittedTransaction'),
-        protocolMessage('SEAT_MATCH_SNAPSHOT', 'SeatMatchSnapshot'),
-        protocolMessage('SEAT_COMMITTED_TRANSACTION', 'SeatCommittedTransaction'),
-        protocolMessage('SEAT_RESYNC_REQUEST', 'SeatResyncRequest'),
-        protocolMessage('SEAT_RESYNC_RESPONSE', 'SeatResyncResponse'),
       ],
     },
   },

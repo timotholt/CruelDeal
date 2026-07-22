@@ -567,7 +567,7 @@ describe('current card API', () => {
       turnPlayed: 1,
       lanePlayed: 0,
     }).map(card => card.id)).toEqual([cardId]);
-    expect(cardLifecycleFrames(transaction.framedEvents, cardId)).toMatchObject({
+    expect(cardLifecycleFrames(transaction.frames, cardId)).toMatchObject({
       played: [expect.any(Number)],
       revealed: [expect.any(Number)],
       destroyed: [expect.any(Number)],
@@ -606,7 +606,7 @@ describe('current location API', () => {
       abilityLabels: ['TURN_START'],
     });
     expect(location?.revealCount).toBe(2);
-    expect(locationLifecycleFrames(transaction.framedEvents, locationId).revealed)
+    expect(locationLifecycleFrames(transaction.frames, locationId).revealed)
       .toHaveLength(2);
   });
 });

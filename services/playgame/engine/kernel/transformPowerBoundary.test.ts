@@ -15,7 +15,7 @@ import {
   testManifest,
 } from '../testkit/runtimeFixture';
 import {
-  foldFramedEvents,
+  foldCanonicalFrames,
   frameAndFoldEvents,
 } from '../transactionTimeline';
 import type { EffectExpr } from '../types/ability';
@@ -382,10 +382,10 @@ describe('transform transaction boundary', () => {
       events: first.events,
       manifest: gameManifest,
     });
-    const replay = foldFramedEvents({
+    const replay = foldCanonicalFrames({
       transactionId: 'transform:replay',
       initialState: state,
-      framedEvents: live.framedEvents,
+      frames: live.frames,
       manifest: gameManifest,
     });
     expect(live.finalState).toEqual(first.state);

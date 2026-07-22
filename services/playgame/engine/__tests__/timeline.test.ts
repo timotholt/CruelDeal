@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { applyFramed } from '../apply';
+import { applyCanonicalFrame } from '../apply';
 import {
-  assertFramedEventSequence,
+  assertCanonicalFrameSequence,
   cardLifecycleFrames,
   currentFrame,
   frameEventSequence,
@@ -91,7 +91,7 @@ describe('Phase 1.1 canonical timeline', () => {
       manifest,
     });
 
-    expect(built.framedEvents.map(({ frame }) => frame)).toEqual([
+    expect(built.frames.map(({ frame }) => frame)).toEqual([
       asFrame(1),
       asFrame(2),
       asFrame(3),
@@ -100,10 +100,10 @@ describe('Phase 1.1 canonical timeline', () => {
       asFrame(6),
     ]);
     expect(built.transitions.map(({ frame }) => frame))
-      .toEqual(built.framedEvents.map(({ frame }) => frame));
+      .toEqual(built.frames.map(({ frame }) => frame));
     expect(built.transitions.map(({ index }) => index)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(currentFrame(built.finalState)).toBe(asFrame(6));
-    expect(cardLifecycleFrames(built.framedEvents, cardId)).toEqual({
+    expect(cardLifecycleFrames(built.frames, cardId)).toEqual({
       created: [asFrame(1)],
       played: [asFrame(4)],
       revealed: [asFrame(3)],
@@ -126,15 +126,15 @@ describe('Phase 1.1 canonical timeline', () => {
       manifest,
     });
 
-    expect(built.framedEvents.map(({ scope }) => scope)).toEqual([
+    expect(built.frames.map(({ scope }) => scope)).toEqual([
       { turn: 3, phase: 'RESOLUTION' },
       { turn: 3, phase: 'END' },
       { turn: 4, phase: 'START' },
       { turn: 4, phase: 'START' },
     ]);
-    expect(turnAtFrame(built.framedEvents, asFrame(2))).toBe(3);
-    expect(turnAtFrame(built.framedEvents, asFrame(3))).toBe(4);
-    expect(turnSpans(built.framedEvents)).toEqual([
+    expect(turnAtFrame(built.frames, asFrame(2))).toBe(3);
+    expect(turnAtFrame(built.frames, asFrame(3))).toBe(4);
+    expect(turnSpans(built.frames)).toEqual([
       { turn: 3, startFrame: asFrame(1), endFrame: asFrame(2) },
       { turn: 4, startFrame: asFrame(3), endFrame: asFrame(4) },
     ]);
@@ -149,15 +149,15 @@ describe('Phase 1.1 canonical timeline', () => {
     const event: MatchEvent = { type: 'TURN_RESOLUTION_STARTED', turn: 3 };
     const framed = frameEventSequence(state, [event])[0];
 
-    expect(() => applyFramed(state, { ...framed, frame: asFrame(2) }, manifest))
+    expect(() => applyCanonicalFrame(state, { ...framed, frame: asFrame(2) }, manifest))
       .toThrow(/expected frame 1, received 2/);
-    expect(() => assertFramedEventSequence(
+    expect(() => assertCanonicalFrameSequence(
       state,
       [{ ...framed, frame: asFrame(2) }],
     )).toThrow(/expected 1, received 2/);
 
-    const once = applyFramed(state, framed, manifest);
-    expect(() => applyFramed(once, framed, manifest))
+    const once = applyCanonicalFrame(state, framed, manifest);
+    expect(() => applyCanonicalFrame(once, framed, manifest))
       .toThrow(/expected frame 2, received 1/);
   });
 });

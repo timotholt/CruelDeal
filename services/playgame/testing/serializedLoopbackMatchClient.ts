@@ -5,6 +5,11 @@ import type {
   SeatMatchInitialization,
 } from '../client/matchClient';
 import type { LaneId, Seat } from '../engine/types/ids';
+import type {
+  SeatBlockAck,
+  SeatResyncRequest,
+  SeatResyncResponse,
+} from '../protocol/playerWire';
 import type { FramePresentationTiming } from '../runtime/performanceTelemetry';
 import type {
   SeatCardToken,
@@ -93,6 +98,20 @@ export class SerializedLoopbackMatchClient implements MatchClient {
   async endTurn(): Promise<SeatCommandResult> {
     await Promise.resolve();
     return wireClone(await this.#authority.endTurn());
+  }
+
+  async acknowledgePresentationBlock(
+    ack: SeatBlockAck,
+  ): Promise<SeatResyncResponse> {
+    await Promise.resolve();
+    return wireClone(await this.#authority.acknowledgePresentationBlock(
+      wireClone(ack),
+    ));
+  }
+
+  async resync(request: SeatResyncRequest): Promise<SeatResyncResponse> {
+    await Promise.resolve();
+    return wireClone(await this.#authority.resync(wireClone(request)));
   }
 
   presentationStateForFrame(

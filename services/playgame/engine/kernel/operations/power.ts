@@ -5,7 +5,7 @@ import {
   getCardPowerAfterStoredMutation,
 } from '../../projections/power';
 import { isPowerBearingCard } from '../../projections/power-bearing';
-import { isPowerIncreaseBlocked } from '../../projections/power-restrictions';
+import { powerIncreaseBlockers } from '../../projections/power-restrictions';
 import { getCardRuntime } from '../../projections/cardRuntime';
 import { getCardTemplate } from '../../projections/cardTemplate';
 import type { MatchEvent } from '../../types/events';
@@ -102,7 +102,17 @@ export function planStoredPowerCommand<Effect, Context>(
   }
 
   if (!isPowerBearingCard(state, command.cardId, manifest)) {
-    return kernelStepSuccess({ work: [] });
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'INVALIDATED',
+        blockedBy: [],
+        reason: 'TARGET_NO_LONGER_MATCHES',
+      },
+    });
   }
   const card = getCardRuntime(state, command.cardId, manifest);
   const template = card ? getCardTemplate(manifest, card.defId) : null;
@@ -112,7 +122,17 @@ export function planStoredPowerCommand<Effect, Context>(
     || !template
     || template.basePower === null
   ) {
-    return kernelStepSuccess({ work: [] });
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'INVALIDATED',
+        blockedBy: [],
+        reason: 'TARGET_LEFT_ZONE',
+      },
+    });
   }
 
   const priorStoredDelta = storedPowerDelta(card, template.basePower);
@@ -122,12 +142,22 @@ export function planStoredPowerCommand<Effect, Context>(
     command.mutation,
   );
   if (resultStoredDelta === priorStoredDelta) {
-    return kernelStepSuccess({ work: [] });
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'NO_CHANGE',
+        blockedBy: [],
+        reason: 'ALREADY_SATISFIED',
+      },
+    });
   }
 
-  const blocked = isPowerIncreaseBlocked(state, command.cardId, manifest);
+  const blockers = powerIncreaseBlockers(state, command.cardId, manifest);
   if (
-    blocked
+    blockers.length > 0
     && (
       (command.mutation.kind === 'ADD' && command.mutation.delta > 0)
       || (
@@ -143,7 +173,17 @@ export function planStoredPowerCommand<Effect, Context>(
       ) > getCardPower(state, command.cardId, manifest)
     )
   ) {
-    return kernelStepSuccess({ work: [] });
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'BLOCKED',
+        blockedBy: blockers,
+        reason: 'CANNOT_GAIN_POWER',
+      },
+    });
   }
 
   const event: PowerChangedEvent = {
@@ -154,5 +194,13 @@ export function planStoredPowerCommand<Effect, Context>(
   };
   return kernelStepSuccess({
     work: [{ kind: 'COMMIT', event }],
+    resolution: {
+      kind: 'TARGET_ATTEMPT',
+      operation: command.type,
+      target: { kind: 'CARD', cardId: command.cardId },
+      result: 'AFFECTED',
+      blockedBy: [],
+      reason: null,
+    },
   });
 }

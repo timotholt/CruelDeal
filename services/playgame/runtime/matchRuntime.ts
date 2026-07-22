@@ -1,21 +1,25 @@
 import { createMatchGenesis } from '../engine/cli/initState';
-import { apply, applyFramed } from '../engine/apply';
+import { apply, applyCanonicalFrame } from '../engine/apply';
 import { planEnemyTurnFromHand } from '../engine/ai';
 import { BOOTSTRAP_MANIFEST } from '../engine/manifest/bootstrap';
 import type { Deck, Manifest } from '../engine/manifest/types';
 import { createRng } from '../engine/rng';
-import { appendGameplayRngAdvance } from '../engine/rng/transaction';
+import {
+  appendGameplayRngAdvance,
+  appendGameplayRngResolution,
+} from '../engine/rng/transaction';
 import { resolve } from '../engine/resolve';
 import { currentFrame } from '../engine/timeline';
-import { frameAndFoldEvents } from '../engine/transactionTimeline';
+import { frameAndFoldResolution } from '../engine/transactionTimeline';
+import type { KernelResolutionStep } from '../engine/kernel/resolutionTrace';
 import type { MatchEvent } from '../engine/types/events';
 import type { Seat } from '../engine/types/ids';
 import type { MatchIntent } from '../engine/types/intents';
 import type { MatchState } from '../engine/types/state';
 import { nextFrame, type Frame, type TimelinePhase } from '../engine/types/timeline';
 import {
-  assertProtocolPayload,
-  validateIntentEnvelopeWire,
+  assertAuthorityPayload,
+  validateInternalIntentEnvelope,
 } from '../protocol';
 import { projectMechanicalStateForController } from './projection';
 import type {
@@ -28,13 +32,15 @@ import type {
   IntentEnvelope,
   IntentReceipt,
   IntentReceiptKey,
-  MatchRevision,
+  PlanRevision,
+  PublicRevision,
   MatchRuntimeRecordExport,
   CommittedTransactionTimeline,
   ParticipantController,
   RuntimeIntent,
   LocationCardDeckEntry,
   DebugMatchCheckpoint,
+  SeatInteractionStatus,
 } from './contracts';
 import { getCardPlacement } from '../engine/projections/cardRuntime';
 import { buildOpeningTransaction } from '../engine/opening';
@@ -68,7 +74,9 @@ export interface MatchRuntime {
   projectWorkingState(baseState?: MatchState): MatchState;
   genesis(): MatchState;
   initialization(): MatchInitializationTimelines;
-  revision(): MatchRevision;
+  publicRevision(): PublicRevision;
+  planRevision(seat: Seat): PlanRevision;
+  interactionStatus(seat: Seat): SeatInteractionStatus;
   transactions(): readonly CommittedTransactionRecord[];
   submitIntent(envelope: IntentEnvelope): Promise<IntentAcceptanceResult>;
   subscribeCommittedTransactions(subscriber: MatchTransactionSubscriber): () => void;
@@ -105,6 +113,7 @@ interface QueuedIntent {
 interface CommitCandidate {
   readonly identity: CommittedIntentIdentity;
   readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly resolveMs?: number;
   readonly initialTimelinePhase?: TimelinePhase;
   readonly receiptKey?: IntentReceiptKey;
@@ -126,6 +135,7 @@ interface PlanningPrelude {
 
 interface ResolvedEventBatch {
   readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly durationMs: number;
 }
 
@@ -222,8 +232,8 @@ function assertValidTimeline(
   initialState: MatchState,
   events: readonly MatchEvent[],
 ): void {
-  if (events.length === 0 || timeline.transitions.length !== events.length) {
-    throw new Error('validated commit requires a non-empty contiguous event sequence');
+  if (timeline.transitions.length === 0) {
+    throw new Error('validated commit requires a non-empty canonical frame sequence');
   }
   const rngDrawDelta = events.reduce(
     (total, event) => total + (event.type === 'GAMEPLAY_RNG_ADVANCED' ? event.draws : 0),
@@ -238,19 +248,27 @@ function assertValidTimeline(
   }
 
   let expectedBefore = initialState;
+  let eventIndex = 0;
   timeline.transitions.forEach((frame, index) => {
-    const inputEvent = events[index];
+    const inputEvent = frame.event === null ? null : events[eventIndex++];
     if (
       frame.index !== index
       || frame.before !== expectedBefore
-      || frame.event !== frame.framedEvent.event
-      || inputEvent === undefined
-      || !eventsHaveSameValue(frame.event, inputEvent)
+      || frame.event !== frame.canonicalFrame.event
+      || frame.effect !== frame.canonicalFrame.effect
+      || (
+        frame.event !== null
+        && (
+          inputEvent === null
+          || inputEvent === undefined
+          || !eventsHaveSameValue(frame.event, inputEvent)
+        )
+      )
     ) {
       throw new Error(`transaction frame sequence is not contiguous at index ${index}`);
     }
     const expectedFrame = nextFrame(currentFrame(frame.before));
-    if (frame.frame !== expectedFrame || frame.framedEvent.frame !== frame.frame) {
+    if (frame.frame !== expectedFrame || frame.canonicalFrame.frame !== frame.frame) {
       throw new Error(`canonical gameplay frame is not contiguous at transaction index ${index}`);
     }
     if (frame.after.rng.seed !== initialState.rng.seed) {
@@ -263,11 +281,24 @@ function assertValidTimeline(
     ) {
       throw new Error(`authoritative timeline is not contiguous at index ${index}`);
     }
-    if (!MUTATION_OPTIONAL_EVENTS.has(frame.event.type) && !hasMechanicalChange(frame.before, frame.after)) {
-      throw new Error(`authoritative ${frame.event.type} event was a silent no-op at index ${index}`);
+    if (frame.event === null) {
+      if (hasMechanicalChange(frame.before, frame.after)) {
+        throw new Error(`trace-only frame mutated mechanics at index ${index}`);
+      }
+    } else if (
+      !MUTATION_OPTIONAL_EVENTS.has(frame.event.type)
+      && !hasMechanicalChange(frame.before, frame.after)
+    ) {
+      throw new Error(
+        `authoritative ${frame.event.type} event was a silent no-op at index ${index}`,
+      );
     }
     expectedBefore = frame.after;
   });
+
+  if (eventIndex !== events.length) {
+    throw new Error('canonical frames do not cover every committed event');
+  }
 
   if (timeline.finalState !== expectedBefore) {
     throw new Error('transaction final state does not match its final frame');
@@ -281,7 +312,8 @@ function phaseAllowsIntent(state: MatchState, intent: RuntimeIntent): boolean {
 
 function illegalResult(
   envelope: IntentEnvelope,
-  currentRevision: MatchRevision,
+  currentPublicRevision: PublicRevision,
+  currentPlanRevision: PlanRevision,
   code: IllegalIntentResult['code'],
   message?: string,
 ): IllegalIntentResult {
@@ -290,7 +322,8 @@ function illegalResult(
     matchId: envelope.matchId,
     seat: envelope.seat,
     intentId: envelope.intentId,
-    currentRevision,
+    currentPublicRevision,
+    currentPlanRevision,
     code,
     ...(message === undefined ? {} : { message }),
   };
@@ -338,7 +371,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const planningPrelude: Record<Seat, PlanningPrelude | null> = { P0: null, P1: null };
   const locked: Record<Seat, boolean> = { P0: false, P1: false };
   let presentationPlan: Readonly<Record<Seat, PlanProjectionSnapshot>> | null = null;
-  let currentRevision: MatchRevision = 0;
+  let currentPublicRevision: PublicRevision = 0;
+  const currentPlanRevision: Record<Seat, PlanRevision> = { P0: 0, P1: 0 };
   let committedTransactions: readonly CommittedTransactionRecord[] = Object.freeze([]);
   let checkpoints: readonly DebugMatchCheckpoint[] = Object.freeze([]);
   let drainScheduled = false;
@@ -351,20 +385,21 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   ): ResolvedEventBatch => {
     const startedAtMs = monotonicNow();
     const rng = createRng(state.rng).scope(purpose);
-    const events = resolve(state, intent, rng, manifest);
-    const committedEvents = appendGameplayRngAdvance(state, rng, events);
+    const resolved = resolve(state, intent, rng, manifest);
+    const committed = appendGameplayRngResolution(state, rng, resolved);
     const endedAtMs = monotonicNow();
     performanceTelemetry.recordResolve({
       purpose,
       turn: state.turn,
       intentType: intent.type,
-      eventCount: committedEvents.length,
+      eventCount: committed.events.length,
       startedAtMs,
       endedAtMs,
       durationMs: elapsed(startedAtMs, endedAtMs),
     });
     return {
-      events: committedEvents,
+      events: committed.events,
+      resolutionSteps: committed.resolutionSteps,
       durationMs: elapsed(startedAtMs, endedAtMs),
     };
   };
@@ -405,7 +440,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       const events = appendGameplayRngAdvance(
         state,
         rng,
-        resolve(state, planned.intent, rng, manifest),
+        resolve(state, planned.intent, rng, manifest).events,
       );
       const rejection = events[0]?.type === 'INTENT_REJECTED'
         ? events[0]
@@ -477,28 +512,29 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
   const commit = (candidate: CommitCandidate): CommittedCandidate => {
     const commitStartedAtMs = monotonicNow();
-    const baseRevision = currentRevision;
+    const baseRevision = currentPublicRevision;
     const revision = baseRevision + 1;
     const transactionId = `${config.matchId}:tx:${revision}`;
     const events = Object.freeze([...candidate.events]);
     let applyMs = 0;
     const foldStartedAtMs = monotonicNow();
-    const built = frameAndFoldEvents({
+    const built = frameAndFoldResolution({
       transactionId,
       initialState: authoritativeState,
       events,
+      resolutionSteps: candidate.resolutionSteps,
       manifest,
       initialPhase: candidate.initialTimelinePhase,
-      reduceFramedEvent: (state, framedEvent, activeManifest) => {
+      reduceCanonicalFrame: (state, canonicalFrame, activeManifest) => {
         const startedAtMs = monotonicNow();
-        const after = applyFramed(state, framedEvent, activeManifest);
+        const after = applyCanonicalFrame(state, canonicalFrame, activeManifest);
         const endedAtMs = monotonicNow();
         const durationMs = elapsed(startedAtMs, endedAtMs);
         applyMs += durationMs;
         performanceTelemetry.recordFrameApply({
           transactionId,
-          frame: framedEvent.frame,
-          eventType: framedEvent.event.type,
+          frame: canonicalFrame.frame,
+          eventType: canonicalFrame.event?.type ?? canonicalFrame.effect!.kind,
           startedAtMs,
           endedAtMs,
           durationMs,
@@ -513,12 +549,12 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       baseRevision,
       revision,
       intent: Object.freeze({ ...candidate.identity }),
-      framedEvents: built.framedEvents,
+      frames: built.frames,
       rngDrawsBefore: authoritativeState.rng.draws,
       rngDrawsAfter: built.finalState.rng.draws,
     });
     const protocolStartedAtMs = monotonicNow();
-    assertProtocolPayload('COMMITTED_TRANSACTION', transaction);
+    assertAuthorityPayload('COMMITTED_TRANSACTION', transaction);
     const protocolEndedAtMs = monotonicNow();
     const timeline: CommittedTransactionTimeline = Object.freeze({
       transaction,
@@ -535,7 +571,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           matchId: candidate.identity.matchId,
           seat: candidate.identity.seat as Seat,
           intentId: candidate.identity.intentId,
-          revision,
+          publicRevision: revision,
+          planRevision: currentPlanRevision[candidate.identity.seat as Seat],
           commit: 'COMMITTED',
           transaction,
         })
@@ -546,8 +583,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     if (config.debugDeterminism) {
       const additions = built.transitions
         .filter(transition => (
-          transition.event.type === 'CARD_STAGED'
-          || transition.event.type === 'MATCH_ENDED'
+          transition.event?.type === 'CARD_STAGED'
+          || transition.event?.type === 'MATCH_ENDED'
         ))
         .map((transition): DebugMatchCheckpoint => Object.freeze({
           frame: transition.frame,
@@ -559,7 +596,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       }
     }
     const endsMatch = built.transitions
-      .some(transition => transition.event.type === 'MATCH_ENDED');
+      .some(transition => transition.event?.type === 'MATCH_ENDED');
     let reconciliationMs = 0;
     if (config.debugDeterminism || endsMatch) {
       const reconciliationStartedAtMs = monotonicNow();
@@ -594,7 +631,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     authoritativeState = built.finalState;
     committedTransactions = nextTransactions;
     checkpoints = nextCheckpoints;
-    currentRevision = revision;
+    currentPublicRevision = revision;
     if (candidate.receiptKey && result) receipts.set(candidate.receiptKey, result);
 
     return { result, timeline };
@@ -627,6 +664,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       intentId: setup.transactionId,
     },
     events: setup.events,
+    resolutionSteps: setup.resolutionSteps,
     initialTimelinePhase: 'SETUP',
   });
   publish(setupCommit.timeline);
@@ -639,6 +677,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       intentId: opening.transactionId,
     },
     events: opening.events,
+    resolutionSteps: opening.resolutionSteps,
     initialTimelinePhase: 'SETUP',
   });
   publish(opened.timeline);
@@ -655,18 +694,31 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     return rejection;
   };
 
+  const planRevisionForEnvelope = (envelope: IntentEnvelope): PlanRevision => (
+    isSeat(envelope.seat) ? currentPlanRevision[envelope.seat] : 0
+  );
+
+  const interactionStatus = (seat: Seat): SeatInteractionStatus => {
+    if (authoritativeState.phase === 'ENDED' || authoritativeState.result !== null) {
+      return 'TERMINAL';
+    }
+    return locked[seat] ? 'WAITING' : 'PLANNING';
+  };
+
   const acceptPrivate = (
     key: IntentReceiptKey,
     envelope: IntentEnvelope,
+    commitState: AcceptedIntentResult['commit'] = 'PRIVATE',
   ): AcceptedIntentResult => {
-    currentRevision += 1;
+    currentPlanRevision[envelope.seat] += 1;
     const result: AcceptedIntentResult = Object.freeze({
       status: 'accepted',
       matchId: envelope.matchId,
       seat: envelope.seat,
       intentId: envelope.intentId,
-      revision: currentRevision,
-      commit: 'PRIVATE',
+      publicRevision: currentPublicRevision,
+      planRevision: currentPlanRevision[envelope.seat],
+      commit: commitState,
     });
     receipts.set(key, result);
     return result;
@@ -682,7 +734,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       matchId: envelope.matchId,
       seat: envelope.seat,
       intentId: envelope.intentId,
-      revision: currentRevision,
+      publicRevision: currentPublicRevision,
+      planRevision: planRevisionForEnvelope(envelope),
       commit: 'COMMITTED',
       transaction,
     });
@@ -693,6 +746,19 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
   const commitLockedTurn = (): CommittedCandidate => {
     let mergedState = authoritativeState;
     const events: MatchEvent[] = [];
+    const resolutionSteps: KernelResolutionStep[] = [];
+    const appendBatch = (
+      batch: Pick<ResolvedEventBatch, 'events' | 'resolutionSteps'>,
+    ): void => {
+      const transitionOffset = events.length;
+      events.push(...batch.events);
+      resolutionSteps.push(...batch.resolutionSteps.map(step => ({
+        transitionIndex: step.transitionIndex === null
+          ? null
+          : step.transitionIndex + transitionOffset,
+        effect: step.effect,
+      })));
+    };
     let resolveMs = 0;
     const ownerOrder: readonly Seat[] = authoritativeState.priority === 'P0'
       ? ['P0', 'P1']
@@ -706,6 +772,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       if (prelude) {
         for (const event of prelude.events) {
           events.push(event);
+          resolutionSteps.push({
+            transitionIndex: events.length - 1,
+            effect: null,
+          });
           mergedState = apply(mergedState, event, manifest);
         }
       }
@@ -731,7 +801,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
             reactionsScheduled: 0,
           }));
         }
-        events.push(...stageEvents);
+        appendBatch(stageBatch);
         for (const event of stageEvents) mergedState = apply(mergedState, event, manifest);
       }
     }
@@ -747,7 +817,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     );
     const resolutionEvents = resolutionBatch.events;
     resolveMs += resolutionBatch.durationMs;
-    events.push(...resolutionEvents);
+    appendBatch(resolutionBatch);
 
     const committed = commit({
       identity: {
@@ -756,6 +826,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         intentId: `resolve-turn-${authoritativeState.turn}`,
       },
       events,
+      resolutionSteps,
       resolveMs,
     });
     // Active planning ends at commit. Presentation receives a separate,
@@ -777,6 +848,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     planningPrelude.P1 = null;
     locked.P0 = false;
     locked.P1 = false;
+    currentPlanRevision.P0 += 1;
+    currentPlanRevision.P1 += 1;
     try {
       publish(committed.timeline);
     } finally {
@@ -789,7 +862,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     const authoritativeAiState = foldPlannedStages(seat);
     const aiState = projectMechanicalStateForController(authoritativeAiState, seat);
     const aiRng = createRng(authoritativeAiState.rng).scope(
-      `ai-plan:${aiState.turn}:${seat}:${currentRevision}`,
+      `ai-plan:${aiState.turn}:${seat}:${currentPublicRevision}`,
     );
     const plays = planEnemyTurnFromHand(
       aiState,
@@ -813,7 +886,8 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         matchId: config.matchId,
         seat,
         intentId,
-        expectedRevision: currentRevision,
+        expectedPublicRevision: currentPublicRevision,
+        expectedPlanRevision: currentPlanRevision[seat],
         intent: play
           ? { type: 'STAGE_CARD', cardId: play.cardId, lane: play.lane }
           : { type: 'END_TURN' },
@@ -843,57 +917,66 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     }
 
     if (envelope.matchId !== config.matchId) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'MATCH_MISMATCH'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'MATCH_MISMATCH'));
     }
     if (!isSeat(envelope.seat)) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'SEAT_AUTHORITY'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'SEAT_AUTHORITY'));
     }
     const suppliedOwner = isRuntimeIntent(envelope.intent)
       ? (envelope.intent as RuntimeIntent & { readonly owner?: unknown }).owner
       : undefined;
     if (suppliedOwner !== undefined && suppliedOwner !== envelope.seat) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'SEAT_AUTHORITY'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'SEAT_AUTHORITY'));
     }
-    const wire = validateIntentEnvelopeWire(envelope);
+    const wire = validateInternalIntentEnvelope(envelope);
     if (!wire.ok) {
-      return storeRejection(key, illegalResult(
-        envelope,
-        currentRevision,
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
         'RULES_INVALID',
         wire.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; '),
       ));
     }
-    if (envelope.expectedRevision !== currentRevision) {
+    if (envelope.expectedPublicRevision !== currentPublicRevision) {
       return storeRejection(key, {
-        status: 'stale',
+        status: 'stale-public',
         matchId: envelope.matchId,
         seat: envelope.seat,
         intentId: envelope.intentId,
-        expectedRevision: envelope.expectedRevision,
-        currentRevision,
+        expectedPublicRevision: envelope.expectedPublicRevision,
+        currentPublicRevision,
+        currentPlanRevision: planRevisionForEnvelope(envelope),
+        resyncRequired: true,
+      });
+    }
+    if (envelope.expectedPlanRevision !== currentPlanRevision[envelope.seat]) {
+      return storeRejection(key, {
+        status: 'stale-plan',
+        matchId: envelope.matchId,
+        seat: envelope.seat,
+        intentId: envelope.intentId,
+        expectedPlanRevision: envelope.expectedPlanRevision,
+        currentPublicRevision,
+        currentPlanRevision: currentPlanRevision[envelope.seat],
       });
     }
     if (authoritativeState.phase === 'ENDED' || authoritativeState.result !== null) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'TERMINAL_MATCH'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'TERMINAL_MATCH'));
     }
     if (!isRuntimeIntent(envelope.intent)) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'RULES_INVALID'));
     }
     if (!phaseAllowsIntent(authoritativeState, envelope.intent)) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'PHASE_INVALID'));
     }
 
     const engineIntent = toEngineIntent(envelope);
     if (!engineIntent) {
-      return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID'));
+      return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'RULES_INVALID'));
     }
 
     try {
       if (engineIntent.type === 'STAGE_CARD') {
         if (locked[envelope.seat]) {
-          return storeRejection(key, illegalResult(
-            envelope,
-            currentRevision,
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
             'PHASE_INVALID',
             'seat is locked',
           ));
@@ -904,9 +987,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         ];
         const folded = foldPlannedSequence(envelope.seat, candidate);
         if (folded.rejection) {
-          return storeRejection(key, illegalResult(
-            envelope,
-            currentRevision,
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
             'RULES_INVALID',
             folded.rejection.reason,
           ));
@@ -917,15 +998,13 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
       if (engineIntent.type === 'UNSTAGE_CARD') {
         if (locked[envelope.seat]) {
-          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is locked'));
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'PHASE_INVALID', 'seat is locked'));
         }
         const index = planning[envelope.seat].findIndex(
           (planned) => planned.intent.cardId === engineIntent.cardId,
         );
         if (index < 0) {
-          return storeRejection(key, illegalResult(
-            envelope,
-            currentRevision,
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
             'RULES_INVALID',
             'card is not in the private planning stack',
           ));
@@ -935,9 +1014,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         );
         const folded = foldPlannedSequence(envelope.seat, candidate);
         if (folded.rejection) {
-          return storeRejection(key, illegalResult(
-            envelope,
-            currentRevision,
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
             'RULES_INVALID',
             `remaining private plan is invalid: ${folded.rejection.reason}`,
           ));
@@ -948,10 +1025,10 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
       if (engineIntent.type === 'UNDO_TURN') {
         if (locked[envelope.seat]) {
-          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is locked'));
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'PHASE_INVALID', 'seat is locked'));
         }
         if (planning[envelope.seat].length === 0) {
-          return storeRejection(key, illegalResult(envelope, currentRevision, 'RULES_INVALID', 'planning stack is empty'));
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'RULES_INVALID', 'planning stack is empty'));
         }
         planning[envelope.seat] = [];
         planningPrelude[envelope.seat] = null;
@@ -960,7 +1037,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
 
       if (engineIntent.type === 'END_TURN') {
         if (locked[envelope.seat]) {
-          return storeRejection(key, illegalResult(envelope, currentRevision, 'PHASE_INVALID', 'seat is already locked'));
+          return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope), 'PHASE_INVALID', 'seat is already locked'));
         }
         const other: Seat = envelope.seat === 'P0' ? 'P1' : 'P0';
         if (locked[other]) {
@@ -969,7 +1046,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
         }
 
         locked[envelope.seat] = true;
-        const result = acceptPrivate(key, envelope);
+        const result = acceptPrivate(key, envelope, 'WAITING');
         if (config.controllers[other] === 'LOCAL_AI') {
           enqueueAiTurn(other);
         }
@@ -979,14 +1056,12 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
       const resolved = resolveWithStateRng(
         authoritativeState,
         engineIntent,
-        `commit:${currentRevision + 1}:${envelope.seat}:${envelope.intentId}`,
+        `commit:${currentPublicRevision + 1}:${envelope.seat}:${envelope.intentId}`,
       );
       const events = resolved.events;
       const engineRejection = events[0]?.type === 'INTENT_REJECTED' ? events[0] : null;
       if (events.length === 0 || engineRejection) {
-        return storeRejection(key, illegalResult(
-          envelope,
-          currentRevision,
+        return storeRejection(key, illegalResult(envelope, currentPublicRevision, planRevisionForEnvelope(envelope),
           'RULES_INVALID',
           engineRejection?.reason ?? 'intent produced no authoritative events',
         ));
@@ -999,6 +1074,7 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
           ...(envelope.intentSeq === undefined ? {} : { intentSeq: envelope.intentSeq }),
         },
         events,
+        resolutionSteps: resolved.resolutionSteps,
         resolveMs: resolved.durationMs,
         receiptKey: key,
       });
@@ -1059,7 +1135,9 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     projectWorkingState,
     genesis: () => genesisState,
     initialization: () => initialization,
-    revision: () => currentRevision,
+    publicRevision: () => currentPublicRevision,
+    planRevision: (seat: Seat) => currentPlanRevision[seat],
+    interactionStatus,
     transactions: () => committedTransactions,
     submitIntent,
     subscribeCommittedTransactions: (subscriber: MatchTransactionSubscriber) => {

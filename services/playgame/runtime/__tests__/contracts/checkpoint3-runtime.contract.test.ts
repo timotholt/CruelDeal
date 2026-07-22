@@ -78,7 +78,7 @@ function stageEnvelope(
   runtime: MatchRuntime,
   seat: Seat,
   intentId: string,
-  expectedRevision: number,
+  expectedPublicRevision: number,
   cardId: CardId = runtime.state().hand[seat][0],
 ): IntentEnvelope {
   const intent: RuntimeIntent = { type: 'STAGE_CARD', cardId, lane: 0 };
@@ -86,7 +86,8 @@ function stageEnvelope(
     matchId: 'phase1-contract-match',
     seat,
     intentId,
-    expectedRevision,
+    expectedPublicRevision,
+    expectedPlanRevision: runtime.planRevision(seat),
     intent,
   };
 }
@@ -94,46 +95,48 @@ function stageEnvelope(
 describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
   test('drains concurrently submitted work in FIFO order', async () => {
     const runtime = runtimeFixture();
-    const baseRevision = runtime.revision();
+    const baseRevision = runtime.publicRevision();
     const initialTransactionCount = runtime.transactions().length;
 
     const first = runtime.submitIntent(stageEnvelope(runtime, 'P0', 'fifo-first', baseRevision));
-    const second = runtime.submitIntent(stageEnvelope(runtime, 'P1', 'fifo-second', baseRevision + 1));
+    const second = runtime.submitIntent(stageEnvelope(runtime, 'P1', 'fifo-second', baseRevision));
 
     const results = await Promise.all([first, second]);
     expect(results.map((result) => result.status)).toEqual(['accepted', 'accepted']);
     // The trusted local projection exposes only the viewer's private plan.
     expect(runtime.state().stagedPlays).toHaveLength(1);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
-    expect(runtime.revision()).toBe(baseRevision + 2);
+    expect(runtime.publicRevision()).toBe(baseRevision);
+    expect(runtime.planRevision('P0')).toBe(1);
+    expect(runtime.planRevision('P1')).toBe(1);
   });
 
   test('validates legality against authoritative state when dequeued (H2)', async () => {
     const runtime = runtimeFixture();
-    const baseRevision = runtime.revision();
+    const baseRevision = runtime.publicRevision();
     const initialTransactionCount = runtime.transactions().length;
     const cardId = runtime.state().hand.P0[0];
 
     const first = runtime.submitIntent(stageEnvelope(runtime, 'P0', 'legal-first', baseRevision, cardId));
     const submittedWhileCardWasInHand = runtime.submitIntent(
-      stageEnvelope(runtime, 'P0', 'illegal-at-dequeue', baseRevision + 1, cardId),
+      stageEnvelope(runtime, 'P0', 'illegal-at-dequeue', baseRevision, cardId),
     );
 
     expect((await first).status).toBe('accepted');
     await expect(submittedWhileCardWasInHand).resolves.toMatchObject({
-      status: 'illegal',
+      status: 'stale-plan',
       intentId: 'illegal-at-dequeue',
-      code: 'RULES_INVALID',
-      currentRevision: baseRevision + 1,
+      currentPublicRevision: baseRevision,
+      currentPlanRevision: 1,
     });
     expect(runtime.state().stagedPlays.map(play => play.cardId)).toEqual([cardId]);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
-    expect(runtime.revision()).toBe(baseRevision + 1);
+    expect(runtime.publicRevision()).toBe(baseRevision);
   });
 
   test('returns an idempotent duplicate receipt without a second commit (H1)', async () => {
     const runtime = runtimeFixture();
-    const baseRevision = runtime.revision();
+    const baseRevision = runtime.publicRevision();
     const envelope = stageEnvelope(runtime, 'P0', 'retry-me', baseRevision);
 
     const [accepted, duplicate] = await Promise.all([
@@ -145,16 +148,16 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
     expect(duplicate).toMatchObject({
       status: 'duplicate',
       intentId: 'retry-me',
-      original: { status: 'accepted', revision: baseRevision + 1 },
+      original: { status: 'accepted', publicRevision: baseRevision },
     });
     expect(runtime.transactions().filter((record) => record.intent.intentId === 'retry-me')).toHaveLength(0);
     expect(runtime.state().stagedPlays).toHaveLength(1);
-    expect(runtime.revision()).toBe(baseRevision + 1);
+    expect(runtime.publicRevision()).toBe(baseRevision);
   });
 
   test('applies every event in an accepted transaction exactly once', async () => {
     const runtime = runtimeFixture();
-    const baseRevision = runtime.revision();
+    const baseRevision = runtime.publicRevision();
     const counts = new Map<string, number>();
     runtime.subscribeCommittedTransactions((timeline) => {
       timeline.transitions.forEach((frame) => {
@@ -173,13 +176,14 @@ describe('Phase 1 checkpoint 3 runtime behavior contracts', () => {
       matchId: 'phase1-contract-match',
       seat: 'P0',
       intentId: 'exactly-once-end',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+      expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
     const committed = runtime.transactions().at(-1)!;
     expect(committed.intent.seat).toBe('SYSTEM');
-    expect([...counts.values()]).toEqual(committed.framedEvents.map(() => 1));
+    expect([...counts.values()]).toEqual(committed.frames.map(() => 1));
     expect(runtime.state().timeline.frame)
-      .toBe(committed.framedEvents.at(-1)?.frame);
+      .toBe(committed.frames.at(-1)?.frame);
   });
 });

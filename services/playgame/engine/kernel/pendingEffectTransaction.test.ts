@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { executeRulesCommands } from '../effects/rulesInterpreter';
 import { BOOTSTRAP_MANIFEST } from '../manifest/bootstrap';
 import { createRng } from '../rng';
-import { frameAndFoldEvents, foldFramedEvents } from '../transactionTimeline';
+import { frameAndFoldEvents, foldCanonicalFrames } from '../transactionTimeline';
 import { buildRuntimeFixture } from '../testkit/runtimeFixture';
 import type { EffectRef } from '../types/ability';
 import type { CardId, PendingEffectId } from '../types/ids';
@@ -322,10 +322,10 @@ describe('pending-effect kernel transaction', () => {
       events: transaction.events,
       manifest: BOOTSTRAP_MANIFEST,
     });
-    const replay = foldFramedEvents({
+    const replay = foldCanonicalFrames({
       transactionId: 'pending:replay',
       initialState: state,
-      framedEvents: live.framedEvents,
+      frames: live.frames,
       manifest: BOOTSTRAP_MANIFEST,
     });
 

@@ -13,6 +13,11 @@ import type {
 } from '../runtime/seatReadModels';
 import type { MatchContentCatalog } from './contentCatalog';
 import type { DebugReplayTimeline } from '../debug/replayContracts';
+import type {
+  SeatBlockAck,
+  SeatResyncRequest,
+  SeatResyncResponse,
+} from '../protocol/playerWire';
 
 export interface SeatMatchInitialization {
   readonly setup: SeatMatchSnapshot;
@@ -28,12 +33,14 @@ interface SeatCommandIdentity {
 export type SeatCommandReceipt =
   | (SeatCommandIdentity & {
       readonly status: 'accepted';
-      readonly revision: number;
-      readonly commit: 'PRIVATE' | 'COMMITTED';
+      readonly publicRevision: number;
+      readonly planRevision: number;
+      readonly commit: 'PRIVATE' | 'WAITING' | 'COMMITTED';
     })
   | (SeatCommandIdentity & {
       readonly status: 'illegal';
-      readonly currentRevision: number;
+      readonly currentPublicRevision: number;
+      readonly currentPlanRevision: number;
       readonly code:
         | 'MATCH_MISMATCH'
         | 'SEAT_AUTHORITY'
@@ -43,9 +50,17 @@ export type SeatCommandReceipt =
       readonly message?: string;
     })
   | (SeatCommandIdentity & {
-      readonly status: 'stale';
-      readonly expectedRevision: number;
-      readonly currentRevision: number;
+      readonly status: 'stale-public';
+      readonly expectedPublicRevision: number;
+      readonly currentPublicRevision: number;
+      readonly currentPlanRevision: number;
+      readonly resyncRequired: true;
+    })
+  | (SeatCommandIdentity & {
+      readonly status: 'stale-plan';
+      readonly expectedPlanRevision: number;
+      readonly currentPublicRevision: number;
+      readonly currentPlanRevision: number;
     });
 
 export type SeatCommandResult =
@@ -82,6 +97,8 @@ export interface MatchClient {
   unstageCard(token: SeatCardToken): Promise<SeatCommandResult>;
   undoLastStagedCard(): Promise<SeatCommandResult>;
   endTurn(): Promise<SeatCommandResult>;
+  acknowledgePresentationBlock(ack: SeatBlockAck): Promise<SeatResyncResponse>;
+  resync(request: SeatResyncRequest): Promise<SeatResyncResponse>;
   presentationStateForFrame(
     frame: SeatTransactionFrame,
   ): SeatTransactionFrame['after'];

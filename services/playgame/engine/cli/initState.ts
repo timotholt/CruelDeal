@@ -32,8 +32,8 @@ import {
   type LocationSetupDeck,
 } from '../locationSetup';
 import { buildOpeningTransaction } from '../opening';
-import { frameAndFoldEvents } from '../transactionTimeline';
-import type { EventTransactionFold } from '../transactionTimeline';
+import { frameAndFoldResolution } from '../transactionTimeline';
+import type { CanonicalTransactionFold } from '../transactionTimeline';
 import { createCardStoreInternal } from '../internal/cardStore';
 import { createLocationStoreInternal } from '../internal/locationStore';
 import { GENESIS_FRAME } from '../types/timeline';
@@ -47,8 +47,8 @@ export type InitialLocationDeck = LocationSetupDeck;
 
 export interface CreatedMatchSetup {
   readonly genesis: MatchState;
-  readonly locationSetup: EventTransactionFold;
-  readonly opening: EventTransactionFold;
+  readonly locationSetup: CanonicalTransactionFold;
+  readonly opening: CanonicalTransactionFold;
   readonly state: MatchState;
 }
 
@@ -195,18 +195,20 @@ export function createSetupMatch(
     manifest,
     locationDeck,
   );
-  const locationSetup = frameAndFoldEvents({
+  const locationSetup = frameAndFoldResolution({
     transactionId: setup.transactionId,
     initialState: genesis,
     events: setup.events,
+    resolutionSteps: setup.resolutionSteps,
     manifest,
     initialPhase: 'SETUP',
   });
   const openingBatch = buildOpeningTransaction(locationSetup.finalState, manifest);
-  const opening = frameAndFoldEvents({
+  const opening = frameAndFoldResolution({
     transactionId: openingBatch.transactionId,
     initialState: locationSetup.finalState,
     events: openingBatch.events,
+    resolutionSteps: openingBatch.resolutionSteps,
     manifest,
     initialPhase: 'SETUP',
   });

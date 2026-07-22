@@ -1,9 +1,9 @@
 import type { Deck } from '../engine/manifest/types';
-import type { EventTransition } from '../engine/transactionTimeline';
+import type { CanonicalFrameTransition } from '../engine/transactionTimeline';
 import type { Seat } from '../engine/types/ids';
 import type { MatchIntent } from '../engine/types/intents';
 import type { MatchState } from '../engine/types/state';
-import type { FramedEvent } from '../engine/types/timeline';
+import type { CanonicalFrame } from '../engine/types/timeline';
 
 /** Descriptive match modes. They do not select reducer rules in Phase 1. */
 export type MatchMode = 'CONQUEST' | 'LADDER' | 'DEBUG';
@@ -105,8 +105,17 @@ export type MatchBootstrapValidationResult =
       readonly issues: readonly MatchBootstrapValidationIssue[];
     };
 
-/** Non-negative, monotonically increasing committed transaction revision. */
-export type MatchRevision = number;
+/** Non-negative revision of publicly committed authoritative match state. */
+export type PublicRevision = number;
+
+/** Non-negative revision of one seat's private staging/lock plan. */
+export type PlanRevision = number;
+
+export type SeatInteractionStatus =
+  | 'PLANNING'
+  | 'WAITING'
+  | 'PRESENTING'
+  | 'TERMINAL';
 
 /**
  * Runtime payload corresponding to MatchIntent without client-authoritative
@@ -122,7 +131,8 @@ export interface IntentEnvelope<TIntent = RuntimeIntent> {
   readonly matchId: string;
   readonly seat: Seat;
   readonly intentId: string;
-  readonly expectedRevision: MatchRevision;
+  readonly expectedPublicRevision: PublicRevision;
+  readonly expectedPlanRevision: PlanRevision;
   readonly intentSeq?: number;
   readonly intent: TIntent;
 }
@@ -141,11 +151,11 @@ export interface CommittedIntentIdentity {
 export interface CommittedTransactionRecord {
   readonly transactionId: string;
   readonly matchId: string;
-  readonly baseRevision: MatchRevision;
-  readonly revision: MatchRevision;
+  readonly baseRevision: PublicRevision;
+  readonly revision: PublicRevision;
   readonly intent: CommittedIntentIdentity;
   /** Canonical committed event stream. Frames are match-global and contiguous. */
-  readonly framedEvents: readonly FramedEvent[];
+  readonly frames: readonly CanonicalFrame[];
   readonly rngDrawsBefore: number;
   readonly rngDrawsAfter: number;
 }
@@ -161,12 +171,12 @@ export interface CommittedTransactionRecord {
  */
 /**
  * A materialized canonical timeline is short-lived and transaction-scoped.
- * Consumers must follow EventTransition's release rules and may not retain it
+ * Consumers must follow CanonicalFrameTransition's release rules and may not retain it
  * as match history.
  */
 export interface CommittedTransactionTimeline {
   readonly transaction: CommittedTransactionRecord;
-  readonly transitions: readonly EventTransition[];
+  readonly transitions: readonly CanonicalFrameTransition[];
   readonly finalState: MatchState;
 }
 
@@ -178,9 +188,10 @@ interface AcceptanceIdentity {
 
 export interface AcceptedIntentResult extends AcceptanceIdentity {
   readonly status: 'accepted';
-  readonly revision: MatchRevision;
+  readonly publicRevision: PublicRevision;
+  readonly planRevision: PlanRevision;
   /** Private planning edits have no canonical transaction until both seats lock. */
-  readonly commit: 'PRIVATE' | 'COMMITTED';
+  readonly commit: 'PRIVATE' | 'WAITING' | 'COMMITTED';
   readonly transaction?: CommittedTransactionRecord;
 }
 
@@ -193,19 +204,33 @@ export type IntentIllegalityCode =
 
 export interface IllegalIntentResult extends AcceptanceIdentity {
   readonly status: 'illegal';
-  readonly currentRevision: MatchRevision;
+  readonly currentPublicRevision: PublicRevision;
+  readonly currentPlanRevision: PlanRevision;
   readonly code: IntentIllegalityCode;
   readonly message?: string;
 }
 
-export interface StaleIntentResult extends AcceptanceIdentity {
-  readonly status: 'stale';
-  readonly expectedRevision: MatchRevision;
-  readonly currentRevision: MatchRevision;
+export interface StalePublicIntentResult extends AcceptanceIdentity {
+  readonly status: 'stale-public';
+  readonly expectedPublicRevision: PublicRevision;
+  readonly currentPublicRevision: PublicRevision;
+  readonly currentPlanRevision: PlanRevision;
+  readonly resyncRequired: true;
+}
+
+export interface StalePlanIntentResult extends AcceptanceIdentity {
+  readonly status: 'stale-plan';
+  readonly expectedPlanRevision: PlanRevision;
+  readonly currentPublicRevision: PublicRevision;
+  readonly currentPlanRevision: PlanRevision;
 }
 
 /** Original receipt stored for a first-seen intent identity. */
-export type IntentReceipt = AcceptedIntentResult | StaleIntentResult | IllegalIntentResult;
+export type IntentReceipt =
+  | AcceptedIntentResult
+  | StalePublicIntentResult
+  | StalePlanIntentResult
+  | IllegalIntentResult;
 
 export interface DuplicateIntentResult extends AcceptanceIdentity {
   readonly status: 'duplicate';

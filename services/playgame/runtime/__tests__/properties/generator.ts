@@ -1,13 +1,13 @@
 import {
   BOOTSTRAP_MANIFEST,
   apply,
-  appendGameplayRngAdvance,
+  appendGameplayRngResolution,
   createSetupMatch,
   createRng,
   frameAndFoldEvents,
   resolve,
   type Deck,
-  type FramedEvent,
+  type CanonicalFrame,
   type LaneId,
   type Manifest,
   type MatchEvent,
@@ -28,7 +28,7 @@ export interface GeneratedMatchCase {
 export interface OpenedMatch {
   readonly genesis: MatchState;
   readonly openingEvents: readonly MatchEvent[];
-  readonly openingFramedEvents: readonly FramedEvent[];
+  readonly openingCanonicalFrames: readonly CanonicalFrame[];
   readonly state: MatchState;
 }
 
@@ -104,9 +104,9 @@ export function createOpenedMatch(
     locationDeck.entries,
   );
   const openingEvents = [
-    ...setup.locationSetup.framedEvents.map(event => event.event),
-    ...setup.opening.framedEvents.map(event => event.event),
-  ];
+    ...setup.locationSetup.frames.map(event => event.event),
+    ...setup.opening.frames.map(event => event.event),
+  ].filter((event): event is MatchEvent => event !== null);
   const committedOpening = frameAndFoldEvents({
     transactionId: `property-opening:${input.matchSeed}`,
     initialState: setup.genesis,
@@ -118,7 +118,7 @@ export function createOpenedMatch(
   return {
     genesis: setup.genesis,
     openingEvents,
-    openingFramedEvents: committedOpening.framedEvents,
+    openingCanonicalFrames: committedOpening.frames,
     state: committedOpening.finalState,
   };
 }
@@ -131,11 +131,11 @@ export function resolvePropertyIntent(
 ): readonly MatchEvent[] {
   const rng = createRng(state.rng)
     .scope(`property-intent:${intentIndex}:${intent.type}`);
-  return appendGameplayRngAdvance(
+  return appendGameplayRngResolution(
     state,
     rng,
     resolve(state, intent, rng, manifest),
-  );
+  ).events;
 }
 
 function isAccepted(events: readonly MatchEvent[]): boolean {

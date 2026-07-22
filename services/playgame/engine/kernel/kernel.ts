@@ -8,6 +8,13 @@ import {
 import { KernelWorkDeque } from './deque';
 import { KernelInvariantError } from './failure';
 import type {
+  KernelEffectTraceEntry,
+  KernelExpansionResolution,
+  KernelInvocationCompleted,
+  KernelResolutionStep,
+  KernelTargetAttemptDescriptor,
+} from './resolutionTrace';
+import type {
   CommittedTransition,
   CommandWork,
   EffectWork,
@@ -40,6 +47,11 @@ export interface KernelWorkExpansion<W> {
   readonly work: readonly W[];
   /** Number of genuinely new runtime entities created by this expansion. */
   readonly createdEntities?: number;
+  /**
+   * Engine-produced semantic evidence. Content never constructs this value.
+   * The kernel assigns deterministic invocation and attempt ordinals.
+   */
+  readonly resolution?: KernelExpansionResolution;
 }
 
 export interface KernelHandlers<
@@ -90,10 +102,33 @@ export interface KernelBudgetUsage {
 export interface CompletedKernelTransaction<S, M, Semantics> {
   readonly state: S;
   readonly transitions: readonly CommittedTransition<M, Semantics>[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly usage: KernelBudgetUsage;
 }
 
 type WorkShape<C extends GameCommand, E, X, M> = KernelWork<C, E, X, M>;
+
+interface QueuedWork<W> {
+  readonly kind: 'WORK';
+  readonly work: W;
+  readonly activeInvocationOrdinal: number | null;
+  readonly attachedAttempt?: KernelTargetAttemptDescriptor;
+}
+
+interface InvocationCompletionWork {
+  readonly kind: 'INVOCATION_COMPLETION';
+  readonly invocationOrdinal: number;
+}
+
+type InternalKernelWork<W> = QueuedWork<W> | InvocationCompletionWork;
+
+interface InvocationCounts {
+  attempted: number;
+  affected: number;
+  blocked: number;
+  invalidated: number;
+  unchanged: number;
+}
 
 const COMMAND_TYPES = new Set<GameCommand['type']>([
   'COMPLETE_SETUP',
@@ -244,13 +279,22 @@ export function resolveKernelTransaction<
   >,
 ): KernelResolutionResult<CompletedKernelTransaction<S, M, Semantics>> {
   const budget = input.budget ?? DEFAULT_RESOLUTION_BUDGET;
-  const work = new KernelWorkDeque(input.initialWork);
+  const work = new KernelWorkDeque<InternalKernelWork<WorkShape<C, E, X, M>>>(
+    input.initialWork.map(item => ({
+      kind: 'WORK',
+      work: item,
+      activeInvocationOrdinal: null,
+    })),
+  );
   const transitions: CommittedTransition<M, Semantics>[] = [];
+  const resolutionSteps: KernelResolutionStep[] = [];
+  const invocationCounts = new Map<number, InvocationCounts>();
   let candidateState = input.initialState;
   let workItemsConsumed = 0;
   let reactionsScheduled = 0;
   let createdEntities = 0;
   let maximumEffectDepth = 0;
+  let nextInvocationOrdinal = 0;
 
   const fail = (fault: KernelFaultSpec): KernelResolutionResult<never> => ({
     ok: false,
@@ -267,7 +311,7 @@ export function resolveKernelTransaction<
     },
   });
 
-  const consumeExpansion = (
+  const validateAndAccountExpansion = (
     expansion: KernelWorkExpansion<WorkShape<C, E, X, M>>,
   ): KernelResolutionResult<true> => {
     const invalid = validateExpansion(expansion);
@@ -282,11 +326,98 @@ export function resolveKernelTransaction<
       });
     }
     createdEntities = nextCreatedEntities;
-    work.prependInOrder(expansion.work);
+    return { ok: true, value: true };
+  };
+
+  const wrapExpansion = (
+    expansion: KernelWorkExpansion<WorkShape<C, E, X, M>>,
+    activeInvocationOrdinal: number | null,
+    attachedAttempt?: KernelTargetAttemptDescriptor,
+  ): readonly InternalKernelWork<WorkShape<C, E, X, M>>[] => {
+    let attached = false;
+    const wrapped = expansion.work.map(
+      (expanded): InternalKernelWork<WorkShape<C, E, X, M>> => {
+        if (
+          attachedAttempt !== undefined
+          && expanded.kind === 'COMMIT'
+          && !attached
+        ) {
+          attached = true;
+          return {
+            kind: 'WORK',
+            work: expanded,
+            activeInvocationOrdinal,
+            attachedAttempt,
+          };
+        }
+        return {
+          kind: 'WORK',
+          work: expanded,
+          activeInvocationOrdinal,
+        };
+      },
+    );
+    return wrapped;
+  };
+
+  const recordTarget = (
+    invocationOrdinal: number,
+    attempt: KernelTargetAttemptDescriptor,
+    transitionIndex: number | null,
+  ): KernelResolutionResult<true> => {
+    const counts = invocationCounts.get(invocationOrdinal);
+    if (!counts) {
+      return fail({
+        code: 'INVALID_OPERATION_OUTPUT',
+        message: 'Target attempt referenced an inactive effect invocation.',
+      });
+    }
+    const effect: KernelEffectTraceEntry = {
+      kind: 'EFFECT_TARGET_RESOLVED',
+      invocationOrdinal,
+      attemptOrdinal: counts.attempted,
+      operation: attempt.operation,
+      target: structuredClone(attempt.target),
+      result: attempt.result,
+      blockedBy: structuredClone(attempt.blockedBy),
+      reason: attempt.reason,
+    };
+    counts.attempted += 1;
+    if (attempt.result === 'AFFECTED') counts.affected += 1;
+    else if (attempt.result === 'BLOCKED') counts.blocked += 1;
+    else if (attempt.result === 'INVALIDATED') counts.invalidated += 1;
+    else counts.unchanged += 1;
+    resolutionSteps.push({ transitionIndex, effect });
     return { ok: true, value: true };
   };
 
   while (!work.isEmpty) {
+    const queued = work.popFront();
+    if (!queued) {
+      return fail({
+        code: 'INVALID_OPERATION_OUTPUT',
+        message: 'Kernel deque returned no work item while non-empty.',
+      });
+    }
+
+    if (queued.kind === 'INVOCATION_COMPLETION') {
+      const counts = invocationCounts.get(queued.invocationOrdinal);
+      if (!counts) {
+        return fail({
+          code: 'INVALID_OPERATION_OUTPUT',
+          message: 'Effect invocation completed without an active transcript.',
+        });
+      }
+      const effect: KernelInvocationCompleted = {
+        kind: 'EFFECT_INVOCATION_COMPLETED',
+        invocationOrdinal: queued.invocationOrdinal,
+        ...counts,
+      };
+      resolutionSteps.push({ transitionIndex: null, effect });
+      invocationCounts.delete(queued.invocationOrdinal);
+      continue;
+    }
+
     if (workItemsConsumed >= budget.maxWorkItems) {
       return fail({
         code: 'BUDGET_EXCEEDED',
@@ -294,14 +425,7 @@ export function resolveKernelTransaction<
       });
     }
     workItemsConsumed += 1;
-
-    const item = work.popFront();
-    if (!item) {
-      return fail({
-        code: 'INVALID_OPERATION_OUTPUT',
-        message: 'Kernel deque returned no work item while non-empty.',
-      });
-    }
+    const item = queued.work;
 
     try {
       if (item.kind === 'EFFECT') {
@@ -320,8 +444,41 @@ export function resolveKernelTransaction<
         maximumEffectDepth = Math.max(maximumEffectDepth, item.depth);
         const result = handlers.interpretEffect(candidateState, item);
         if (result.ok === false) return fail(result.fault);
-        const consumed = consumeExpansion(result.value);
+        const consumed = validateAndAccountExpansion(result.value);
         if (consumed.ok === false) return consumed;
+        if (result.value.resolution?.kind === 'EFFECT_INVOCATION') {
+          const invocationOrdinal = nextInvocationOrdinal;
+          nextInvocationOrdinal += 1;
+          invocationCounts.set(invocationOrdinal, {
+            attempted: 0,
+            affected: 0,
+            blocked: 0,
+            invalidated: 0,
+            unchanged: 0,
+          });
+          resolutionSteps.push({
+            transitionIndex: null,
+            effect: {
+              kind: 'EFFECT_INVOCATION_STARTED',
+              invocationOrdinal,
+              parentInvocationOrdinal: queued.activeInvocationOrdinal,
+              source: structuredClone(result.value.resolution.source),
+              ability: structuredClone(result.value.resolution.ability),
+              invocationReason: result.value.resolution.invocationReason,
+              depth: item.depth,
+              candidates: structuredClone(result.value.resolution.candidates),
+            },
+          });
+          work.prependInOrder([
+            ...wrapExpansion(result.value, invocationOrdinal),
+            { kind: 'INVOCATION_COMPLETION', invocationOrdinal },
+          ]);
+        } else {
+          work.prependInOrder(wrapExpansion(
+            result.value,
+            queued.activeInvocationOrdinal,
+          ));
+        }
         continue;
       }
 
@@ -334,8 +491,51 @@ export function resolveKernelTransaction<
         }
         const result = handlers.executeCommand(candidateState, item);
         if (result.ok === false) return fail(result.fault);
-        const consumed = consumeExpansion(result.value);
+        const consumed = validateAndAccountExpansion(result.value);
         if (consumed.ok === false) return consumed;
+        const attempt = result.value.resolution?.kind === 'TARGET_ATTEMPT'
+          ? result.value.resolution
+          : null;
+        if (attempt && queued.activeInvocationOrdinal !== null) {
+          const immediateCommits = result.value.work.filter(
+            expanded => expanded.kind === 'COMMIT',
+          ).length;
+          if (attempt.result === 'AFFECTED') {
+            if (immediateCommits !== 1) {
+              return fail({
+                code: 'INVALID_OPERATION_OUTPUT',
+                message: 'Affected target attempt must produce exactly one immediate commit.',
+              });
+            }
+            work.prependInOrder(wrapExpansion(
+              result.value,
+              queued.activeInvocationOrdinal,
+              attempt,
+            ));
+          } else {
+            if (immediateCommits !== 0) {
+              return fail({
+                code: 'INVALID_OPERATION_OUTPUT',
+                message: `${attempt.result} target attempt cannot produce an immediate commit.`,
+              });
+            }
+            const recorded = recordTarget(
+              queued.activeInvocationOrdinal,
+              attempt,
+              null,
+            );
+            if (recorded.ok === false) return recorded;
+            work.prependInOrder(wrapExpansion(
+              result.value,
+              queued.activeInvocationOrdinal,
+            ));
+          }
+        } else {
+          work.prependInOrder(wrapExpansion(
+            result.value,
+            queued.activeInvocationOrdinal,
+          ));
+        }
         continue;
       }
 
@@ -393,9 +593,27 @@ export function resolveKernelTransaction<
       if (invalidReactionWork) return fail(invalidReactionWork);
 
       transitions.push(transition);
+      const transitionIndex = transitions.length - 1;
+      if (
+        queued.attachedAttempt !== undefined
+        && queued.activeInvocationOrdinal !== null
+      ) {
+        const recorded = recordTarget(
+          queued.activeInvocationOrdinal,
+          queued.attachedAttempt,
+          transitionIndex,
+        );
+        if (recorded.ok === false) return recorded;
+      } else {
+        resolutionSteps.push({ transitionIndex, effect: null });
+      }
       candidateState = after;
       reactionsScheduled += reactions.length;
-      work.prependInOrder(reactionWork);
+      work.prependInOrder(reactionWork.map(reactionItem => ({
+        kind: 'WORK' as const,
+        work: reactionItem,
+        activeInvocationOrdinal: queued.activeInvocationOrdinal,
+      })));
     } catch (error) {
       return fail(unexpectedFault(error));
     }
@@ -406,6 +624,7 @@ export function resolveKernelTransaction<
     value: {
       state: candidateState,
       transitions,
+      resolutionSteps,
       usage: {
         workItemsConsumed,
         eventsProduced: transitions.length,

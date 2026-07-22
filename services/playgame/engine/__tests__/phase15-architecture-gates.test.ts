@@ -237,7 +237,7 @@ describe('C5C permanent Phase 1.5 architecture gates', () => {
           && ts.isIdentifier(node.expression)
           && (
             node.expression.text === 'apply'
-            || node.expression.text === 'applyFramed'
+            || node.expression.text === 'applyCanonicalFrame'
           )
           && !allowedCalls.has(current)
         ) {
@@ -459,7 +459,7 @@ describe('C5C permanent Phase 1.5 architecture gates', () => {
         if (
           ts.isCallExpression(node)
           && ts.isIdentifier(node.expression)
-          && /^(?:apply|applyFramed|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
+          && /^(?:apply|applyCanonicalFrame|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
             .test(node.expression.text)
         ) {
           violations.push(`${current}: calls ${node.expression.text}`);
@@ -497,7 +497,7 @@ describe('C5C permanent Phase 1.5 architecture gates', () => {
       if (
         ts.isCallExpression(node)
         && ts.isIdentifier(node.expression)
-        && /^(?:apply|applyFramed|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
+        && /^(?:apply|applyCanonicalFrame|executeRulesCommands|resolveRulesTransaction|resolveKernelTransaction)$/
           .test(node.expression.text)
       ) {
         forbiddenCalls.push(node.expression.text);

@@ -44,7 +44,9 @@ export function executeEffectForTest(
 ): EvalResult {
   const work: CanonicalRulesWork = {
     kind: 'EFFECT',
-    effect,
+    // Mirror the production reveal/reaction boundary. Raw child expressions
+    // are internal control-flow work; AUTHORED marks one concrete invocation.
+    effect: { kind: 'AUTHORED', effect },
     context: canonicalContext(ctx),
     depth: ctx.depth,
   };
@@ -73,6 +75,7 @@ export function executeCardRevealForTest(
       events: [],
       state,
       transitions: [],
+      resolutionSteps: [],
       usage: {
         workItemsConsumed: 0,
         eventsProduced: 0,

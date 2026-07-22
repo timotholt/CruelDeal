@@ -3,6 +3,7 @@ import type { MatchState } from '../types/state';
 import type { Manifest } from '../manifest/types';
 import { isPowerBearingCard } from './power-bearing';
 import { ongoingsTargeting } from './ongoing';
+import type { CanonicalEntityRef } from '../types/effectTrace';
 
 /**
  * True while a live restriction (Courthouse in core-v1) prevents this card
@@ -12,17 +13,22 @@ import { ongoingsTargeting } from './ongoing';
  * Existing permanent ledger contributions remain stored, so moving away restores only
  * Power that the card had already earned before entering the restricted lane.
  */
-export function isPowerIncreaseBlocked(
+export function powerIncreaseBlockers(
   state: MatchState,
   cardId: CardId,
   manifest: Manifest,
-): boolean {
+): readonly CanonicalEntityRef[] {
   return ongoingsTargeting(
     state,
     manifest,
     cardId,
     ['BLOCK_POWER_INCREASE'],
-  ).length > 0;
+  ).map((entry): CanonicalEntityRef => entry.sourceCardId !== null
+    ? { kind: 'CARD', cardId: entry.sourceCardId }
+    : {
+        kind: 'LOCATION',
+        locationId: entry.sourceLocationId!,
+      });
 }
 
 /**
@@ -39,5 +45,5 @@ export function isLanePowerIncreaseBlocked(
 ): boolean {
   return state.lanesById[lane].cards[owner]
     .filter(cardId => isPowerBearingCard(state, cardId, manifest))
-    .some(cardId => isPowerIncreaseBlocked(state, cardId, manifest));
+    .some(cardId => powerIncreaseBlockers(state, cardId, manifest).length > 0);
 }

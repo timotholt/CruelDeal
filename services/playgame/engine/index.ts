@@ -30,10 +30,13 @@ export {
   createRng,
   stepGameplayRng,
 } from './rng';
-export { appendGameplayRngAdvance } from './rng/transaction';
+export {
+  appendGameplayRngAdvance,
+  appendGameplayRngResolution,
+} from './rng/transaction';
 
 // ---- Reducer / resolvers ---------------------------------------------------
-export { apply, applyFramed } from './apply';
+export { apply, applyCanonicalFrame } from './apply';
 export { resolve, resolveTurn } from './resolve';
 export type { ResolveTurnResult } from './resolve';
 export { buildOpeningTransaction } from './opening';
@@ -92,25 +95,28 @@ export type {
   RulesTransactionResult,
 } from './kernel/rulesTransaction';
 export {
-  assertFramedEventSequence,
+  assertCanonicalFrameSequence,
   cardLifecycleFrames,
   currentFrame,
   frameEventSequence,
+  frameResolutionSequence,
   frameSingleEvent,
   scopeAtFrame,
   turnAtFrame,
   turnSpans,
 } from './timeline';
 export {
-  foldFramedEvents,
+  foldCanonicalFrames,
   frameAndFoldEvents,
+  frameAndFoldResolution,
 } from './transactionTimeline';
 export type {
-  FoldFramedEventsOptions,
-  FramedEventReducer,
-  EventTransition,
-  EventTransactionFold,
+  FoldCanonicalFramesOptions,
+  CanonicalFrameReducer,
+  CanonicalFrameTransition,
+  CanonicalTransactionFold,
   FrameAndFoldEventsOptions,
+  FrameAndFoldResolutionOptions,
 } from './transactionTimeline';
 
 // ---- Canonical rules interpreter ------------------------------------------

@@ -1,0 +1,235 @@
+{
+  "protocolVersion": 2,
+  "cases": [
+    {
+      "name": "valid empty seat presentation block",
+      "valid": true,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_PRESENTATION_BLOCK",
+        "payload": {
+          "version": 2,
+          "transactionId": "match-1:tx:1",
+          "matchId": "match-1",
+          "viewerSeat": "P0",
+          "basePublicRevision": 0,
+          "publicRevision": 1,
+          "firstFrame": 1,
+          "lastFrame": 1,
+          "preState": {
+            "turn": 1,
+            "phase": "AWAITING_INTENT",
+            "priority": "P0",
+            "energy": { "P0": 1, "P1": 1 },
+            "maxEnergy": { "P0": 1, "P1": 1 },
+            "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
+            "deckCounts": { "P0": 8, "P1": 8 },
+            "locationDeckCount": 3,
+            "hands": { "P0": [], "P1": [] },
+            "cards": [],
+            "lanes": [],
+            "stagedCards": [],
+            "discard": { "P0": [], "P1": [] },
+            "destroyed": { "P0": [], "P1": [] },
+            "banished": { "P0": [], "P1": [] },
+            "banishedCounts": { "P0": 0, "P1": 0 },
+            "result": null
+          },
+          "frames": [],
+          "postState": {
+            "turn": 1,
+            "phase": "AWAITING_INTENT",
+            "priority": "P0",
+            "energy": { "P0": 1, "P1": 1 },
+            "maxEnergy": { "P0": 1, "P1": 1 },
+            "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
+            "deckCounts": { "P0": 8, "P1": 8 },
+            "locationDeckCount": 3,
+            "hands": { "P0": [], "P1": [] },
+            "cards": [],
+            "lanes": [],
+            "stagedCards": [],
+            "discard": { "P0": [], "P1": [] },
+            "destroyed": { "P0": [], "P1": [] },
+            "banished": { "P0": [], "P1": [] },
+            "banishedCounts": { "P0": 0, "P1": 0 },
+            "result": null
+          },
+          "postStateHash": "fnv1a32:00000000"
+        }
+      }
+    },
+    {
+      "name": "authority record kind is rejected by player wire",
+      "valid": false,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
+        "payload": {}
+      }
+    },
+    {
+      "name": "player wire protocol version is exact",
+      "valid": false,
+      "value": {
+        "protocolVersion": 1,
+        "kind": "SEAT_PRESENTATION_BLOCK",
+        "payload": {}
+      }
+    },
+    {
+      "name": "canonical card identity is rejected in player state",
+      "valid": false,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_MATCH_SNAPSHOT",
+        "payload": {
+          "version": 2,
+          "matchId": "match-1",
+          "publicRevision": 1,
+          "planRevision": 0,
+          "frame": 1,
+          "viewerSeat": "P0",
+          "interactionStatus": "PLANNING",
+          "state": {
+            "turn": 1,
+            "phase": "AWAITING_INTENT",
+            "priority": "P0",
+            "energy": { "P0": 1, "P1": 1 },
+            "maxEnergy": { "P0": 1, "P1": 1 },
+            "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
+            "deckCounts": { "P0": 8, "P1": 8 },
+            "locationDeckCount": 3,
+            "hands": { "P0": ["opaque-card"] , "P1": [] },
+            "cards": [{
+              "token": "opaque-card",
+              "cardId": "canonical-card-1",
+              "owner": "P0",
+              "zone": "HAND",
+              "lane": null,
+              "revealed": false
+            }],
+            "lanes": [],
+            "stagedCards": [],
+            "discard": { "P0": [], "P1": [] },
+            "destroyed": { "P0": [], "P1": [] },
+            "banished": { "P0": [], "P1": [] },
+            "banishedCounts": { "P0": 0, "P1": 0 },
+            "result": null
+          }
+        }
+      }
+    },
+    {
+      "name": "valid seat command envelope uses opaque card token",
+      "valid": true,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_COMMAND_ENVELOPE",
+        "payload": {
+          "version": 2,
+          "matchId": "match-1",
+          "commandId": "cmd-1",
+          "expectedPublicRevision": 1,
+          "expectedPlanRevision": 0,
+          "command": {
+            "type": "STAGE_CARD",
+            "token": "c_opaque",
+            "lane": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "seat command envelope rejects client-selected seat",
+      "valid": false,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_COMMAND_ENVELOPE",
+        "payload": {
+          "version": 2,
+          "matchId": "match-1",
+          "commandId": "cmd-2",
+          "expectedPublicRevision": 1,
+          "expectedPlanRevision": 0,
+          "seat": "P0",
+          "command": {
+            "type": "END_TURN"
+          }
+        }
+      }
+    },
+    {
+      "name": "valid seat block acknowledgement",
+      "valid": true,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_BLOCK_ACK",
+        "payload": {
+          "version": 2,
+          "matchId": "match-1",
+          "viewerSeat": "P0",
+          "publicRevision": 2,
+          "frame": 10,
+          "postStateHash": "fnv1a32:abcdef12"
+        }
+      }
+    },
+    {
+      "name": "valid seat resync request",
+      "valid": true,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_RESYNC_REQUEST",
+        "payload": {
+          "version": 2,
+          "matchId": "match-1",
+          "viewerSeat": "P0",
+          "publicRevision": 1,
+          "planRevision": 0,
+          "frame": 9,
+          "postStateHash": null
+        }
+      }
+    },
+    {
+      "name": "valid seat resync snapshot response",
+      "valid": true,
+      "value": {
+        "protocolVersion": 2,
+        "kind": "SEAT_RESYNC_RESPONSE",
+        "payload": {
+          "type": "SNAPSHOT",
+          "snapshot": {
+            "version": 2,
+            "matchId": "match-1",
+            "publicRevision": 1,
+            "planRevision": 0,
+            "frame": 1,
+            "viewerSeat": "P0",
+            "interactionStatus": "PLANNING",
+            "state": {
+              "turn": 1,
+              "phase": "AWAITING_INTENT",
+              "priority": "P0",
+              "energy": { "P0": 1, "P1": 1 },
+              "maxEnergy": { "P0": 1, "P1": 1 },
+              "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
+              "deckCounts": { "P0": 8, "P1": 8 },
+              "locationDeckCount": 3,
+              "hands": { "P0": [], "P1": [] },
+              "cards": [],
+              "lanes": [],
+              "stagedCards": [],
+              "discard": { "P0": [], "P1": [] },
+              "destroyed": { "P0": [], "P1": [] },
+              "banished": { "P0": [], "P1": [] },
+              "banishedCounts": { "P0": 0, "P1": 0 },
+              "result": null
+            }
+          }
+        }
+      }
+    }
+  ]
+}

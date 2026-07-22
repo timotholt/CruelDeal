@@ -1,4 +1,5 @@
 import type { MatchEvent } from './events';
+import type { EffectTraceEntry } from './effectTrace';
 
 declare const frameBrand: unique symbol;
 
@@ -6,8 +7,8 @@ declare const frameBrand: unique symbol;
  * Deterministic gameplay chronology within one match.
  *
  * A Frame is not wall-clock time, a render frame, or a transaction-local
- * array index. Genesis is frame 0; every committed gameplay event advances
- * the match by exactly one frame.
+ * array index. Genesis is frame 0; every canonical mechanical or semantic
+ * resolution step advances the match by exactly one frame.
  */
 export type Frame = number & { readonly [frameBrand]: true };
 
@@ -48,11 +49,12 @@ export interface TemporalScope {
   readonly phase: TimelinePhase;
 }
 
-/** One canonical event at one unique match-local frame. */
-export interface FramedEvent<TEvent extends MatchEvent = MatchEvent> {
+/** One canonical mechanical and/or semantic fact at one unique frame. */
+export interface CanonicalFrame<TEvent extends MatchEvent = MatchEvent> {
   readonly frame: Frame;
   readonly scope: TemporalScope;
-  readonly event: TEvent;
+  readonly event: TEvent | null;
+  readonly effect: EffectTraceEntry | null;
 }
 
 /** External references must pair the match identity with its local frame. */

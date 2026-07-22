@@ -262,9 +262,9 @@ describe('card variants and opening initialization', () => {
       seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
-      framedEvents: [
-        ...setup.locationSetup.framedEvents,
-        ...setup.opening.framedEvents,
+      frames: [
+        ...setup.locationSetup.frames,
+        ...setup.opening.frames,
       ],
     });
 

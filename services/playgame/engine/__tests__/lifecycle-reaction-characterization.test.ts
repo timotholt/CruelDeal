@@ -273,7 +273,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       owner: 'P0',
       cardId: delayed.id,
       lane: 0,
-    }, createRng('delay'), gameManifest);
+    }, createRng('delay'), gameManifest).events;
     const staged = fold(initial, stageEvents, gameManifest);
 
     expect(stageEvents.map((event) => event.type)).toEqual([
@@ -361,7 +361,7 @@ describe('Phase 1.5 lifecycle/reaction collision characterization', () => {
       owner: 'P0',
       cardId: stagedCard.id,
       lane: 0,
-    }, createRng('stage'), gameManifest);
+    }, createRng('stage'), gameManifest).events;
     const staged = fold(initial, stageEvents, gameManifest);
 
     expect(stageEvents.map(event => event.type)).toEqual([

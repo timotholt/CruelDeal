@@ -1,7 +1,7 @@
 import type { Manifest } from '../engine/manifest/types';
 import type { ReplayResult, ReplayStep } from '../engine/replay';
 import type { MatchState } from '../engine/types/state';
-import type { FramedEvent } from '../engine/types/timeline';
+import type { CanonicalFrame } from '../engine/types/timeline';
 import type { MatchRuntime } from '../runtime/matchRuntime';
 import { renderRuntimeReplay } from '../runtime/replayExport';
 import type { MatchRuntimeReplayExport } from '../runtime/contracts';
@@ -17,7 +17,7 @@ import {
 
 export interface SnapDebugApi {
   getLiveState: () => MatchState;
-  getCommittedEvents: () => readonly FramedEvent[];
+  getCommittedEvents: () => readonly CanonicalFrame[];
   getReplayBundle: () => MatchRuntimeReplayExport;
   getReplayTimeline: () => ReplayResult;
   getStep: (cursor: number) => ReplayStep | null;
@@ -44,7 +44,7 @@ export function installSnapDebug(
   const api: SnapDebugApi = {
     getLiveState: () => structuredClone(runtime.state()),
     getCommittedEvents: () => structuredClone(
-      exportReplay().transactions.flatMap(transaction => transaction.framedEvents),
+      exportReplay().transactions.flatMap(transaction => transaction.frames),
     ),
     getReplayBundle: exportReplay,
     getReplayTimeline: timeline,

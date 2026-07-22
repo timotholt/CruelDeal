@@ -48,7 +48,7 @@ describe('replay snapshot parity stress', () => {
       seed: genesis.rng.seed,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: genesis,
-      framedEvents: live.framedEvents,
+      frames: live.frames,
     });
 
     expect(replayed.steps).toHaveLength(FRAME_COUNT + 1);

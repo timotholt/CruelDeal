@@ -20,7 +20,8 @@ async function twoTransactionReplay(seed: string): Promise<MatchRuntimeReplayExp
     matchId: match.bootstrap.matchId,
     seat: match.bootstrap.viewerSeat,
     intentId: 'frame-edge-end-turn',
-    expectedRevision: match.runtime.revision(),
+    expectedPublicRevision: match.runtime.publicRevision(),
+    expectedPlanRevision: match.runtime.planRevision(match.bootstrap.viewerSeat),
     intent: { type: 'END_TURN' },
   });
   return structuredClone(match.exportReplay());
@@ -61,7 +62,7 @@ describe('Runtime frame replay edge cases', () => {
 
     const rendered = renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST);
     expect(rendered.finalState.timeline.frame)
-      .toBe(replay.transactions.at(-1)?.framedEvents.at(-1)?.frame);
+      .toBe(replay.transactions.at(-1)?.frames.at(-1)?.frame);
   });
 
   it('rejects transaction revisions that move backward', async () => {
@@ -85,7 +86,7 @@ describe('Runtime frame replay edge cases', () => {
     const replay: MatchRuntimeReplayExport = {
       ...exported,
       transactions: exported.transactions.map((transaction, index) => (
-        index === 0 ? { ...transaction, framedEvents: [] } : transaction
+        index === 0 ? { ...transaction, frames: [] } : transaction
       )),
     };
 
@@ -100,16 +101,16 @@ describe('Runtime frame replay edge cases', () => {
       ...exported,
       transactions: exported.transactions.map((transaction, transactionIndex) => ({
         ...transaction,
-        framedEvents: transaction.framedEvents.map((framedEvent, eventIndex) => (
+        frames: transaction.frames.map((canonicalFrame, eventIndex) => (
           transactionIndex === 0 && eventIndex === 0
-            ? { ...framedEvent, event: { type: 'UNKNOWN_EVENT' } }
-            : framedEvent
+            ? { ...canonicalFrame, event: { type: 'UNKNOWN_EVENT' } }
+            : canonicalFrame
         )),
       })),
     } as unknown as MatchRuntimeReplayExport;
 
     expect(() => renderRuntimeReplay(replay, BOOTSTRAP_MANIFEST))
-      .toThrow(/COMMITTED_TRANSACTION violates Cruel Deal protocol/);
+      .toThrow(/COMMITTED_TRANSACTION violates Cruel Deal authority protocol v2/);
   });
 
   it('rejects duplicate transaction identities', async () => {
@@ -135,7 +136,7 @@ describe('Runtime frame replay edge cases', () => {
         if (transactionIndex !== 1) return transaction;
         return {
           ...transaction,
-          framedEvents: transaction.framedEvents.map((framed, eventIndex) => (
+          frames: transaction.frames.map((framed, eventIndex) => (
             eventIndex === 0
               ? { ...framed, frame: asFrame(framed.frame + 1) }
               : framed
@@ -176,6 +177,6 @@ describe('Runtime frame replay edge cases', () => {
     expect(rendered.steps[boundaryIndex].state.turn).toBe(2);
     expect(rendered.steps[boundaryIndex].scope).toEqual({ turn: 2, phase: 'START' });
     expect(rendered.steps[boundaryIndex].frame)
-      .toBe(rendered.steps[boundaryIndex].framedEvent?.frame);
+      .toBe(rendered.steps[boundaryIndex].canonicalFrame?.frame);
   });
 });

@@ -93,7 +93,7 @@ describe('Phase 0 runtime characterization', () => {
       type: 'END_TURN',
       intentId: 'end-turn-empty-intent',
       owner: runtimeFixture.localSeat,
-    }, intentRng, manifest);
+    }, intentRng, manifest).events;
     expect(events[0]).toEqual({ type: 'TURN_RESOLUTION_STARTED', turn: 2 });
     const resolutionStart = frameAndFoldEvents({
       transactionId: 'end-turn-empty:resolution-start',

@@ -20,6 +20,10 @@
 import type { MatchEvent } from './types/events';
 import type { MatchIntent } from './types/intents';
 import type { MatchState } from './types/state';
+import type {
+  KernelEffectTraceEntry,
+  KernelResolutionStep,
+} from './kernel/resolutionTrace';
 import type { CardId, Owner } from './types/ids';
 import type { Manifest } from './manifest/types';
 import type { Rng } from './rng';
@@ -40,12 +44,66 @@ import {
 // resolve — intent → events
 // ============================================================================
 
+export interface ResolveResult {
+  readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
+}
+
+function appendResolution(
+  events: MatchEvent[],
+  resolutionSteps: KernelResolutionStep[],
+  result: ResolveResult,
+): void {
+  const transitionOffset = events.length;
+  const invocationOffset = resolutionSteps.reduce((next, step) => (
+    step.effect === null
+      ? next
+      : Math.max(next, step.effect.invocationOrdinal + 1)
+  ), 0);
+  events.push(...result.events);
+  resolutionSteps.push(...result.resolutionSteps.map(step => ({
+    transitionIndex: step.transitionIndex === null
+      ? null
+      : step.transitionIndex + transitionOffset,
+    effect: rebaseInvocationOrdinals(step.effect, invocationOffset),
+  })));
+}
+
+function rebaseInvocationOrdinals(
+  effect: KernelEffectTraceEntry | null,
+  offset: number,
+): KernelEffectTraceEntry | null {
+  if (effect === null || offset === 0) return effect;
+  if (effect.kind === 'EFFECT_INVOCATION_STARTED') {
+    return {
+      ...effect,
+      invocationOrdinal: effect.invocationOrdinal + offset,
+      parentInvocationOrdinal: effect.parentInvocationOrdinal === null
+        ? null
+        : effect.parentInvocationOrdinal + offset,
+    };
+  }
+  return {
+    ...effect,
+    invocationOrdinal: effect.invocationOrdinal + offset,
+  };
+}
+
+function combineResolution(...results: readonly ResolveResult[]): ResolveResult {
+  const events: MatchEvent[] = [];
+  const resolutionSteps: KernelResolutionStep[] = [];
+  for (const result of results) {
+    appendResolution(events, resolutionSteps, result);
+  }
+  return { events, resolutionSteps };
+}
+
 export function resolve(
   state: MatchState,
   intent: MatchIntent,
   rng: Rng,
   manifest: Manifest,
-): MatchEvent[] {
+): ResolveResult {
   if (state.phase === 'SETUP') {
     return reject(intent.intentId, 'match setup is not complete');
   }
@@ -64,17 +122,22 @@ export function resolve(
       }], {
         rng: rng.scope(`turn:${state.turn}:begin-resolution`),
       }, manifest);
-      return [
-        ...begun.events,
-        ...resolveTurn(begun.state, manifest, rng.scope(`turn:${state.turn}`)).events,
-      ];
+      const turn = resolveTurn(
+        begun.state,
+        manifest,
+        rng.scope(`turn:${state.turn}`),
+      );
+      return combineResolution(begun, turn);
     }
     case 'CONCEDE':      return resolveConcede(state, intent, manifest, rng);
   }
 }
 
-function reject(intentId: string, reason: string): MatchEvent[] {
-  return [{ type: 'INTENT_REJECTED', intentId, reason }];
+function reject(intentId: string, reason: string): ResolveResult {
+  return {
+    events: [{ type: 'INTENT_REJECTED', intentId, reason }],
+    resolutionSteps: [{ transitionIndex: 0, effect: null }],
+  };
 }
 
 function resolveStage(
@@ -82,9 +145,9 @@ function resolveStage(
   intent: Extract<MatchIntent, { type: 'STAGE_CARD' }>,
   rng: Rng,
   manifest: Manifest,
-): MatchEvent[] {
+): ResolveResult {
   try {
-    return [...executeRulesCommands(state, [{
+    return executeRulesCommands(state, [{
       type: 'STAGE_PLAY',
       intentId: intent.intentId,
       cardId: intent.cardId,
@@ -97,7 +160,7 @@ function resolveStage(
       },
     }], {
       rng: rng.scope(`stage:${intent.intentId}`),
-    }, manifest).events];
+    }, manifest);
   } catch (error) {
     if (error instanceof KernelInvariantError) {
       return reject(intent.intentId, error.failure.message);
@@ -111,15 +174,15 @@ function resolveConcede(
   intent: Extract<MatchIntent, { type: 'CONCEDE' }>,
   manifest: Manifest,
   rng: Rng,
-): MatchEvent[] {
-  return [...executeRulesCommands(state, [{
+): ResolveResult {
+  return executeRulesCommands(state, [{
     type: 'END_MATCH',
     authority: 'SYSTEM',
     reason: 'CONCESSION',
     concedingOwner: intent.owner,
   }], {
     rng: rng.scope(`concession:${intent.owner}`),
-  }, manifest).events];
+  }, manifest);
 }
 
 // ============================================================================
@@ -128,6 +191,7 @@ function resolveConcede(
 
 export interface ResolveTurnResult {
   readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly state: MatchState;
 }
 
@@ -137,12 +201,13 @@ export function resolveTurn(
   rng: Rng,
 ): ResolveTurnResult {
   const events: MatchEvent[] = [];
+  const resolutionSteps: KernelResolutionStep[] = [];
   let s = state;
 
   // ─── Phase 1  Reveals (priority-ordered) ─────────────────────────────────
   // Priority holder's cards flip first, in stage order; then the other side.
   const turnReveals = revealScheduledCards(s, manifest, rng.scope('turn-reveals'), 'TURN');
-  events.push(...turnReveals.events);
+  appendResolution(events, resolutionSteps, turnReveals);
   s = turnReveals.state;
 
   // ─── END-OF-TURN BOOKKEEPING ─────────────────────────────────────────────
@@ -201,7 +266,7 @@ export function resolveTurn(
       { rng: rng.scope('turn-end-reactions') },
       manifest,
     );
-    events.push(...triggered.events);
+    appendResolution(events, resolutionSteps, triggered);
     s = triggered.state;
   }
 
@@ -225,7 +290,7 @@ export function resolveTurn(
           reason: 'PENDING_END_OF_TURN_DUE',
         },
       }], { rng: rng.scope('scheduled-end'), depth: 0 }, manifest);
-      events.push(...consumed.events);
+      appendResolution(events, resolutionSteps, consumed);
       s = consumed.state;
     }
   }
@@ -233,7 +298,7 @@ export function resolveTurn(
   const isFinalTurn = s.turn >= getFinalTurn(s, manifest);
   if (isFinalTurn) {
     const delayed = revealScheduledCards(s, manifest, rng.scope('endgame-reveal'), 'END_OF_GAME');
-    events.push(...delayed.events);
+    appendResolution(events, resolutionSteps, delayed);
     s = delayed.state;
   }
 
@@ -245,7 +310,7 @@ export function resolveTurn(
   }], {
     rng: rng.scope(`turn:${s.turn}:end-boundary`),
   }, manifest);
-  events.push(...ended.events);
+  appendResolution(events, resolutionSteps, ended);
   s = ended.state;
 
   // Phase 3  Terminal score is derived inside the governed lifecycle
@@ -258,9 +323,9 @@ export function resolveTurn(
     }], {
       rng: rng.scope(`turn:${s.turn}:match-end`),
     }, manifest);
-    events.push(...terminated.events);
+    appendResolution(events, resolutionSteps, terminated);
     s = terminated.state;
-    return { events, state: s };
+    return { events, resolutionSteps, state: s };
   }
 
   // ─── START-OF-TURN BOOKKEEPING ───────────────────────────────────────────
@@ -309,7 +374,7 @@ export function resolveTurn(
   }], {
     rng: rng.scope(`turn:${nextTurn}:start-boundary`),
   }, manifest);
-  events.push(...started.events);
+  appendResolution(events, resolutionSteps, started);
   s = started.state;
 
   // Phase 5  Ramp `maxEnergy` (+1 per owner), refill `energy` to
@@ -332,7 +397,7 @@ export function resolveTurn(
         reason: 'TURN_START_MAX_ENERGY_RAMP',
       },
     }], { rng: rng.scope(`turn:${nextTurn}:energy-ramp:${owner}`) }, manifest);
-    events.push(...ramp.events);
+    appendResolution(events, resolutionSteps, ramp);
     s = ramp.state;
 
     const bonus = s.nextTurnEnergyBonus[owner];
@@ -351,7 +416,7 @@ export function resolveTurn(
           reason: 'TURN_START_ENERGY_REFILL',
         },
       }], { rng: rng.scope(`turn:${nextTurn}:energy-refill:${owner}`) }, manifest);
-      events.push(...refill.events);
+      appendResolution(events, resolutionSteps, refill);
       s = refill.state;
     }
 
@@ -368,7 +433,7 @@ export function resolveTurn(
           reason: 'TURN_START_BONUS_CONSUMED',
         },
       }], { rng: rng.scope(`turn:${nextTurn}:bonus-consume:${owner}`) }, manifest);
-      events.push(...consume.events);
+      appendResolution(events, resolutionSteps, consume);
       s = consume.state;
     }
   }
@@ -393,7 +458,7 @@ export function resolveTurn(
           reason: 'PENDING_START_OF_TURN_DUE',
         },
       }], { rng: rng.scope('scheduled-start'), depth: 0 }, manifest);
-      events.push(...consumed.events);
+      appendResolution(events, resolutionSteps, consumed);
       s = consumed.state;
     }
   }
@@ -445,7 +510,7 @@ export function resolveTurn(
       { rng: rng.scope('turn-start-reactions') },
       manifest,
     );
-    events.push(...triggered.events);
+    appendResolution(events, resolutionSteps, triggered);
     s = triggered.state;
   }
 
@@ -466,7 +531,7 @@ export function resolveTurn(
       { rng: rng.scope(`turn-start-draw:${owner}`) },
       manifest,
     );
-    events.push(...draw.events);
+    appendResolution(events, resolutionSteps, draw);
     s = draw.state;
   }
 
@@ -497,12 +562,12 @@ export function resolveTurn(
       }], {
         rng: rng.scope(`location-reveal:${loc.id}`),
       }, manifest);
-      events.push(...reveal.events);
+      appendResolution(events, resolutionSteps, reveal);
       s = reveal.state;
     }
   }
 
-  return { events, state: s };
+  return { events, resolutionSteps, state: s };
 }
 
 // ============================================================================
@@ -520,6 +585,7 @@ function revealScheduledCards(
   window: 'TURN' | 'END_OF_GAME',
 ): ResolveTurnResult {
   const events: MatchEvent[] = [];
+  const resolutionSteps: KernelResolutionStep[] = [];
   let s = state;
   const due = getAllCardIds(s)
     .map((id) => getCardRuntime(s, id, manifest))
@@ -581,10 +647,10 @@ function revealScheduledCards(
       },
       manifest,
     );
-    events.push(...res.events);
+    appendResolution(events, resolutionSteps, res);
     s = res.state;
   }
-  return { events, state: s };
+  return { events, resolutionSteps, state: s };
 }
 
 // Re-exports for Step 8+ wiring convenience.

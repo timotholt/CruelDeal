@@ -9,7 +9,7 @@ import {
   type MatchEvent,
   type MatchState,
   type Owner,
-  type FramedEvent,
+  type CanonicalFrame,
 } from '../../../engine';
 import {
   assertManifestValidDeck,
@@ -44,7 +44,7 @@ interface ExecutionResult {
   readonly genesis: MatchState;
   readonly finalState: MatchState;
   readonly events: readonly MatchEvent[];
-  readonly framedEvents: readonly FramedEvent[];
+  readonly frames: readonly CanonicalFrame[];
   readonly commits: readonly CommitRecord[];
 }
 
@@ -92,7 +92,7 @@ function commitEvents(
   state: MatchState,
   batch: readonly MatchEvent[],
   allEvents: MatchEvent[],
-  allFramedEvents: FramedEvent[],
+  allCanonicalFrames: CanonicalFrame[],
   onApply?: (application: EventApplication) => void,
   initialPhase?: 'SETUP',
 ): MatchState {
@@ -108,7 +108,7 @@ function commitEvents(
     const globalIndex = allEvents.length;
     onApply?.({ transactionId, eventIndex, globalIndex, event });
     allEvents.push(event);
-    allFramedEvents.push(transition.framedEvent);
+    allCanonicalFrames.push(transition.canonicalFrame);
   });
   return transaction.finalState;
 }
@@ -120,7 +120,7 @@ function executeGeneratedMatch(
 ): ExecutionResult {
   const opened = createOpenedMatch(input, BOOTSTRAP_MANIFEST);
   const events: MatchEvent[] = [];
-  const framedEvents: FramedEvent[] = [];
+  const frames: CanonicalFrame[] = [];
   const commits: CommitRecord[] = [];
   let state = opened.genesis;
 
@@ -129,7 +129,7 @@ function executeGeneratedMatch(
     state,
     opened.openingEvents,
     events,
-    framedEvents,
+    frames,
     onApply,
     'SETUP',
   );
@@ -158,7 +158,7 @@ function executeGeneratedMatch(
       state,
       batch,
       events,
-      framedEvents,
+      frames,
       onApply,
     );
     commits.push({
@@ -177,7 +177,7 @@ function executeGeneratedMatch(
     genesis: opened.genesis,
     finalState: state,
     events,
-    framedEvents,
+    frames,
     commits,
   };
 }
@@ -311,7 +311,7 @@ function assertProvenance(input: GeneratedMatchCase, execution: ExecutionResult)
     seed: input.matchSeed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState: execution.genesis,
-    framedEvents: execution.framedEvents,
+    frames: execution.frames,
   });
 
   replay.steps.forEach((frame, frameIndex) => {
@@ -396,7 +396,7 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        framedEvents: direct.framedEvents,
+        frames: direct.frames,
       });
 
       expect(replayed.finalState).toEqual(direct.finalState);
@@ -415,7 +415,7 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        framedEvents: direct.framedEvents,
+        frames: direct.frames,
       });
 
       assertStableApplicationsExactlyOnce(applications);
@@ -450,7 +450,7 @@ describe('seeded engine properties', () => {
         seed: input.matchSeed,
         manifest: BOOTSTRAP_MANIFEST,
         initialState: direct.genesis,
-        framedEvents: direct.framedEvents,
+        frames: direct.frames,
       });
 
       for (const commit of direct.commits) {

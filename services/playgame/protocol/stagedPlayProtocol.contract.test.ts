@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { validateFramedEventWire } from './validator';
+import { validateCanonicalFrameWire } from './validator';
 
 const cause = {
   sourceId: 'card:protocol-stage',
@@ -12,11 +12,12 @@ const framed = (event: unknown) => ({
   frame: 1,
   scope: { turn: 1, phase: 'ACTION' },
   event,
+  effect: null,
 });
 
 describe('C5A-5 staged-play protocol contract', () => {
   it('accepts complete staged-play and reveal-timing events', () => {
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_STAGED',
       intentId: 'intent:stage',
       cardId: 'card:protocol-stage',
@@ -25,13 +26,13 @@ describe('C5A-5 staged-play protocol contract', () => {
       energyPaid: 0,
       cause,
     })).ok).toBe(true);
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_REVEAL_SCHEDULED',
       cardId: 'card:protocol-stage',
       timing: { kind: 'TURN', turn: 1 },
       cause,
     })).ok).toBe(true);
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_REVEAL_SCHEDULED',
       cardId: 'card:protocol-stage',
       timing: { kind: 'END_OF_GAME' },
@@ -107,7 +108,7 @@ describe('C5A-5 staged-play protocol contract', () => {
       cause,
     }],
   ])('rejects CARD_STAGED without required %s', (_field, event) => {
-    expect(validateFramedEventWire(framed(event)).ok).toBe(false);
+    expect(validateCanonicalFrameWire(framed(event)).ok).toBe(false);
   });
 
   it.each([
@@ -115,7 +116,7 @@ describe('C5A-5 staged-play protocol contract', () => {
     ['fractional payment', 1.5],
     ['unsafe payment', Number.MAX_SAFE_INTEGER + 1],
   ])('rejects CARD_STAGED with %s', (_label, energyPaid) => {
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_STAGED',
       intentId: 'intent:stage',
       cardId: 'card:protocol-stage',
@@ -186,11 +187,11 @@ describe('C5A-5 staged-play protocol contract', () => {
       cause,
     }],
   ])('rejects reveal schedule with %s', (_label, event) => {
-    expect(validateFramedEventWire(framed(event)).ok).toBe(false);
+    expect(validateCanonicalFrameWire(framed(event)).ok).toBe(false);
   });
 
   it('rejects aliases and unknown fields on both strict governed events', () => {
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_STAGED',
       intentId: 'intent:stage',
       cardId: 'card:protocol-stage',
@@ -201,7 +202,7 @@ describe('C5A-5 staged-play protocol contract', () => {
       cost: 1,
       callerSuppliedTiming: { kind: 'END_OF_GAME' },
     })).ok).toBe(false);
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_REVEAL_SCHEDULED',
       cardId: 'card:protocol-stage',
       timing: { kind: 'END_OF_GAME' },
@@ -211,7 +212,7 @@ describe('C5A-5 staged-play protocol contract', () => {
   });
 
   it('rejects the removed CARD_UNSTAGED event', () => {
-    expect(validateFramedEventWire(framed({
+    expect(validateCanonicalFrameWire(framed({
       type: 'CARD_UNSTAGED',
       intentId: 'intent:undo',
       cardId: 'card:protocol-stage',

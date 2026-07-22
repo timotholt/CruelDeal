@@ -1,12 +1,12 @@
 {
-  "protocolVersion": 1,
+  "protocolVersion": 2,
   "cases": [
     {
       "name": "valid framed turn boundary",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 66,
           "scope": {
@@ -18,7 +18,8 @@
             "turn": 3,
             "priority": "P0",
             "priorityReason": "MORE_POWER"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -26,8 +27,8 @@
       "name": "valid non-boundary event envelope",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 67,
           "scope": {
@@ -39,7 +40,8 @@
             "owner": "P0",
             "delta": 3,
             "reason": "TURN_START"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -47,8 +49,8 @@
       "name": "valid governed location reveal schedule",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 68,
           "scope": {
@@ -65,7 +67,8 @@
               "effectKind": "LOCATION",
               "reason": "SCHEDULE_REVEAL"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -73,8 +76,8 @@
       "name": "valid governed lane creation",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 69,
           "scope": {
@@ -90,27 +93,8 @@
               "effectKind": "LOCATION",
               "reason": "CREATE_LANE"
             }
-          }
-        }
-      }
-    },
-    {
-      "name": "valid intent envelope",
-      "valid": true,
-      "value": {
-        "protocolVersion": 1,
-        "kind": "INTENT_ENVELOPE",
-        "payload": {
-          "matchId": "match-1",
-          "seat": "P0",
-          "intentId": "intent-1",
-          "expectedRevision": 8,
-          "intentSeq": 12,
-          "intent": {
-            "type": "STAGE_CARD",
-            "cardId": "card-1",
-            "lane": 2
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -118,7 +102,7 @@
       "name": "valid match bootstrap",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "kind": "MATCH_BOOTSTRAP",
         "payload": {
           "matchId": "match-1",
@@ -177,7 +161,7 @@
       "name": "valid committed transaction",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "kind": "COMMITTED_TRANSACTION",
         "payload": {
           "transactionId": "match-1:tx:9",
@@ -191,7 +175,7 @@
             "seat": "SYSTEM",
             "intentId": "resolve-turn-2"
           },
-          "framedEvents": [
+          "frames": [
             {
               "frame": 66,
               "scope": {
@@ -203,43 +187,10 @@
                 "turn": 3,
                 "priority": "P0",
                 "priorityReason": "RETAINED"
-              }
+              },
+              "effect": null
             }
           ]
-        }
-      }
-    },
-    {
-      "name": "valid seat-safe snapshot",
-      "valid": true,
-      "value": {
-        "protocolVersion": 1,
-        "kind": "SEAT_MATCH_SNAPSHOT",
-        "payload": {
-          "version": 1,
-          "matchId": "match-1",
-          "revision": 9,
-          "frame": 66,
-          "viewerSeat": "P0",
-          "state": {
-            "turn": 3,
-            "phase": "AWAITING_INTENT",
-            "priority": "P0",
-            "energy": { "P0": 3, "P1": 3 },
-            "maxEnergy": { "P0": 3, "P1": 3 },
-            "nextTurnEnergyBonus": { "P0": 0, "P1": 0 },
-            "deckCounts": { "P0": 5, "P1": 5 },
-            "locationDeckCount": 3,
-            "hands": { "P0": [], "P1": [] },
-            "cards": [],
-            "lanes": [],
-            "stagedCards": [],
-            "discard": { "P0": [], "P1": [] },
-            "destroyed": { "P0": [], "P1": [] },
-            "banished": { "P0": [], "P1": [] },
-            "banishedCounts": { "P0": 0, "P1": 0 },
-            "result": null
-          }
         }
       }
     },
@@ -247,8 +198,8 @@
       "name": "frame zero cannot own an event",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 0,
           "scope": {
@@ -257,7 +208,8 @@
           },
           "event": {
             "type": "CARD_DRAWN"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -265,8 +217,8 @@
       "name": "unknown event type is rejected",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 1,
           "scope": {
@@ -275,7 +227,8 @@
           },
           "event": {
             "type": "CARD_DREW_ITSELF"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -283,8 +236,8 @@
       "name": "governed location event requires stable identity and cause",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 2,
           "scope": {
@@ -294,7 +247,8 @@
           "event": {
             "type": "LOCATION_REVEALED",
             "lane": 0
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -302,8 +256,8 @@
       "name": "governed lane event rejects unknown fields",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 3,
           "scope": {
@@ -320,7 +274,8 @@
               "effectKind": "SYSTEM",
               "reason": "MATCH_SETUP"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -328,8 +283,8 @@
       "name": "scheduled replacement requires an exact reveal turn",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 4,
           "scope": {
@@ -349,7 +304,8 @@
               "effectKind": "LOCATION",
               "reason": "REPLACE_LOCATION"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -357,8 +313,8 @@
       "name": "turn started requires priority",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 4,
           "scope": {
@@ -369,25 +325,8 @@
             "type": "TURN_STARTED",
             "turn": 2,
             "priorityReason": "RETAINED"
-          }
-        }
-      }
-    },
-    {
-      "name": "intent rejects unknown properties",
-      "valid": false,
-      "value": {
-        "protocolVersion": 1,
-        "kind": "INTENT_ENVELOPE",
-        "payload": {
-          "matchId": "match-1",
-          "seat": "P0",
-          "intentId": "intent-1",
-          "expectedRevision": 8,
-          "intent": {
-            "type": "END_TURN",
-            "owner": "P0"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -395,7 +334,7 @@
       "name": "transaction must contain a frame",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "kind": "COMMITTED_TRANSACTION",
         "payload": {
           "transactionId": "match-1:tx:9",
@@ -407,7 +346,7 @@
             "seat": "SYSTEM",
             "intentId": "resolve-turn-2"
           },
-          "framedEvents": []
+          "frames": []
         }
       }
     },
@@ -415,7 +354,7 @@
       "name": "bootstrap rejects an incomplete seat map",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
+        "protocolVersion": 2,
         "kind": "MATCH_BOOTSTRAP",
         "payload": {
           "matchId": "match-1",
@@ -469,8 +408,8 @@
       "name": "valid canonical staged card event",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 9,
           "scope": {
@@ -489,7 +428,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -497,8 +437,8 @@
       "name": "valid canonical turn reveal schedule",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 10,
           "scope": {
@@ -517,7 +457,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -525,8 +466,8 @@
       "name": "valid canonical end of game reveal schedule",
       "valid": true,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 11,
           "scope": {
@@ -544,7 +485,8 @@
               "effectKind": "LOCATION",
               "reason": "DELAY_REVEAL"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -552,8 +494,8 @@
       "name": "staged payment must be a non-negative safe integer",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 12,
           "scope": {
@@ -572,7 +514,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -580,8 +523,8 @@
       "name": "staged event rejects legacy cost alias",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 12,
           "scope": {
@@ -601,7 +544,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -609,8 +553,8 @@
       "name": "reveal schedule rejects unsafe turn",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 13,
           "scope": {
@@ -629,7 +573,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -637,8 +582,8 @@
       "name": "reveal schedule rejects legacy timing discriminator",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 14,
           "scope": {
@@ -657,7 +602,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -665,8 +611,8 @@
       "name": "staged event requires non-empty cause provenance",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 15,
           "scope": {
@@ -685,7 +631,8 @@
               "effectKind": "SYSTEM",
               "reason": "CARD_STAGE"
             }
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -693,8 +640,8 @@
       "name": "removed card unstaged event is rejected",
       "valid": false,
       "value": {
-        "protocolVersion": 1,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 2,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 16,
           "scope": {
@@ -705,7 +652,8 @@
             "type": "CARD_UNSTAGED",
             "intentId": "intent:undo",
             "cardId": "card:staged"
-          }
+          },
+          "effect": null
         }
       }
     },
@@ -713,8 +661,8 @@
       "name": "protocol version is exact",
       "valid": false,
       "value": {
-        "protocolVersion": 2,
-        "kind": "FRAMED_EVENT",
+        "protocolVersion": 1,
+        "kind": "CANONICAL_FRAME",
         "payload": {
           "frame": 1,
           "scope": {
@@ -723,7 +671,8 @@
           },
           "event": {
             "type": "CARD_DRAWN"
-          }
+          },
+          "effect": null
         }
       }
     }

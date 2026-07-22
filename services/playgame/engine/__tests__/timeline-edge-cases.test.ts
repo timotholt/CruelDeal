@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  assertFramedEventSequence,
+  assertCanonicalFrameSequence,
   cardLifecycleFrames,
   currentFrame,
   frameEventSequence,
@@ -9,13 +9,13 @@ import {
   turnAtFrame,
   turnSpans,
 } from '../timeline';
-import { foldFramedEvents, frameAndFoldEvents } from '../transactionTimeline';
+import { foldCanonicalFrames, frameAndFoldEvents } from '../transactionTimeline';
 import {
   GENESIS_FRAME,
   asFrame,
   nextFrame,
   type Frame,
-  type FramedEvent,
+  type CanonicalFrame,
 } from '../types/timeline';
 import type { CardId, LocationCardInstanceId } from '../types/ids';
 import type { MatchEvent } from '../types/events';
@@ -69,9 +69,9 @@ function addToHand(id: CardId): MatchEvent {
 }
 
 function tamper(
-  framed: FramedEvent,
-  changes: Partial<FramedEvent>,
-): FramedEvent {
+  framed: CanonicalFrame,
+  changes: Partial<CanonicalFrame>,
+): CanonicalFrame {
   return { ...framed, ...changes };
 }
 
@@ -134,8 +134,8 @@ describe('Canonical framing edge cases', () => {
       manifest,
     });
 
-    expect(first.framedEvents[0].frame).toBe(asFrame(1));
-    expect(second.framedEvents[0].frame).toBe(asFrame(2));
+    expect(first.frames[0].frame).toBe(asFrame(1));
+    expect(second.frames[0].frame).toBe(asFrame(2));
   });
 
   it('resets transaction-local indexes without resetting gameplay frames', () => {
@@ -246,32 +246,32 @@ describe('Canonical framing edge cases', () => {
   });
 
   it('canonicalizes caller-owned frames once, then preserves internal identity', () => {
-    const framedEvents = frameEventSequence(
+    const frames = frameEventSequence(
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    const folded = foldFramedEvents({
+    const folded = foldCanonicalFrames({
       transactionId: 'edge:identity',
       initialState: fixtureState(),
-      framedEvents,
+      frames,
       manifest,
     });
 
-    expect(folded.framedEvents[0]).not.toBe(framedEvents[0]);
-    expect(folded.framedEvents[0].event).not.toBe(framedEvents[0].event);
-    expect(folded.transitions[0].framedEvent).toBe(folded.framedEvents[0]);
-    expect(folded.transitions[0].event).toBe(folded.framedEvents[0].event);
-    expect(folded.framedEvents[0]).toMatchObject({
-      frame: framedEvents[0].frame,
-      scope: framedEvents[0].scope,
-      event: framedEvents[0].event,
+    expect(folded.frames[0]).not.toBe(frames[0]);
+    expect(folded.frames[0].event).not.toBe(frames[0].event);
+    expect(folded.transitions[0].canonicalFrame).toBe(folded.frames[0]);
+    expect(folded.transitions[0].event).toBe(folded.frames[0].event);
+    expect(folded.frames[0]).toMatchObject({
+      frame: frames[0].frame,
+      scope: frames[0].scope,
+      event: frames[0].event,
     });
-    const callerEvent = framedEvents[0].event as Extract<
+    const callerEvent = frames[0].event as Extract<
       MatchEvent,
       { type: 'TURN_RESOLUTION_STARTED' }
     >;
     callerEvent.turn = 99;
-    expect(folded.framedEvents[0].event).toMatchObject({
+    expect(folded.frames[0].event).toMatchObject({
       type: 'TURN_RESOLUTION_STARTED',
       turn: 3,
     });
@@ -279,10 +279,10 @@ describe('Canonical framing edge cases', () => {
 
   it('folds an empty canonical batch without manufacturing a frame', () => {
     const state = fixtureState();
-    const folded = foldFramedEvents({
+    const folded = foldCanonicalFrames({
       transactionId: 'edge:empty',
       initialState: state,
-      framedEvents: [],
+      frames: [],
       manifest,
     });
 
@@ -298,7 +298,7 @@ describe('Canonical scope validation edge cases', () => {
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    expect(() => assertFramedEventSequence(fixtureState(), [
+    expect(() => assertCanonicalFrameSequence(fixtureState(), [
       tamper(framed, { scope: { turn: 0, phase: 'RESOLUTION' } }),
     ])).toThrow(/positive safe integer/);
   });
@@ -308,7 +308,7 @@ describe('Canonical scope validation edge cases', () => {
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    expect(() => assertFramedEventSequence(fixtureState(), [
+    expect(() => assertCanonicalFrameSequence(fixtureState(), [
       tamper(framed, { scope: { turn: 3.5, phase: 'RESOLUTION' } }),
     ])).toThrow(/positive safe integer/);
   });
@@ -318,7 +318,7 @@ describe('Canonical scope validation edge cases', () => {
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    expect(() => assertFramedEventSequence(fixtureState(), [
+    expect(() => assertCanonicalFrameSequence(fixtureState(), [
       tamper(framed, { scope: { turn: 4, phase: 'RESOLUTION' } }),
     ])).toThrow(/scope mismatch/);
   });
@@ -328,7 +328,7 @@ describe('Canonical scope validation edge cases', () => {
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    expect(() => assertFramedEventSequence(fixtureState(), [
+    expect(() => assertCanonicalFrameSequence(fixtureState(), [
       tamper(framed, { scope: { turn: 3, phase: 'ACTION' } }),
     ])).toThrow(/scope mismatch/);
   });
@@ -435,7 +435,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(turnSpans(folded.framedEvents)).toEqual([
+    expect(turnSpans(folded.frames)).toEqual([
       { turn: 3, startFrame: asFrame(1), endFrame: asFrame(2) },
       { turn: 4, startFrame: asFrame(3), endFrame: asFrame(5) },
       { turn: 5, startFrame: asFrame(6), endFrame: asFrame(6) },
@@ -450,7 +450,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(cardLifecycleFrames(folded.framedEvents, cardId).created)
+    expect(cardLifecycleFrames(folded.frames, cardId).created)
       .toEqual([asFrame(1)]);
   });
 
@@ -492,7 +492,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       ],
       manifest,
     });
-    const lifecycle = cardLifecycleFrames(folded.framedEvents, cardId);
+    const lifecycle = cardLifecycleFrames(folded.frames, cardId);
 
     expect(lifecycle.played).toEqual([asFrame(4), asFrame(8)]);
     expect(lifecycle.revealed).toEqual([asFrame(3), asFrame(7)]);
@@ -527,7 +527,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       manifest,
     });
 
-    expect(cardLifecycleFrames(folded.framedEvents, cardId)).toMatchObject({
+    expect(cardLifecycleFrames(folded.frames, cardId)).toMatchObject({
       created: [asFrame(1)],
       moved: [asFrame(3)],
       destroyed: [asFrame(2), asFrame(4)],
@@ -550,7 +550,7 @@ describe('Timeline query and lifecycle edge cases', () => {
       fixtureState(),
       [{ type: 'TURN_RESOLUTION_STARTED', turn: 3 }],
     );
-    expect(() => assertFramedEventSequence(fixtureState(), [
+    expect(() => assertCanonicalFrameSequence(fixtureState(), [
       tamper(framed, { frame: -1 as Frame }),
     ])).toThrow(/expected 1, received -1/);
   });

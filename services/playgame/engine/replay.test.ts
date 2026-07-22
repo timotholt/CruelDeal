@@ -34,10 +34,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     seed: result.finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    framedEvents: result.framedEvents,
+    frames: result.frames,
   });
 
-  eq(replayed.steps.length, result.events.length + 1, 'replayMatch: step count = events + genesis');
+  eq(replayed.steps.length, result.frames.length + 1, 'replayMatch: step count = canonical frames + genesis');
   eq(replayed.finalState, result.finalState, 'replayMatch: final state matches original run');
 }
 
@@ -56,10 +56,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
       notes: 'test bundle',
     },
     initialState,
-    framedEvents: result.framedEvents,
+    frames: result.frames,
   });
   eq(bundle.seed, result.finalState.rng.seed, 'exportReplayBundle: seed copied');
-  eq(bundle.framedEvents.length, result.framedEvents.length, 'exportReplayBundle: event count matches record');
+  eq(bundle.frames.length, result.frames.length, 'exportReplayBundle: frame count matches record');
   eq(bundle.manifestVersion, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifestVersion copied');
   eq(bundle.manifestSnapshot.version, BOOTSTRAP_MANIFEST.version, 'exportReplayBundle: manifest snapshot copied');
 }
@@ -105,10 +105,10 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     seed: finalState.rng.seed,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    framedEvents: [
-      ...setup.locationSetup.framedEvents,
-      ...setup.opening.framedEvents,
-      ...drawTransaction.framedEvents,
+    frames: [
+      ...setup.locationSetup.frames,
+      ...setup.opening.frames,
+      ...drawTransaction.frames,
     ],
   });
   eq(getCardState(replayed.initialState, cardId)!.defId, 'drill-instructor', 'replayMatch: preserves supplied initial card identity');
@@ -127,7 +127,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
     finalState: result.finalState,
     manifest: BOOTSTRAP_MANIFEST,
     initialState,
-    framedEvents: result.framedEvents,
+    frames: result.frames,
   });
   const validation = validateReplayBundle(bundle, BOOTSTRAP_MANIFEST);
   truthy(validation.ok, 'validateReplayBundle: valid bundle passes');
@@ -156,7 +156,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
       finalState: result.finalState,
       manifest: BOOTSTRAP_MANIFEST,
       initialState,
-      framedEvents: result.framedEvents,
+      frames: result.frames,
     }),
     manifestVersion: BOOTSTRAP_MANIFEST.version + 1,
   };
@@ -180,7 +180,7 @@ const locationDeck = orderedTestLocationDeck(BOOTSTRAP_MANIFEST);
       finalState: currentState,
       manifest: BOOTSTRAP_MANIFEST,
       initialState: badInitial,
-      framedEvents: [],
+      frames: [],
     });
   } catch {
     threw = true;

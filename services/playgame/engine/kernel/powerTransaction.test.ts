@@ -10,7 +10,7 @@ import {
   testLocationDef,
   testManifest,
 } from '../testkit/runtimeFixture';
-import { foldFramedEvents, frameAndFoldEvents } from '../transactionTimeline';
+import { foldCanonicalFrames, frameAndFoldEvents } from '../transactionTimeline';
 import type { CardId } from '../types/ids';
 import type { EffectRef } from '../types/ability';
 import type { MatchState, PowerMutation } from '../types/state';
@@ -335,16 +335,16 @@ describe('stored-power kernel transaction', () => {
       events: transaction.events,
       manifest,
     });
-    const replay = foldFramedEvents({
+    const replay = foldCanonicalFrames({
       transactionId: 'kernel-power:replay',
       initialState: state,
-      framedEvents: live.framedEvents,
+      frames: live.frames,
       manifest,
     });
     const entry = getCardState(live.finalState, CARD_ID)!.powerLedger.at(-1);
 
     expect(entry).toMatchObject({
-      frame: live.framedEvents[0]?.frame,
+      frame: live.frames[0]?.frame,
       turn: 4,
       mutation: { kind: 'ADD', delta: 2 },
       cause: CAUSE,

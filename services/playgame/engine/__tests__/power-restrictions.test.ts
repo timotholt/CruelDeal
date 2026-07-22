@@ -201,6 +201,37 @@ describe('Courthouse Power contract', () => {
     );
 
     expect(result.events).not.toContainEqual(expect.objectContaining({ type: 'CARD_POWER_CHANGED' }));
+    expect(result.resolutionSteps).toEqual([
+      expect.objectContaining({
+        transitionIndex: null,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_INVOCATION_STARTED',
+          source: { kind: 'CARD', cardId: 'subject' },
+          candidates: [{ kind: 'CARD', cardId: 'subject' }],
+        }),
+      }),
+      {
+        transitionIndex: null,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_TARGET_RESOLVED',
+          target: { kind: 'CARD', cardId: 'subject' },
+          result: 'BLOCKED',
+          blockedBy: [{ kind: 'LOCATION', locationId: 'courthouse@0' }],
+          reason: 'CANNOT_GAIN_POWER',
+        }),
+      },
+      expect.objectContaining({
+        transitionIndex: null,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_INVOCATION_COMPLETED',
+          attempted: 1,
+          affected: 0,
+          blocked: 1,
+          invalidated: 0,
+          unchanged: 0,
+        }),
+      }),
+    ]);
     expect(getStoredCardPowerDelta(result.state, 'subject' as CardId, manifest)).toBe(0);
     expect(getCardPower(result.state, 'subject' as CardId, manifest)).toBe(3);
   });

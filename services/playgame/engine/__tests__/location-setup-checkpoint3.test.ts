@@ -11,7 +11,7 @@ import {
   testManifest,
 } from '../testkit/runtimeFixture';
 import { currentFrame } from '../timeline';
-import { frameAndFoldEvents, foldFramedEvents } from '../transactionTimeline';
+import { frameAndFoldEvents, foldCanonicalFrames } from '../transactionTimeline';
 import { GENESIS_FRAME } from '../types/timeline';
 import { resolve } from '../resolve';
 import { createRng } from '../rng';
@@ -90,7 +90,7 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
       .toEqual(['FACE_DOWN', 'FACE_DOWN', 'FACE_DOWN']);
     expect(state.activeLaneOrder.map(lane => state.lanesById[lane].locationSlot.revealAtTurn))
       .toEqual([1, 2, 3]);
-    expect(folded.framedEvents.every(event => event.scope.phase === 'SETUP')).toBe(true);
+    expect(folded.frames.every(event => event.scope.phase === 'SETUP')).toBe(true);
     expect(validateLocationState(state)).toEqual([]);
   });
 
@@ -104,10 +104,10 @@ describe('Phase 1.2 checkpoint 3 canonical setup', () => {
       manifest,
       initialPhase: 'SETUP',
     });
-    const replayed = foldFramedEvents({
+    const replayed = foldCanonicalFrames({
       transactionId: setup.transactionId,
       initialState: genesis,
-      framedEvents: live.framedEvents,
+      frames: live.frames,
       manifest,
     });
 

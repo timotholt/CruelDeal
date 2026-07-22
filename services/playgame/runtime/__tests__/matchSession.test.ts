@@ -58,7 +58,8 @@ describe('MatchSession', () => {
       matchId: session.bootstrap.matchId,
       seat: session.bootstrap.viewerSeat,
       intentId: 'render-end-turn',
-      expectedRevision: session.runtime.revision(),
+      expectedPublicRevision: session.runtime.publicRevision(),
+        expectedPlanRevision: session.runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
     const exported = session.exportReplay();
@@ -70,7 +71,7 @@ describe('MatchSession', () => {
     expect(rendered.finalState).toEqual(session.runtime.state());
     expect(rendered.steps).toHaveLength(
       1 + exported.transactions.reduce(
-        (count, transaction) => count + transaction.framedEvents.length,
+        (count, transaction) => count + transaction.frames.length,
         0,
       ),
     );
@@ -113,14 +114,16 @@ describe('MatchSession', () => {
       matchId: session.bootstrap.matchId,
       seat: 'P0',
       intentId: 'checkpoint-stage',
-      expectedRevision: session.runtime.revision(),
+      expectedPublicRevision: session.runtime.publicRevision(),
+        expectedPlanRevision: session.runtime.planRevision('P0'),
       intent: { type: 'STAGE_CARD', cardId: cardId!, lane: 0 },
     });
     await session.runtime.submitIntent({
       matchId: session.bootstrap.matchId,
       seat: 'P0',
       intentId: 'checkpoint-end-turn',
-      expectedRevision: session.runtime.revision(),
+      expectedPublicRevision: session.runtime.publicRevision(),
+        expectedPlanRevision: session.runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
 

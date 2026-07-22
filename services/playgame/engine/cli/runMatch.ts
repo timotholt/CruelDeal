@@ -13,18 +13,18 @@
 
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
-import type { FramedEvent, TimelinePhase } from '../types/timeline';
+import type { CanonicalFrame, TimelinePhase } from '../types/timeline';
 import type { Manifest } from '../manifest/types';
 import type { Owner } from '../types/ids';
-import { resolve } from '../resolve';
+import { resolve, type ResolveResult } from '../resolve';
 import { createRng, type Rng } from '../rng';
-import { appendGameplayRngAdvance } from '../rng/transaction';
+import { appendGameplayRngResolution } from '../rng/transaction';
 import {
   createSetupMatch,
   type InitialLocationDeck,
 } from './initState';
 import { planEnemyTurnFromHand } from '../ai';
-import { frameAndFoldEvents } from '../transactionTimeline';
+import { frameAndFoldResolution } from '../transactionTimeline';
 
 export interface RunMatchOptions {
   readonly seed: string;
@@ -40,36 +40,41 @@ export interface RunMatchOptions {
 export interface RunMatchResult {
   readonly finalState: MatchState;
   readonly events: readonly MatchEvent[];
-  readonly framedEvents: readonly FramedEvent[];
+  readonly frames: readonly CanonicalFrame[];
   readonly turnsPlayed: number;
 }
 
 function commitBatch(
   transactionId: string,
   state: MatchState,
-  events: readonly MatchEvent[],
+  resolution: ResolveResult,
   manifest: Manifest,
   onEvent: (e: MatchEvent, s: MatchState) => void,
   allEvents: MatchEvent[],
-  allFramedEvents: FramedEvent[],
+  allCanonicalFrames: CanonicalFrame[],
   initialPhase?: TimelinePhase,
   rng?: Rng,
 ): MatchState {
-  const committedEvents = rng
-    ? appendGameplayRngAdvance(state, rng, events)
-    : events;
-  if (committedEvents.length === 0) return state;
-  const transaction = frameAndFoldEvents({
+  const committed = rng
+    ? appendGameplayRngResolution(state, rng, resolution)
+    : resolution;
+  if (committed.events.length === 0 && committed.resolutionSteps.length === 0) {
+    return state;
+  }
+  const transaction = frameAndFoldResolution({
     transactionId,
     initialState: state,
-    events: committedEvents,
+    events: committed.events,
+    resolutionSteps: committed.resolutionSteps,
     manifest,
     ...(initialPhase === undefined ? {} : { initialPhase }),
   });
   for (const transition of transaction.transitions) {
-    allEvents.push(transition.event);
-    allFramedEvents.push(transition.framedEvent);
-    onEvent(transition.event, transition.before);
+    allCanonicalFrames.push(transition.canonicalFrame);
+    if (transition.event !== null) {
+      allEvents.push(transition.event);
+      onEvent(transition.event, transition.before);
+    }
   }
   return transaction.finalState;
 }
@@ -81,7 +86,7 @@ function runOneTurn(
   rng: Rng,
   onEvent: (e: MatchEvent, s: MatchState) => void,
   allEvents: MatchEvent[],
-  allFramedEvents: FramedEvent[],
+  allCanonicalFrames: CanonicalFrame[],
 ): MatchState {
   let s = state;
 
@@ -95,7 +100,7 @@ function runOneTurn(
       forkTag: `plan:${owner}:${s.turn}`,
     });
     for (const step of plan) {
-      const events = resolve(
+      const resolution = resolve(
         s,
         {
           type: 'STAGE_CARD',
@@ -107,17 +112,23 @@ function runOneTurn(
         rng.scope(`stage:${owner}:${step.cardId}`),
         manifest,
       );
-      if (events.length && events[0].type === 'INTENT_REJECTED') {
+      if (
+        resolution.events.length
+        && resolution.events[0].type === 'INTENT_REJECTED'
+      ) {
         // AI emitted an invalid plan. Retain the diagnostic in canonical
         // history without mutating mechanics beyond the timeline coordinate.
         s = commitBatch(
           `cli:stage-rejected:${owner}:${step.cardId}:turn:${s.turn}`,
           s,
-          [events[0]],
+          {
+            events: [resolution.events[0]],
+            resolutionSteps: [{ transitionIndex: 0, effect: null }],
+          },
           manifest,
           onEvent,
           allEvents,
-          allFramedEvents,
+          allCanonicalFrames,
           undefined,
           rng,
         );
@@ -126,11 +137,11 @@ function runOneTurn(
       s = commitBatch(
         `cli:stage:${owner}:${step.cardId}:turn:${s.turn}`,
         s,
-        events,
+        resolution,
         manifest,
         onEvent,
         allEvents,
-        allFramedEvents,
+        allCanonicalFrames,
         undefined,
         rng,
       );
@@ -139,7 +150,7 @@ function runOneTurn(
 
   // END_TURN — runs the full resolveTurn cascade (reveals, draws, energy,
   // next-turn priority). `resolve` returns its events; we apply them all.
-  const endEvents = resolve(
+  const endResolution = resolve(
     s,
     { type: 'END_TURN', intentId: `end-t${s.turn}`, owner: s.priority },
     rng.scope(`endturn:${s.turn}`),
@@ -148,11 +159,11 @@ function runOneTurn(
   return commitBatch(
     `cli:end-turn:${s.turn}`,
     s,
-    endEvents,
+    endResolution,
     manifest,
     onEvent,
     allEvents,
-    allFramedEvents,
+    allCanonicalFrames,
     undefined,
     rng,
   );
@@ -167,15 +178,17 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
   const { seed, manifest, locationDeck } = opts;
   const cap = opts.maxTurns ?? manifest.constants.turnLimit + 2;
   const events: MatchEvent[] = [];
-  const framedEvents: FramedEvent[] = [];
+  const frames: CanonicalFrame[] = [];
   const onEvent = opts.onEvent ?? ((): void => undefined);
 
   const setup = createSetupMatch(seed, manifest, {}, locationDeck);
   for (const transaction of [setup.locationSetup, setup.opening]) {
     for (const transition of transaction.transitions) {
-      events.push(transition.event);
-      framedEvents.push(transition.framedEvent);
-      onEvent(transition.event, transition.before);
+      frames.push(transition.canonicalFrame);
+      if (transition.event !== null) {
+        events.push(transition.event);
+        onEvent(transition.event, transition.before);
+      }
     }
   }
   let state = setup.state;
@@ -190,7 +203,7 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
       rng,
       onEvent,
       events,
-      framedEvents,
+      frames,
     );
     turnsPlayed += 1;
     // Safety: if the turn counter failed to advance and the match didn't
@@ -198,5 +211,5 @@ export function runMatch(opts: RunMatchOptions): RunMatchResult {
     if (state.turn === startTurn && state.result === null) break;
   }
 
-  return { finalState: state, events, framedEvents, turnsPlayed };
+  return { finalState: state, events, frames, turnsPlayed };
 }

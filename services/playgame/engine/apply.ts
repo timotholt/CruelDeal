@@ -40,7 +40,7 @@ import type {
 import { pendingEffectIdForSequence } from './types/ids';
 import type { Manifest } from './manifest/types';
 import { currentFrame, frameSingleEvent } from './timeline';
-import { nextFrame, type FramedEvent } from './types/timeline';
+import { nextFrame, type CanonicalFrame } from './types/timeline';
 import {
   cardRecordsInternal,
   readCardInternal,
@@ -60,37 +60,43 @@ export function apply(
   event: MatchEvent,
   _manifest: Manifest,
 ): MatchState {
-  return applyFramed(state, frameSingleEvent(state, event), _manifest);
+  return applyCanonicalFrame(state, frameSingleEvent(state, event), _manifest);
 }
 
 /**
  * Canonical reducer entry point. A supplied frame must be the immediate
  * successor of the state's current frame; gaps, duplicates, and rewinds fail.
  */
-export function applyFramed(
+export function applyCanonicalFrame(
   state: MatchState,
-  framed: FramedEvent,
+  framed: CanonicalFrame,
   _manifest: Manifest,
 ): MatchState {
   const expected = nextFrame(currentFrame(state));
   if (framed.frame !== expected) {
-    throw new Error(`applyFramed: expected frame ${expected}, received ${framed.frame}`);
+    throw new Error(`applyCanonicalFrame: expected frame ${expected}, received ${framed.frame}`);
   }
   // The reducer is the final write boundary, including for replay and tests
   // that construct events directly. Snapshot caller-owned payloads before
   // either state or the runtime-owned event timeline can retain them.
   const canonicalFramed = structuredClone(framed);
-  requireEventProvenance(canonicalFramed.event);
-  const next = applyBody(
-    state,
-    canonicalFramed.event,
-    canonicalFramed.frame,
-    _manifest,
-  );
+  if (canonicalFramed.event !== null) {
+    requireEventProvenance(canonicalFramed.event);
+  }
+  const next = canonicalFramed.event === null
+    ? state
+    : applyBody(
+        state,
+        canonicalFramed.event,
+        canonicalFramed.frame,
+        _manifest,
+      );
   // Every event advances the state's current timeline coordinate, regardless
   // of whether the body also mutated mechanics. Runtime transaction records
   // retain the canonical event itself.
-  const next2 = applyTrackedVars(next, state, canonicalFramed.event);
+  const next2 = canonicalFramed.event === null
+    ? next
+    : applyTrackedVars(next, state, canonicalFramed.event);
   return {
     ...next2,
     timeline: {
@@ -150,7 +156,7 @@ function requireEventProvenance(event: MatchEvent): void {
 function applyBody(
   state: MatchState,
   event: MatchEvent,
-  eventFrame: FramedEvent['frame'],
+  eventFrame: CanonicalFrame['frame'],
   manifest: Manifest,
 ): MatchState {
   return applyEventBody(state, event, eventFrame, manifest);
@@ -159,7 +165,7 @@ function applyBody(
 function applyEventBody(
   state: MatchState,
   event: MatchEvent,
-  eventFrame: FramedEvent['frame'],
+  eventFrame: CanonicalFrame['frame'],
   manifest: Manifest,
 ): MatchState {
   switch (event.type) {

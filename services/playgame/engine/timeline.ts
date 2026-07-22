@@ -1,11 +1,21 @@
 import type { MatchEvent } from './types/events';
+import {
+  effectAttemptId,
+  effectInvocationId,
+  type EffectInvocationId,
+  type EffectTraceEntry,
+} from './types/effectTrace';
 import type { CardId, LocationCardInstanceId } from './types/ids';
 import type { MatchState } from './types/state';
+import type {
+  KernelEffectTraceEntry,
+  KernelResolutionStep,
+} from './kernel/resolutionTrace';
 import {
   GENESIS_FRAME,
   nextFrame,
   type Frame,
-  type FramedEvent,
+  type CanonicalFrame,
   type TemporalScope,
   type TimelinePhase,
   type TurnFrameSpan,
@@ -14,6 +24,11 @@ import {
 export interface FrameEventSequenceOptions {
   /** Opening/bootstrap batches belong to turn 1's SETUP scope. */
   readonly initialPhase?: TimelinePhase;
+}
+
+export interface FrameResolutionSequenceOptions
+  extends FrameEventSequenceOptions {
+  readonly transactionId: string;
 }
 
 export interface CardLifecycleFrames {
@@ -43,7 +58,7 @@ export function frameEventSequence(
   initialState: MatchState,
   events: readonly MatchEvent[],
   options: FrameEventSequenceOptions = {},
-): readonly FramedEvent[] {
+): readonly CanonicalFrame[] {
   if (events.length === 0) return Object.freeze([]);
 
   let frame = currentFrame(initialState);
@@ -53,7 +68,7 @@ export function frameEventSequence(
     ? 'SETUP'
     : undefined;
   let scope = initialScope(initialState, options.initialPhase ?? inferredOpeningPhase);
-  const framed: FramedEvent[] = [];
+  const framed: CanonicalFrame[] = [];
 
   for (const event of events) {
     scope = scopeForEvent(event, scope);
@@ -62,29 +77,190 @@ export function frameEventSequence(
       frame,
       scope: Object.freeze({ ...scope }),
       event,
+      effect: null,
     }));
   }
 
   return Object.freeze(framed);
 }
 
-export function assertFramedEventSequence(
+function canonicalEffectEntry(
+  transactionId: string,
+  entry: KernelEffectTraceEntry,
+  invocations: Map<number, EffectInvocationId>,
+): EffectTraceEntry {
+  if (entry.kind === 'EFFECT_INVOCATION_STARTED') {
+    if (invocations.has(entry.invocationOrdinal)) {
+      throw new Error(
+        `Duplicate effect invocation ordinal ${entry.invocationOrdinal}.`,
+      );
+    }
+    const invocationId = effectInvocationId(
+      transactionId,
+      entry.invocationOrdinal,
+    );
+    const parentInvocationId = entry.parentInvocationOrdinal === null
+      ? null
+      : invocations.get(entry.parentInvocationOrdinal);
+    if (
+      entry.parentInvocationOrdinal !== null
+      && parentInvocationId === undefined
+    ) {
+      throw new Error(
+        `Effect invocation ${entry.invocationOrdinal} references an unknown parent.`,
+      );
+    }
+    invocations.set(entry.invocationOrdinal, invocationId);
+    return {
+      kind: entry.kind,
+      invocationId,
+      parentInvocationId: parentInvocationId ?? null,
+      source: structuredClone(entry.source),
+      ability: structuredClone(entry.ability),
+      invocationReason: entry.invocationReason,
+      depth: entry.depth,
+      candidates: structuredClone(entry.candidates),
+    };
+  }
+
+  const invocationId = invocations.get(entry.invocationOrdinal);
+  if (invocationId === undefined) {
+    throw new Error(
+      `Effect trace references unknown invocation ${entry.invocationOrdinal}.`,
+    );
+  }
+  if (entry.kind === 'EFFECT_TARGET_RESOLVED') {
+    return {
+      kind: entry.kind,
+      invocationId,
+      attemptId: effectAttemptId(invocationId, entry.attemptOrdinal),
+      attemptOrdinal: entry.attemptOrdinal,
+      operation: entry.operation,
+      target: structuredClone(entry.target),
+      result: entry.result,
+      blockedBy: structuredClone(entry.blockedBy),
+      reason: entry.reason,
+    };
+  }
+  return {
+    kind: entry.kind,
+    invocationId,
+    attempted: entry.attempted,
+    affected: entry.affected,
+    blocked: entry.blocked,
+    invalidated: entry.invalidated,
+    unchanged: entry.unchanged,
+  };
+}
+
+/**
+ * Promote a successful kernel transcript into the one canonical match
+ * timeline. Kernel ordinals become deterministic transaction-scoped IDs here,
+ * at the runtime chronology boundary rather than inside the rules kernel.
+ */
+export function frameResolutionSequence(
   initialState: MatchState,
-  framedEvents: readonly FramedEvent[],
-): readonly FramedEvent[] {
+  events: readonly MatchEvent[],
+  resolutionSteps: readonly KernelResolutionStep[],
+  options: FrameResolutionSequenceOptions,
+): readonly CanonicalFrame[] {
+  if (events.length === 0 && resolutionSteps.length === 0) {
+    return Object.freeze([]);
+  }
+  if (resolutionSteps.length === 0) {
+    throw new Error('A non-empty resolution must contain ordered kernel steps.');
+  }
+
+  let frame = currentFrame(initialState);
+  const firstEvent = resolutionSteps
+    .map(step => step.transitionIndex === null
+      ? null
+      : events[step.transitionIndex] ?? null)
+    .find((event): event is MatchEvent => event !== null);
+  const inferredOpeningPhase = currentFrame(initialState) === GENESIS_FRAME
+    && firstEvent?.type === 'CARD_DRAWN'
+    ? 'SETUP'
+    : undefined;
+  let scope = initialScope(
+    initialState,
+    options.initialPhase ?? inferredOpeningPhase,
+  );
+  const seenTransitions = new Set<number>();
+  const invocations = new Map<number, EffectInvocationId>();
+  const frames: CanonicalFrame[] = [];
+
+  for (const step of resolutionSteps) {
+    const event = step.transitionIndex === null
+      ? null
+      : events[step.transitionIndex] ?? null;
+    if (step.transitionIndex !== null) {
+      if (event === null) {
+        throw new Error(
+          `Resolution step references missing transition ${step.transitionIndex}.`,
+        );
+      }
+      if (seenTransitions.has(step.transitionIndex)) {
+        throw new Error(
+          `Resolution transition ${step.transitionIndex} appears more than once.`,
+        );
+      }
+      seenTransitions.add(step.transitionIndex);
+      scope = scopeForEvent(event, scope);
+    }
+    const effect = step.effect === null
+      ? null
+      : canonicalEffectEntry(options.transactionId, step.effect, invocations);
+    frame = nextFrame(frame);
+    frames.push(Object.freeze({
+      frame,
+      scope: Object.freeze({ ...scope }),
+      event: event === null ? null : structuredClone(event),
+      effect,
+    }));
+  }
+
+  if (seenTransitions.size !== events.length) {
+    throw new Error(
+      `Resolution transcript covered ${seenTransitions.size} of ${events.length} transitions.`,
+    );
+  }
+  return Object.freeze(frames);
+}
+
+export function assertCanonicalFrameSequence(
+  initialState: MatchState,
+  frames: readonly CanonicalFrame[],
+): readonly CanonicalFrame[] {
   let expected = nextFrame(currentFrame(initialState));
   const validationInitialPhase = currentFrame(initialState) === GENESIS_FRAME
-    && framedEvents[0]?.scope.phase === 'SETUP'
+    && frames[0]?.scope.phase === 'SETUP'
     ? 'SETUP'
     : undefined;
   let expectedScope = initialScope(initialState, validationInitialPhase);
 
-  for (const framed of framedEvents) {
+  for (const framed of frames) {
     if (framed.frame !== expected) {
       throw new Error(`Non-contiguous framed event: expected ${expected}, received ${framed.frame}`);
     }
     assertScope(framed.scope);
-    expectedScope = scopeForEvent(framed.event, expectedScope);
+    if (framed.event === null && framed.effect === null) {
+      throw new Error(`Canonical frame ${framed.frame} contains no fact.`);
+    }
+    if (framed.effect?.kind === 'EFFECT_TARGET_RESOLVED') {
+      if (framed.effect.result === 'AFFECTED' && framed.event === null) {
+        throw new Error(
+          `Affected effect target at frame ${framed.frame} has no event.`,
+        );
+      }
+      if (framed.effect.result !== 'AFFECTED' && framed.event !== null) {
+        throw new Error(
+          `${framed.effect.result} effect target at frame ${framed.frame} cannot contain an event.`,
+        );
+      }
+    }
+    expectedScope = framed.event === null
+      ? expectedScope
+      : scopeForEvent(framed.event, expectedScope);
     if (
       framed.scope.turn !== expectedScope.turn
       || framed.scope.phase !== expectedScope.phase
@@ -97,7 +273,7 @@ export function assertFramedEventSequence(
     }
     expected = nextFrame(expected);
   }
-  return framedEvents;
+  return frames;
 }
 
 /**
@@ -105,13 +281,13 @@ export function assertFramedEventSequence(
  * state. Canonical multi-event commits use frameEventSequence so boundary
  * scope carries through the whole batch.
  */
-export function frameSingleEvent(state: MatchState, event: MatchEvent): FramedEvent {
+export function frameSingleEvent(state: MatchState, event: MatchEvent): CanonicalFrame {
   return frameEventSequence(state, [event])[0];
 }
 
-export function turnSpans(framedEvents: readonly FramedEvent[]): readonly TurnFrameSpan[] {
+export function turnSpans(frames: readonly CanonicalFrame[]): readonly TurnFrameSpan[] {
   const spans = new Map<number, { startFrame: Frame; endFrame: Frame }>();
-  for (const entry of framedEvents) {
+  for (const entry of frames) {
     const existing = spans.get(entry.scope.turn);
     if (existing) {
       existing.endFrame = entry.frame;
@@ -125,16 +301,16 @@ export function turnSpans(framedEvents: readonly FramedEvent[]): readonly TurnFr
 }
 
 export function scopeAtFrame(
-  framedEvents: readonly FramedEvent[],
+  frames: readonly CanonicalFrame[],
   frame: Frame,
 ): TemporalScope | null {
   if (frame === GENESIS_FRAME) return null;
-  const entry = framedEvents.find((candidate) => candidate.frame === frame);
+  const entry = frames.find((candidate) => candidate.frame === frame);
   return entry?.scope ?? null;
 }
 
-export function turnAtFrame(framedEvents: readonly FramedEvent[], frame: Frame): number | null {
-  return scopeAtFrame(framedEvents, frame)?.turn ?? null;
+export function turnAtFrame(frames: readonly CanonicalFrame[], frame: Frame): number | null {
+  return scopeAtFrame(frames, frame)?.turn ?? null;
 }
 
 /**
@@ -143,7 +319,7 @@ export function turnAtFrame(framedEvents: readonly FramedEvent[], frame: Frame):
  * into an ambiguous scalar timestamp.
  */
 export function cardLifecycleFrames(
-  framedEvents: readonly FramedEvent[],
+  frames: readonly CanonicalFrame[],
   cardId: CardId,
 ): CardLifecycleFrames {
   const created: Frame[] = [];
@@ -153,8 +329,9 @@ export function cardLifecycleFrames(
   const destroyed: Frame[] = [];
   const banished: Frame[] = [];
 
-  for (const entry of framedEvents) {
+  for (const entry of frames) {
     const event = entry.event;
+    if (event === null) continue;
     if (!('cardId' in event) || event.cardId !== cardId) continue;
     switch (event.type) {
       case 'CARD_CREATED':
@@ -193,7 +370,7 @@ export function cardLifecycleFrames(
 }
 
 export function locationLifecycleFrames(
-  framedEvents: readonly FramedEvent[],
+  frames: readonly CanonicalFrame[],
   locationId: LocationCardInstanceId,
 ): LocationLifecycleFrames {
   const created: Frame[] = [];
@@ -203,8 +380,9 @@ export function locationLifecycleFrames(
   const moved: Frame[] = [];
   const removed: Frame[] = [];
 
-  for (const entry of framedEvents) {
+  for (const entry of frames) {
     const event = entry.event;
+    if (event === null) continue;
     switch (event.type) {
       case 'LOCATION_CARD_CREATED':
         if (event.locationId === locationId) created.push(entry.frame);

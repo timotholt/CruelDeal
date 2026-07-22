@@ -190,6 +190,57 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     }
   });
 
+  it('redelivers one complete unacknowledged block and clears it on ack', async () => {
+    const { adapter } = fixture('adapter-block-resync');
+    const before = adapter.snapshot();
+    const timelines: SeatTransactionTimeline[] = [];
+    const unsubscribe = adapter.subscribeCommittedTransactions(
+      timeline => timelines.push(timeline),
+    );
+
+    await adapter.endTurn();
+    unsubscribe();
+    expect(timelines).toHaveLength(1);
+
+    const redelivery = await adapter.resync({
+      version: 2,
+      matchId: adapter.bootstrap.matchId,
+      viewerSeat: adapter.bootstrap.viewerSeat,
+      publicRevision: before.publicRevision,
+      planRevision: before.planRevision,
+      frame: before.frame,
+      postStateHash: null,
+    });
+    expect(redelivery.type).toBe('PRESENTATION_BLOCK');
+    if (redelivery.type !== 'PRESENTATION_BLOCK') return;
+    expect(redelivery.block.basePublicRevision).toBe(before.publicRevision);
+    expect(redelivery.block.postState).toEqual(adapter.snapshot().state);
+
+    await adapter.acknowledgePresentationBlock({
+      version: 2,
+      matchId: adapter.bootstrap.matchId,
+      viewerSeat: adapter.bootstrap.viewerSeat,
+      publicRevision: redelivery.block.publicRevision,
+      frame: redelivery.block.lastFrame,
+      postStateHash: redelivery.block.postStateHash,
+    });
+
+    await expect(adapter.resync({
+      version: 2,
+      matchId: adapter.bootstrap.matchId,
+      viewerSeat: adapter.bootstrap.viewerSeat,
+      publicRevision: before.publicRevision,
+      planRevision: before.planRevision,
+      frame: before.frame,
+      postStateHash: null,
+    })).resolves.toMatchObject({
+      type: 'SNAPSHOT',
+      snapshot: {
+        publicRevision: adapter.snapshot().publicRevision,
+      },
+    });
+  });
+
   it('preserves enemy staged plays in both the live timeline and replay', async () => {
     const { adapter } = fixture('bug-stage-1');
     const viewer = adapter.bootstrap.viewerSeat;

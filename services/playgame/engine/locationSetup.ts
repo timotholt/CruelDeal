@@ -7,7 +7,8 @@ import {
   type RulesCommand,
 } from './kernel/rulesTransaction';
 import { createRng, type Rng } from './rng';
-import { appendGameplayRngAdvance } from './rng/transaction';
+import { appendGameplayRngResolution } from './rng/transaction';
+import type { KernelResolutionStep } from './kernel/resolutionTrace';
 import type { EffectRef } from './types/ability';
 import type { MatchEvent } from './types/events';
 import type { LocationCardInstanceId } from './types/ids';
@@ -20,6 +21,7 @@ export type LocationSetupDeck = readonly { readonly defId: string }[];
 export interface LocationSetupTransaction {
   readonly transactionId: string;
   readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
 }
 
 const SETUP_CAUSE: EffectRef = {
@@ -136,14 +138,15 @@ export function buildLocationSetupTransaction(
       sourceInstanceId: String(SETUP_CAUSE.sourceId),
     }),
   });
-  const events = appendGameplayRngAdvance(
+  const committed = appendGameplayRngResolution(
     genesis,
     setupRng,
-    governed.events,
+    governed,
   );
 
   return Object.freeze({
     transactionId: `setup:${genesis.rng.seed}`,
-    events,
+    events: committed.events,
+    resolutionSteps: committed.resolutionSteps,
   });
 }

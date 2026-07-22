@@ -38,7 +38,7 @@ function initialState() {
 }
 
 describe('Phase 1.5 preserves the Phase 1.1 chronology', () => {
-  it('reuses the exact live FramedEvents for replay while local indexes reset', () => {
+  it('reuses the exact live CanonicalFrames for replay while local indexes reset', () => {
     const genesis = initialState();
     const firstEvents: readonly MatchEvent[] = [
       { type: 'TURN_RESOLUTION_STARTED', turn: 3 },
@@ -65,15 +65,15 @@ describe('Phase 1.5 preserves the Phase 1.1 chronology', () => {
       ],
       manifest,
     });
-    const framedEvents = [...first.framedEvents, ...second.framedEvents];
+    const frames = [...first.frames, ...second.frames];
     const replayed = replayMatch({
       seed: genesis.rng.seed,
       manifest,
       initialState: genesis,
-      framedEvents,
+      frames,
     });
 
-    expect(framedEvents.map(event => event.frame)).toEqual([
+    expect(frames.map(event => event.frame)).toEqual([
       asFrame(1),
       asFrame(2),
       asFrame(3),
@@ -85,12 +85,12 @@ describe('Phase 1.5 preserves the Phase 1.1 chronology', () => {
       asFrame(4),
       asFrame(5),
     ]);
-    expect(replayed.steps.slice(1).map(step => step.framedEvent))
-      .toEqual(framedEvents);
+    expect(replayed.steps.slice(1).map(step => step.canonicalFrame))
+      .toEqual(frames);
     expect(replayed.steps.slice(1).map(step => step.frame))
-      .toEqual(framedEvents.map(event => event.frame));
+      .toEqual(frames.map(event => event.frame));
     expect(replayed.steps.slice(1).map(step => step.scope))
-      .toEqual(framedEvents.map(event => event.scope));
+      .toEqual(frames.map(event => event.scope));
     expect(replayed.finalState).toEqual(second.finalState);
     expect(currentFrame(replayed.finalState)).toBe(asFrame(5));
   });

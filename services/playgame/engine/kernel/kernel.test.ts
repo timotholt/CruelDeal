@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mkCardId } from '../types/ids';
 import type { ChangeStoredPowerCommand, KernelWork } from './types';
+import type { CanonicalEntityRef } from '../types/effectTrace';
 import {
   assertKernelSuccess,
   kernelStepSuccess,
@@ -59,6 +60,16 @@ const effect = (label: string, work: readonly TestWork[]): TestWork => ({
   effect: { type: 'EXPAND', label, work },
   context: {},
   depth: 0,
+});
+
+const command = (cardId: string, delta = 1): TestWork => ({
+  kind: 'COMMAND',
+  command: {
+    type: 'CHANGE_STORED_POWER',
+    cardId: mkCardId(cardId),
+    mutation: { kind: 'ADD', delta },
+    cause,
+  },
 });
 
 function handlers(
@@ -147,6 +158,138 @@ const reaction = (
 });
 
 describe('transactional rules kernel foundation', () => {
+  it('records one ordered transcript for affected, blocked, and nested work', () => {
+    const base = handlers();
+    const entity = (id: string): CanonicalEntityRef => ({
+      kind: 'CARD',
+      cardId: mkCardId(id),
+    });
+    const traced: ReturnType<typeof handlers> = {
+      ...base,
+      interpretEffect: (_state, item) => kernelStepSuccess({
+        work: item.effect.work,
+        resolution: {
+          kind: 'EFFECT_INVOCATION',
+          source: entity(item.effect.label),
+          ability: {
+            kind: 'ON_REVEAL',
+            ruleId: `rule:${item.effect.label}`,
+            ruleIndex: 0,
+          },
+          invocationReason: item.effect.label === 'root'
+            ? 'NATURAL'
+            : 'REACTION',
+          candidates: item.effect.work
+            .filter(work => work.kind === 'COMMAND')
+            .map(work => entity(String(work.command.cardId))),
+        },
+      }),
+      executeCommand: (_state, item) => {
+        const blocked = String(item.command.cardId) === 'blocked';
+        return kernelStepSuccess({
+          work: blocked
+            ? []
+            : [commit(`command:${item.command.cardId}`)],
+          resolution: {
+            kind: 'TARGET_ATTEMPT',
+            operation: 'CHANGE_STORED_POWER',
+            target: entity(String(item.command.cardId)),
+            result: blocked ? 'BLOCKED' : 'AFFECTED',
+            blockedBy: blocked ? [entity('blocker')] : [],
+            reason: blocked ? 'CANNOT_GAIN_POWER' : null,
+          },
+        });
+      },
+    };
+    const result = resolveKernelTransaction(
+      {
+        initialState: { total: 0, log: [] },
+        initialWork: [
+          effect('root', [
+            command('affected'),
+            command('blocked'),
+            effect('child', [command('nested')]),
+          ]),
+        ],
+      },
+      traced,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.value.state.log).toEqual([
+      'command:affected',
+      'command:nested',
+    ]);
+    expect(result.value.resolutionSteps).toEqual([
+      expect.objectContaining({
+        transitionIndex: null,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_INVOCATION_STARTED',
+          invocationOrdinal: 0,
+          parentInvocationOrdinal: null,
+        }),
+      }),
+      expect.objectContaining({
+        transitionIndex: 0,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_TARGET_RESOLVED',
+          invocationOrdinal: 0,
+          attemptOrdinal: 0,
+          result: 'AFFECTED',
+        }),
+      }),
+      expect.objectContaining({
+        transitionIndex: null,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_TARGET_RESOLVED',
+          invocationOrdinal: 0,
+          attemptOrdinal: 1,
+          result: 'BLOCKED',
+          reason: 'CANNOT_GAIN_POWER',
+        }),
+      }),
+      expect.objectContaining({
+        effect: expect.objectContaining({
+          kind: 'EFFECT_INVOCATION_STARTED',
+          invocationOrdinal: 1,
+          parentInvocationOrdinal: 0,
+        }),
+      }),
+      expect.objectContaining({
+        transitionIndex: 1,
+        effect: expect.objectContaining({
+          kind: 'EFFECT_TARGET_RESOLVED',
+          invocationOrdinal: 1,
+          attemptOrdinal: 0,
+          result: 'AFFECTED',
+        }),
+      }),
+      expect.objectContaining({
+        effect: {
+          kind: 'EFFECT_INVOCATION_COMPLETED',
+          invocationOrdinal: 1,
+          attempted: 1,
+          affected: 1,
+          blocked: 0,
+          invalidated: 0,
+          unchanged: 0,
+        },
+      }),
+      expect.objectContaining({
+        effect: {
+          kind: 'EFFECT_INVOCATION_COMPLETED',
+          invocationOrdinal: 0,
+          attempted: 2,
+          affected: 1,
+          blocked: 1,
+          invalidated: 0,
+          unchanged: 0,
+        },
+      }),
+    ]);
+  });
+
   it('prepends nested work in declared depth-first order', () => {
     const initialWork = [
       effect('root', [
@@ -291,7 +434,7 @@ describe('transactional rules kernel foundation', () => {
     expect(initialState).toEqual({ total: 0, log: [] });
   });
 
-  it('returns only candidate state, transitions, and usage—not Frame or RNG authority', () => {
+  it('returns candidate state, transitions, transcript, and usage—not Frame or RNG authority', () => {
     const result = resolveKernelTransaction(
       {
         initialState: { total: 0, log: [] },
@@ -303,9 +446,13 @@ describe('transactional rules kernel foundation', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(Object.keys(result.value).sort()).toEqual([
+      'resolutionSteps',
       'state',
       'transitions',
       'usage',
+    ]);
+    expect(result.value.resolutionSteps).toEqual([
+      { transitionIndex: 0, effect: null },
     ]);
     expect(Object.keys(result.value.usage).sort()).toEqual([
       'createdEntities',

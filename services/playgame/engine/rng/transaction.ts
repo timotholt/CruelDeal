@@ -1,6 +1,7 @@
 import type { MatchEvent } from '../types/events';
 import type { MatchState } from '../types/state';
 import type { Rng } from '.';
+import type { KernelResolutionStep } from '../kernel/resolutionTrace';
 
 const TERMINAL_BATCH_EVENTS = new Set<MatchEvent['type']>([
   'MATCH_SETUP_COMPLETED',
@@ -38,4 +39,51 @@ export function appendGameplayRngAdvance(
     return Object.freeze([...events.slice(0, -1), advanced, last]);
   }
   return Object.freeze([...events, advanced]);
+}
+
+export interface ResolutionWithRngAdvance {
+  readonly events: readonly MatchEvent[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
+}
+
+/**
+ * Add RNG bookkeeping to both the mechanical event list and its ordered
+ * kernel transcript. This is the only supported publication path for a
+ * resolved batch that consumed gameplay RNG.
+ */
+export function appendGameplayRngResolution(
+  state: MatchState,
+  rng: Rng,
+  resolution: ResolutionWithRngAdvance,
+): ResolutionWithRngAdvance {
+  const events = appendGameplayRngAdvance(state, rng, resolution.events);
+  if (events.length === resolution.events.length) return resolution;
+
+  const terminal = resolution.events.at(-1);
+  const insertionIndex = terminal && TERMINAL_BATCH_EVENTS.has(terminal.type)
+    ? resolution.events.length - 1
+    : resolution.events.length;
+  const resolutionSteps: KernelResolutionStep[] = [];
+  let inserted = false;
+  for (const step of resolution.resolutionSteps) {
+    if (!inserted && step.transitionIndex === insertionIndex) {
+      resolutionSteps.push({ transitionIndex: insertionIndex, effect: null });
+      inserted = true;
+    }
+    resolutionSteps.push({
+      transitionIndex: step.transitionIndex === null
+        ? null
+        : step.transitionIndex >= insertionIndex
+          ? step.transitionIndex + 1
+          : step.transitionIndex,
+      effect: step.effect,
+    });
+  }
+  if (!inserted) {
+    resolutionSteps.push({ transitionIndex: insertionIndex, effect: null });
+  }
+  return {
+    events,
+    resolutionSteps: Object.freeze(resolutionSteps),
+  };
 }

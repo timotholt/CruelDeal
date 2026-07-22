@@ -2,7 +2,7 @@ import { getCardCost } from '../../engine/projections/cost';
 import { getAllLocationStates, getLocationState } from '../../engine/projections/locationRuntime';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BOOTSTRAP_MANIFEST, currentFrame, foldFramedEvents } from '../../engine';
+import { BOOTSTRAP_MANIFEST, currentFrame, foldCanonicalFrames } from '../../engine';
 import { getStoredCardPowerDelta } from '../../engine/powerLedger';
 import type { Deck } from '../../engine/manifest/types';
 import type { CardId, Seat } from '../../engine/types/ids';
@@ -93,15 +93,17 @@ function runtimeFixture(
 function stageEnvelope(
   runtime: MatchRuntime,
   intentId: string,
-  expectedRevision = runtime.revision(),
+  expectedPublicRevision = runtime.publicRevision(),
   seat: Seat = 'P0',
   cardId: CardId = runtime.state().hand[seat][0],
+  expectedPlanRevision: number | undefined = undefined,
 ): IntentEnvelope {
   return {
     matchId: 'phase1-runtime-match',
     seat,
     intentId,
-    expectedRevision,
+    expectedPublicRevision,
+    expectedPlanRevision: expectedPlanRevision ?? runtime.planRevision(seat),
     intent: { type: 'STAGE_CARD', cardId, lane: 0 },
   };
 }
@@ -111,15 +113,15 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture();
     const [setup, opening] = runtime.transactions();
     const initialization = runtime.initialization();
-    const setupEvents = setup.framedEvents.map(({ event }) => event);
-    const openingEvents = opening.framedEvents.map(({ event }) => event);
+    const setupEvents = setup.frames.map(({ event }) => event);
+    const openingEvents = opening.frames.map(({ event }) => event);
 
     expect(initialization.setup.transaction).toBe(setup);
     expect(initialization.opening.transaction).toBe(opening);
     expect(initialization.setup.finalState.activeLaneOrder).toEqual([0, 1, 2]);
     expect(initialization.setup.finalState.hand.P0).toHaveLength(0);
     expect(initialization.opening.transitions[0]?.event.type).toBe('CARD_DRAWN');
-    expect(runtime.revision()).toBe(2);
+    expect(runtime.publicRevision()).toBe(2);
     expect(setup.intent.seat).toBe('SYSTEM');
     expect(opening.intent.seat).toBe('SYSTEM');
     expect(setup.rngDrawsBefore).toBe(runtime.genesis().rng.draws);
@@ -145,12 +147,12 @@ describe('createMatchRuntime', () => {
     expect(initialization.setup.finalState.phase).toBe('SETUP');
     expect(openingEvents.at(-1)?.type).toBe('MATCH_SETUP_COMPLETED');
     expect(initialization.opening.finalState.phase).toBe('AWAITING_INTENT');
-    expect(setup.framedEvents.map(({ frame }) => frame))
+    expect(setup.frames.map(({ frame }) => frame))
       .toEqual(setupEvents.map((_, index) => index + 1));
-    expect(opening.framedEvents[0]?.frame).toBe(setup.framedEvents.at(-1)!.frame + 1);
-    expect(setup.framedEvents.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
-    expect(opening.framedEvents.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
-    expect(runtime.frame()).toBe(opening.framedEvents.at(-1)?.frame);
+    expect(opening.frames[0]?.frame).toBe(setup.frames.at(-1)!.frame + 1);
+    expect(setup.frames.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
+    expect(opening.frames.every(({ scope }) => scope.phase === 'SETUP')).toBe(true);
+    expect(runtime.frame()).toBe(opening.frames.at(-1)?.frame);
     const openingHandSize = BOOTSTRAP_MANIFEST.constants.startingHandSize
       + BOOTSTRAP_MANIFEST.constants.turnStartDraw;
     expect(openingEvents.filter((event) => event.type === 'CARD_DRAWN'))
@@ -173,7 +175,7 @@ describe('createMatchRuntime', () => {
     const runtime = runtimeFixture('runtime-performance-sidecar');
     const profile = runtime.performanceProfile();
     const committedFrameCount = runtime.transactions().reduce(
-      (count, transaction) => count + transaction.framedEvents.length,
+      (count, transaction) => count + transaction.frames.length,
       0,
     );
 
@@ -197,7 +199,7 @@ describe('createMatchRuntime', () => {
 
   it('keeps planning private, then publishes one complete system resolution timeline', async () => {
     const runtime = runtimeFixture();
-    const baseRevision = runtime.revision();
+    const baseRevision = runtime.publicRevision();
     let publications = 0;
     let publishedTimeline: CommittedTransactionTimeline | null = null;
     let stateDuringPublication: ReturnType<MatchRuntime['state']> | null = null;
@@ -217,7 +219,12 @@ describe('createMatchRuntime', () => {
 
     const result = await runtime.submitIntent(stageEnvelope(runtime, 'atomic-publication'));
 
-    expect(result).toMatchObject({ status: 'accepted', revision: baseRevision + 1, commit: 'PRIVATE' });
+    expect(result).toMatchObject({
+      status: 'accepted',
+      publicRevision: baseRevision,
+      planRevision: 1,
+      commit: 'PRIVATE',
+    });
     const committedFrameBeforeLock = runtime.frame();
     expect(currentFrame(runtime.state())).toBe(committedFrameBeforeLock);
     expect(publications).toBe(0);
@@ -225,17 +232,18 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'atomic-end',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
     expect(publications).toBe(1);
     expect(projectionError).toBeNull();
     expect(publishedTimeline).not.toBeNull();
     expect(stateDuringPublication).toBe(publishedTimeline?.finalState);
-    expect(runtime.revision()).toBe(publishedTimeline?.transaction.revision);
+    expect(runtime.publicRevision()).toBe(publishedTimeline?.transaction.revision);
     expect(runtime.transactions().at(-1)).toBe(publishedTimeline?.transaction);
     expect(publishedTimeline?.transitions)
-      .toHaveLength(publishedTimeline?.transaction.framedEvents.length ?? 0);
+      .toHaveLength(publishedTimeline?.transaction.frames.length ?? 0);
     expect(publishedTimeline?.transitions.at(-1)?.after)
       .toBe(publishedTimeline?.finalState);
     expect(publishedTimeline?.transitions[0].before.lanesById[1])
@@ -245,7 +253,7 @@ describe('createMatchRuntime', () => {
 
   it('returns stale, authority, match, rules, and terminal receipts without committed events', async () => {
     const runtime = runtimeFixture();
-    const initialRevision = runtime.revision();
+    const initialRevision = runtime.publicRevision();
     const initialFrame = runtime.frame();
     const initialTransactionCount = runtime.transactions().length;
     const initialRngDraws = runtime.transactions().at(-1)!.rngDrawsAfter;
@@ -269,9 +277,9 @@ describe('createMatchRuntime', () => {
       'stale',
       initialRevision - 1,
     ))).resolves.toMatchObject({
-      status: 'stale',
-      expectedRevision: initialRevision - 1,
-      currentRevision: initialRevision,
+      status: 'stale-public',
+      expectedPublicRevision: initialRevision - 1,
+      currentPublicRevision: initialRevision,
     });
     expect(runtime.frame()).toBe(initialFrame);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
@@ -280,7 +288,7 @@ describe('createMatchRuntime', () => {
     const cardId = runtime.state().hand.P0[0];
     await expect(runtime.submitIntent(stageEnvelope(runtime, 'first-stage', initialRevision, 'P0', cardId)))
       .resolves.toMatchObject({ status: 'accepted' });
-    const afterAcceptedRevision = runtime.revision();
+    const afterAcceptedRevision = runtime.publicRevision();
     const afterAcceptedFrame = runtime.frame();
     const afterAcceptedTransactions = runtime.transactions().length;
     await expect(runtime.submitIntent(stageEnvelope(
@@ -290,24 +298,25 @@ describe('createMatchRuntime', () => {
       'P0',
       cardId,
     ))).resolves.toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
-    expect(runtime.revision()).toBe(afterAcceptedRevision);
+    expect(runtime.publicRevision()).toBe(afterAcceptedRevision);
     expect(runtime.frame()).toBe(afterAcceptedFrame);
     expect(runtime.transactions()).toHaveLength(afterAcceptedTransactions);
-    expect(runtime.transactions().flatMap(transaction => transaction.framedEvents)
+    expect(runtime.transactions().flatMap(transaction => transaction.frames)
       .some(entry => entry.event.type === 'INTENT_REJECTED')).toBe(false);
 
-    const concedeRevision = runtime.revision();
+    const concedeRevision = runtime.publicRevision();
     await expect(runtime.submitIntent({
       matchId: 'phase1-runtime-match',
       seat: 'P1',
       intentId: 'concede',
-      expectedRevision: concedeRevision,
+      expectedPublicRevision: concedeRevision,
+      expectedPlanRevision: runtime.planRevision('P1'),
       intent: { type: 'CONCEDE' },
     })).resolves.toMatchObject({ status: 'accepted' });
     await expect(runtime.submitIntent(stageEnvelope(
       runtime,
       'after-terminal',
-      runtime.revision(),
+      runtime.publicRevision(),
       'P0',
     ))).resolves.toMatchObject({ status: 'illegal', code: 'TERMINAL_MATCH' });
 
@@ -317,14 +326,14 @@ describe('createMatchRuntime', () => {
 
   it('returns the original rejected receipt on retry before evaluating staleness', async () => {
     const runtime = runtimeFixture();
-    const envelope = stageEnvelope(runtime, 'stale-retry', runtime.revision() - 1);
+    const envelope = stageEnvelope(runtime, 'stale-retry', runtime.publicRevision() - 1);
     const original = await runtime.submitIntent(envelope);
     const duplicate = await runtime.submitIntent(envelope);
 
-    expect(original).toMatchObject({ status: 'stale' });
+    expect(original).toMatchObject({ status: 'stale-public' });
     expect(duplicate).toMatchObject({
       status: 'duplicate',
-      original: { status: 'stale' },
+      original: { status: 'stale-public' },
     });
   });
 
@@ -338,14 +347,15 @@ describe('createMatchRuntime', () => {
         matchId: 'phase1-runtime-match',
         seat: 'P0',
         intentId: 'terminal-concede',
-        expectedRevision: runtime.revision(),
+        expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
         intent: { type: 'CONCEDE' },
       })).resolves.toMatchObject({ status: 'accepted', commit: 'COMMITTED' });
 
       expect(reconcile).toHaveBeenCalledTimes(1);
       expect(reconcile.mock.calls[0][3]).toBe(runtime.state());
       expect(reconcile.mock.results[0].value).toMatchObject({ ok: true });
-      expect(runtime.transactions().at(-1)?.framedEvents.at(-1)?.event.type)
+      expect(runtime.transactions().at(-1)?.frames.at(-1)?.event.type)
         .toBe('MATCH_ENDED');
     } finally {
       reconcile.mockRestore();
@@ -366,7 +376,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'advance-to-two-energy',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
 
@@ -378,7 +389,7 @@ describe('createMatchRuntime', () => {
     expect(firstCardId).toBeDefined();
     expect(secondCardId).toBeDefined();
 
-    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-first', runtime.revision(), 'P0', firstCardId));
+    await runtime.submitIntent(stageEnvelope(runtime, 'gun-store-first', runtime.publicRevision(), 'P0', firstCardId));
     expect(getStoredCardPowerDelta(
       runtime.state(),
       firstCardId,
@@ -388,7 +399,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'gun-store-second',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'STAGE_CARD', cardId: secondCardId, lane: 1 },
     });
     expect(runtime.state().stagedPlays.map(play => play.cardId))
@@ -398,7 +410,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'undo-older-suffix',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'UNSTAGE_CARD', cardId: firstCardId },
     };
     await expect(runtime.submitIntent(unstageEnvelope)).resolves.toMatchObject({
@@ -427,7 +440,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'undo-full-turn',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'UNDO_TURN' },
     });
     expect(runtime.state()).toEqual(turnBase);
@@ -436,7 +450,7 @@ describe('createMatchRuntime', () => {
 
   it('turns malformed dequeue work into a typed receipt and continues draining', async () => {
     const runtime = runtimeFixture();
-    const revision = runtime.revision();
+    const revision = runtime.publicRevision();
     const initialTransactionCount = runtime.transactions().length;
     const malformed = {
       ...stageEnvelope(runtime, 'malformed', revision),
@@ -449,7 +463,11 @@ describe('createMatchRuntime', () => {
     ]);
 
     expect(rejected).toMatchObject({ status: 'illegal', code: 'RULES_INVALID' });
-    expect(accepted).toMatchObject({ status: 'accepted', revision: revision + 1 });
+    expect(accepted).toMatchObject({
+      status: 'accepted',
+      publicRevision: revision,
+      commit: 'PRIVATE',
+    });
     expect(runtime.state().stagedPlays).not.toHaveLength(0);
     expect(runtime.transactions()).toHaveLength(initialTransactionCount);
   });
@@ -464,7 +482,7 @@ describe('createMatchRuntime', () => {
     await expect(runtime.submitIntent(stageEnvelope(
       runtime,
       'first-private-stage',
-      runtime.revision(),
+      runtime.publicRevision(),
       'P0',
       stagedCardId,
     ))).resolves.toMatchObject({ status: 'accepted', commit: 'PRIVATE' });
@@ -473,7 +491,7 @@ describe('createMatchRuntime', () => {
     await expect(runtime.submitIntent(stageEnvelope(
       runtime,
       'duplicate-private-stage',
-      runtime.revision(),
+      runtime.publicRevision(),
       'P0',
       stagedCardId,
     ))).resolves.toMatchObject({
@@ -486,7 +504,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'missing-private-unstage',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'UNSTAGE_CARD', cardId: otherCardId },
     })).resolves.toMatchObject({
       status: 'illegal',
@@ -521,10 +540,10 @@ describe('createMatchRuntime', () => {
 
     exported.transactions.forEach((transaction) => {
       expect(transaction.baseRevision + 1).toBe(transaction.revision);
-      replayed = foldFramedEvents({
+      replayed = foldCanonicalFrames({
         transactionId: transaction.transactionId,
         initialState: replayed,
-        framedEvents: transaction.framedEvents,
+        frames: transaction.frames,
         manifest: BOOTSTRAP_MANIFEST,
       }).finalState;
     });
@@ -536,16 +555,17 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'replay-end',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
     const resolvedExport = runtime.exportReplay();
     let resolvedReplay = resolvedExport.genesis;
     for (const transaction of resolvedExport.transactions) {
-      resolvedReplay = foldFramedEvents({
+      resolvedReplay = foldCanonicalFrames({
         transactionId: transaction.transactionId,
         initialState: resolvedReplay,
-        framedEvents: transaction.framedEvents,
+        frames: transaction.frames,
         manifest: BOOTSTRAP_MANIFEST,
       }).finalState;
     }
@@ -567,7 +587,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'end-turn',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+      expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
 
@@ -583,11 +604,12 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P0',
       intentId: 'p0-lock',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+      expectedPlanRevision: runtime.planRevision('P0'),
       intent: { type: 'END_TURN' },
     });
 
-    expect(first).toMatchObject({ status: 'accepted', commit: 'PRIVATE' });
+    expect(first).toMatchObject({ status: 'accepted', commit: 'WAITING' });
     expect(runtime.transactions()).toHaveLength(openingCount);
     expect(runtime.state().phase).toBe('AWAITING_INTENT');
 
@@ -595,7 +617,8 @@ describe('createMatchRuntime', () => {
       matchId: 'phase1-runtime-match',
       seat: 'P1',
       intentId: 'p1-lock',
-      expectedRevision: runtime.revision(),
+      expectedPublicRevision: runtime.publicRevision(),
+      expectedPlanRevision: runtime.planRevision('P1'),
       intent: { type: 'END_TURN' },
     });
     expect(runtime.transactions()).toHaveLength(openingCount + 1);
@@ -626,20 +649,22 @@ describe('createMatchRuntime', () => {
         matchId: 'phase1-runtime-match',
         seat: 'P0',
         intentId: 'atomic-p0-lock',
-        expectedRevision: runtime.revision(),
+        expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
         intent: { type: 'END_TURN' },
       });
-      expect(firstLock).toMatchObject({ status: 'accepted', commit: 'PRIVATE' });
+      expect(firstLock).toMatchObject({ status: 'accepted', commit: 'WAITING' });
 
       const retryableSecondLock: IntentEnvelope = {
         matchId: 'phase1-runtime-match',
         seat: 'P1',
         intentId: 'atomic-p1-lock',
-        expectedRevision: runtime.revision(),
+        expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P1'),
         intent: { type: 'END_TURN' },
       };
       const beforeFailure = {
-        revision: runtime.revision(),
+        revision: runtime.publicRevision(),
         frame: runtime.frame(),
         state: runtime.state(),
         transactions: runtime.transactions(),
@@ -656,7 +681,7 @@ describe('createMatchRuntime', () => {
         },
       });
 
-      expect(runtime.revision()).toBe(beforeFailure.revision);
+      expect(runtime.publicRevision()).toBe(beforeFailure.revision);
       expect(runtime.frame()).toBe(beforeFailure.frame);
       expect(runtime.state()).toBe(beforeFailure.state);
       expect(runtime.state().rng.draws).toBe(beforeFailure.rngDraws);
@@ -666,7 +691,8 @@ describe('createMatchRuntime', () => {
         matchId: 'phase1-runtime-match',
         seat: 'P0',
         intentId: 'atomic-p0-second-lock',
-        expectedRevision: runtime.revision(),
+        expectedPublicRevision: runtime.publicRevision(),
+        expectedPlanRevision: runtime.planRevision('P0'),
         intent: { type: 'END_TURN' },
       })).resolves.toMatchObject({
         status: 'illegal',
@@ -677,7 +703,7 @@ describe('createMatchRuntime', () => {
       await expect(runtime.submitIntent(retryableSecondLock)).resolves.toMatchObject({
         status: 'accepted',
         commit: 'COMMITTED',
-        revision: beforeFailure.revision + 1,
+        publicRevision: beforeFailure.revision + 1,
         transaction: {
           intent: {
             seat: 'SYSTEM',

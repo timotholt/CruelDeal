@@ -10,7 +10,13 @@ import {
   getLocationState,
   redactLocationsForSeat,
 } from '../engine/projections/locationRuntime';
-import type { EventTransition } from '../engine/transactionTimeline';
+import type { CanonicalFrameTransition } from '../engine/transactionTimeline';
+import type {
+  AbilityRef,
+  CanonicalEntityRef,
+  EffectOutcomeReason,
+  EffectTargetResult,
+} from '../engine/types/effectTrace';
 import type { MatchEvent } from '../engine/types/events';
 import type {
   CardZone,
@@ -29,10 +35,11 @@ import type {
 import type { Frame, TemporalScope } from '../engine/types/timeline';
 import type {
   CommittedTransactionTimeline,
-  CommittedTransactionRecord,
   MatchBootstrap,
   MatchMode,
-  MatchRevision,
+  PlanRevision,
+  PublicRevision,
+  SeatInteractionStatus,
   ParticipantController,
 } from './contracts';
 
@@ -164,11 +171,13 @@ export interface SeatVisibleMatchState {
 }
 
 export interface SeatMatchSnapshot {
-  readonly version: 1;
+  readonly version: 2;
   readonly matchId: string;
-  readonly revision: MatchRevision;
+  readonly publicRevision: PublicRevision;
+  readonly planRevision: PlanRevision;
   readonly frame: Frame;
   readonly viewerSeat: Seat;
+  readonly interactionStatus: SeatInteractionStatus;
   readonly state: SeatVisibleMatchState;
 }
 
@@ -185,23 +194,85 @@ export interface SeatAnimationEvent {
   readonly data: Readonly<Record<string, JsonValue>>;
 }
 
-export interface SeatFramedAnimationEvent {
+export type SeatEntityRef =
+  | { readonly kind: 'CARD'; readonly token: SeatCardToken }
+  | { readonly kind: 'LOCATION'; readonly token: SeatLocationToken }
+  | { readonly kind: 'LANE'; readonly laneId: LaneId }
+  | { readonly kind: 'PLAYER'; readonly owner: Owner }
+  | { readonly kind: 'ZONE'; readonly owner: Owner | null; readonly zone: string }
+  | { readonly kind: 'SYSTEM'; readonly systemId: string }
+  | {
+      readonly kind: 'HIDDEN';
+      readonly category: 'CARD' | 'LOCATION' | 'RULE';
+    };
+
+export type SeatAbilityRef =
+  | {
+      readonly kind: AbilityRef['kind'];
+      readonly ruleId: string;
+      readonly ruleIndex: number;
+    }
+  | { readonly kind: 'HIDDEN' };
+
+export type SeatEffectTraceEntry =
+  | {
+      readonly kind: 'EFFECT_INVOCATION_STARTED';
+      readonly invocationToken: string;
+      readonly parentInvocationToken: string | null;
+      readonly source: SeatEntityRef;
+      readonly ability: SeatAbilityRef;
+      readonly invocationReason:
+        | 'NATURAL'
+        | 'RETRIGGER'
+        | 'REACTION'
+        | 'SCHEDULED'
+        | 'SYSTEM';
+      readonly depth: number;
+      readonly candidates: readonly SeatEntityRef[];
+    }
+  | {
+      readonly kind: 'EFFECT_TARGET_RESOLVED';
+      readonly invocationToken: string;
+      readonly attemptToken: string;
+      readonly attemptOrdinal: number;
+      readonly operation: string;
+      readonly target: SeatEntityRef;
+      readonly result: EffectTargetResult;
+      readonly blockedBy: readonly SeatEntityRef[];
+      readonly reason: EffectOutcomeReason | null;
+    }
+  | {
+      readonly kind: 'EFFECT_INVOCATION_COMPLETED';
+      readonly invocationToken: string;
+      readonly attempted: number;
+      readonly affected: number;
+      readonly blocked: number;
+      readonly invalidated: number;
+      readonly unchanged: number;
+    };
+
+export interface SeatPresentationFrame {
+  readonly index: number;
   readonly frame: Frame;
   readonly scope: TemporalScope;
-  readonly event: SeatAnimationEvent;
+  readonly event: SeatAnimationEvent | null;
+  readonly effect: SeatEffectTraceEntry | null;
+  readonly after: SeatVisibleMatchState;
 }
 
-export interface SeatCommittedTransaction {
-  readonly version: 1;
+export interface SeatPresentationBlock {
+  readonly version: 2;
   readonly transactionId: string;
   readonly matchId: string;
-  readonly baseRevision: MatchRevision;
-  readonly revision: MatchRevision;
-  readonly frame: Frame;
   readonly viewerSeat: Seat;
-  readonly events: readonly SeatFramedAnimationEvent[];
-  /** Authoritative correction point after the event animation batch. */
+  readonly basePublicRevision: number;
+  readonly publicRevision: number;
+  readonly firstFrame: Frame;
+  readonly lastFrame: Frame;
+  readonly preState: SeatVisibleMatchState;
+  readonly frames: readonly SeatPresentationFrame[];
   readonly postState: SeatVisibleMatchState;
+  readonly postStateHash: string;
 }
 
 /**
@@ -225,25 +296,11 @@ export interface SeatTransactionFrame {
 export interface SeatTransactionTimeline {
   readonly transactionId: string;
   readonly matchId: string;
-  readonly baseRevision: MatchRevision;
-  readonly revision: MatchRevision;
+  readonly baseRevision: PublicRevision;
+  readonly revision: PublicRevision;
   readonly viewerSeat: Seat;
   readonly frames: readonly SeatTransactionFrame[];
   readonly finalState: SeatVisibleMatchState;
-}
-
-export interface SeatResyncRequest {
-  readonly version: 1;
-  readonly matchId: string;
-  readonly viewerSeat: Seat;
-  readonly knownRevision: MatchRevision;
-  readonly knownFrame: Frame;
-}
-
-export interface SeatResyncResponse {
-  readonly version: 1;
-  readonly snapshot: SeatMatchSnapshot;
-  readonly transactions: readonly SeatCommittedTransaction[];
 }
 
 function opaqueToken(
@@ -315,6 +372,180 @@ function locationIdentityVisible(
   );
 }
 
+function effectToken(
+  state: MatchState,
+  viewerSeat: Seat,
+  kind: 'invocation' | 'attempt',
+  canonicalId: string,
+): string {
+  const [high, low] = cyrb128(
+    `seat-effect-token-v2|${state.rng.seed}|${viewerSeat}|${kind}|${canonicalId}`,
+  );
+  return `${kind === 'invocation' ? 'i' : 'a'}_`
+    + high.toString(16).padStart(8, '0')
+    + low.toString(16).padStart(8, '0');
+}
+
+function cardPositionObservable(
+  transition: CanonicalFrameTransition,
+  cardId: CardId,
+): boolean {
+  const card = getAllCardStates(transition.after)
+    .find(candidate => candidate.id === cardId)
+    ?? getAllCardStates(transition.before)
+      .find(candidate => candidate.id === cardId);
+  return card !== undefined && card.zone !== 'DECK';
+}
+
+function locationPositionObservable(
+  transition: CanonicalFrameTransition,
+  locationId: LocationCardInstanceId,
+): boolean {
+  const location = getLocationState(transition.after, locationId)
+    ?? getLocationState(transition.before, locationId);
+  return location !== null && location.zone !== 'DECK';
+}
+
+function projectEntityRefForSeat(
+  ref: CanonicalEntityRef,
+  transition: CanonicalFrameTransition,
+  viewerSeat: Seat,
+): SeatEntityRef {
+  switch (ref.kind) {
+    case 'CARD':
+      return cardPositionObservable(transition, ref.cardId)
+        ? {
+            kind: 'CARD',
+            token: cardToken(transition.after, viewerSeat, ref.cardId),
+          }
+        : { kind: 'HIDDEN', category: 'CARD' };
+    case 'LOCATION':
+      return locationPositionObservable(transition, ref.locationId)
+        ? {
+            kind: 'LOCATION',
+            token: locationToken(transition.after, viewerSeat, ref.locationId),
+          }
+        : { kind: 'HIDDEN', category: 'LOCATION' };
+    case 'LANE':
+      return { kind: 'LANE', laneId: ref.laneId };
+    case 'PLAYER':
+      return { kind: 'PLAYER', owner: ref.owner };
+    case 'ZONE':
+      return { kind: 'ZONE', owner: ref.owner, zone: ref.zone };
+    case 'SYSTEM':
+      return { kind: 'SYSTEM', systemId: ref.systemId };
+  }
+}
+
+function entityIdentityVisible(
+  ref: CanonicalEntityRef,
+  transition: CanonicalFrameTransition,
+  viewerSeat: Seat,
+): boolean {
+  switch (ref.kind) {
+    case 'CARD':
+      return cardIdentityVisible(transition.before, ref.cardId, viewerSeat)
+        || cardIdentityVisible(transition.after, ref.cardId, viewerSeat);
+    case 'LOCATION':
+      return locationIdentityVisible(transition.before, ref.locationId, viewerSeat)
+        || locationIdentityVisible(transition.after, ref.locationId, viewerSeat);
+    case 'LANE':
+    case 'PLAYER':
+    case 'ZONE':
+    case 'SYSTEM':
+      return true;
+  }
+}
+
+function projectAbilityForSeat(
+  ability: AbilityRef,
+  source: CanonicalEntityRef,
+  transition: CanonicalFrameTransition,
+  viewerSeat: Seat,
+): SeatAbilityRef {
+  if (!entityIdentityVisible(source, transition, viewerSeat)) {
+    return { kind: 'HIDDEN' };
+  }
+  return {
+    kind: ability.kind,
+    ruleId: ability.ruleId,
+    ruleIndex: ability.ruleIndex,
+  };
+}
+
+export function projectEffectTraceForSeat(
+  transition: CanonicalFrameTransition,
+  viewerSeat: Seat,
+): SeatEffectTraceEntry | null {
+  const effect = transition.effect;
+  if (effect === null) return null;
+  const invocation = (canonicalId: string): string => effectToken(
+    transition.after,
+    viewerSeat,
+    'invocation',
+    canonicalId,
+  );
+  switch (effect.kind) {
+    case 'EFFECT_INVOCATION_STARTED':
+      return {
+        kind: 'EFFECT_INVOCATION_STARTED',
+        invocationToken: invocation(effect.invocationId),
+        parentInvocationToken: effect.parentInvocationId === null
+          ? null
+          : invocation(effect.parentInvocationId),
+        source: projectEntityRefForSeat(
+          effect.source,
+          transition,
+          viewerSeat,
+        ),
+        ability: projectAbilityForSeat(
+          effect.ability,
+          effect.source,
+          transition,
+          viewerSeat,
+        ),
+        invocationReason: effect.invocationReason,
+        depth: effect.depth,
+        candidates: effect.candidates.map(candidate =>
+          projectEntityRefForSeat(candidate, transition, viewerSeat)
+        ),
+      };
+    case 'EFFECT_TARGET_RESOLVED':
+      return {
+        kind: 'EFFECT_TARGET_RESOLVED',
+        invocationToken: invocation(effect.invocationId),
+        attemptToken: effectToken(
+          transition.after,
+          viewerSeat,
+          'attempt',
+          effect.attemptId,
+        ),
+        attemptOrdinal: effect.attemptOrdinal,
+        operation: effect.operation,
+        target: projectEntityRefForSeat(
+          effect.target,
+          transition,
+          viewerSeat,
+        ),
+        result: effect.result,
+        blockedBy: effect.blockedBy.map(blocker =>
+          projectEntityRefForSeat(blocker, transition, viewerSeat)
+        ),
+        reason: effect.reason,
+      };
+    case 'EFFECT_INVOCATION_COMPLETED':
+      return {
+        kind: 'EFFECT_INVOCATION_COMPLETED',
+        invocationToken: invocation(effect.invocationId),
+        attempted: effect.attempted,
+        affected: effect.affected,
+        blocked: effect.blocked,
+        invalidated: effect.invalidated,
+        unchanged: effect.unchanged,
+      };
+  }
+}
+
 function zoneTokens(
   state: MatchState,
   viewerSeat: Seat,
@@ -353,7 +584,9 @@ export function projectMatchStateForSeat(
           tags: card.tags.map(tag => tag.kind),
         }),
         ...(Object.keys(card.counters).length === 0 ? {} : {
-          counters: { ...card.counters },
+          counters: Object.fromEntries(
+            Object.entries(card.counters).map(([name, value]) => [name, value]),
+          ),
         }),
       };
     });
@@ -394,9 +627,12 @@ export function projectMatchStateForSeat(
     turn: state.turn,
     phase: state.phase,
     priority: state.priority,
-    energy: { ...state.energy },
-    maxEnergy: { ...state.maxEnergy },
-    nextTurnEnergyBonus: { ...state.nextTurnEnergyBonus },
+    energy: { P0: state.energy.P0, P1: state.energy.P1 },
+    maxEnergy: { P0: state.maxEnergy.P0, P1: state.maxEnergy.P1 },
+    nextTurnEnergyBonus: {
+      P0: state.nextTurnEnergyBonus.P0,
+      P1: state.nextTurnEnergyBonus.P1,
+    },
     deckCounts: { P0: state.deck.P0.length, P1: state.deck.P1.length },
     locationDeckCount: state.locationDeck.drawPile.length,
     hands: {
@@ -426,8 +662,14 @@ export function projectMatchStateForSeat(
     },
     result: state.result === null ? null : {
       winner: state.result.winner,
-      lanesWon: { ...state.result.lanesWon },
-      totalPower: { ...state.result.totalPower },
+      lanesWon: {
+        P0: state.result.lanesWon.P0,
+        P1: state.result.lanesWon.P1,
+      },
+      totalPower: {
+        P0: state.result.totalPower.P0,
+        P1: state.result.totalPower.P1,
+      },
     },
   };
 }
@@ -508,23 +750,27 @@ export function overlaySeatPrivatePlan(
 
 export function projectSnapshotForSeat(
   matchId: string,
-  revision: MatchRevision,
+  publicRevision: PublicRevision,
+  planRevision: PlanRevision,
   state: MatchState,
   viewerSeat: Seat,
   manifest: Manifest,
+  interactionStatus: SeatInteractionStatus,
 ): SeatMatchSnapshot {
   return {
-    version: 1,
+    version: 2,
     matchId,
-    revision,
+    publicRevision,
+    planRevision,
     frame: state.timeline.frame,
     viewerSeat,
+    interactionStatus,
     state: projectMatchStateForSeat(state, viewerSeat, manifest),
   };
 }
 
 function cardEventVisible(
-  transition: EventTransition,
+  transition: CanonicalFrameTransition,
   cardId: string,
   viewerSeat: Seat,
 ): boolean {
@@ -533,10 +779,11 @@ function cardEventVisible(
 }
 
 export function projectAnimationEventForSeat(
-  transition: EventTransition,
+  transition: CanonicalFrameTransition,
   viewerSeat: Seat,
 ): SeatAnimationEvent | null {
   const event = transition.event;
+  if (event === null) return null;
   const card = (id: string): SeatCardToken => cardToken(
     transition.after,
     viewerSeat,
@@ -881,42 +1128,126 @@ export function projectAnimationEventForSeat(
   }
 }
 
-export function projectTransactionForSeat(
-  transaction: CommittedTransactionRecord,
-  transitions: readonly EventTransition[],
+function stableSeatJson(value: unknown): string {
+  const visit = (input: unknown): unknown => {
+    if (Array.isArray(input)) return input.map(visit);
+    if (input !== null && typeof input === 'object') {
+      return Object.fromEntries(
+        Object.entries(input)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([key, child]) => [key, visit(child)]),
+      );
+    }
+    return input;
+  };
+  return JSON.stringify(visit(value));
+}
+
+export function hashSeatVisibleState(state: SeatVisibleMatchState): string {
+  const json = stableSeatJson(state);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < json.length; index += 1) {
+    hash ^= json.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `fnv1a32:${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
+function seatStatesEqual(
+  left: SeatVisibleMatchState,
+  right: SeatVisibleMatchState,
+): boolean {
+  return stableSeatJson(left) === stableSeatJson(right);
+}
+
+/**
+ * Build one complete player delivery block from one canonical transaction.
+ * Every player DTO is constructed field-by-field; canonical frames, events,
+ * effect entries, entity references, and state objects are never forwarded.
+ */
+export function projectPresentationBlockForSeat(
+  timeline: CommittedTransactionTimeline,
   viewerSeat: Seat,
   manifest: Manifest,
-): SeatCommittedTransaction {
-  if (
-    transitions.length !== transaction.framedEvents.length
-    || transitions.some(transition => transition.transactionId !== transaction.transactionId)
-  ) {
+  projectAuthorityState: (state: MatchState) => MatchState = state => state,
+): SeatPresentationBlock {
+  const first = timeline.transitions[0];
+  const last = timeline.transitions.at(-1);
+  if (!first || !last) {
     throw new Error(
-      `projectTransactionForSeat: transitions do not match ${transaction.transactionId}`,
+      'projectPresentationBlockForSeat: a committed transaction cannot be empty',
     );
   }
-  const finalState = transitions.at(-1)?.after;
-  if (!finalState) {
-    throw new Error('projectTransactionForSeat: a committed transaction cannot be empty');
+  if (
+    timeline.transitions.length !== timeline.transaction.frames.length
+    || timeline.transitions.some(transition => (
+      transition.transactionId !== timeline.transaction.transactionId
+    ))
+  ) {
+    throw new Error(
+      `projectPresentationBlockForSeat: transitions do not match `
+      + timeline.transaction.transactionId,
+    );
   }
-  const events = transitions.flatMap((transition): SeatFramedAnimationEvent[] => {
-    const projected = projectAnimationEventForSeat(transition, viewerSeat);
-    return projected === null ? [] : [{
-      frame: transition.frame,
-      scope: { ...transition.scope },
-      event: projected,
-    }];
-  });
-  return {
-    version: 1,
-    transactionId: transaction.transactionId,
-    matchId: transaction.matchId,
-    baseRevision: transaction.baseRevision,
-    revision: transaction.revision,
-    frame: finalState.timeline.frame,
+
+  const preState = projectMatchStateForSeat(
+    projectAuthorityState(first.before),
     viewerSeat,
-    events,
-    postState: projectMatchStateForSeat(finalState, viewerSeat, manifest),
+    manifest,
+  );
+  const frames: SeatPresentationFrame[] = [];
+  for (const transition of timeline.transitions) {
+    const event = projectAnimationEventForSeat(transition, viewerSeat);
+    const effect = projectEffectTraceForSeat(transition, viewerSeat);
+    const before = projectMatchStateForSeat(
+      projectAuthorityState(transition.before),
+      viewerSeat,
+      manifest,
+    );
+    const after = projectMatchStateForSeat(
+      projectAuthorityState(transition.after),
+      viewerSeat,
+      manifest,
+    );
+    if (event === null && effect === null && seatStatesEqual(before, after)) {
+      continue;
+    }
+    frames.push({
+      index: transition.index,
+      frame: transition.frame,
+      scope: {
+        turn: transition.scope.turn,
+        phase: transition.scope.phase,
+      },
+      event,
+      effect,
+      after,
+    });
+  }
+  const postState = projectMatchStateForSeat(
+    projectAuthorityState(last.after),
+    viewerSeat,
+    manifest,
+  );
+  const lastVisibleState = frames.at(-1)?.after ?? preState;
+  if (!seatStatesEqual(lastVisibleState, postState)) {
+    throw new Error(
+      'projectPresentationBlockForSeat: visible frames do not reach postState',
+    );
+  }
+  return {
+    version: 2,
+    transactionId: timeline.transaction.transactionId,
+    matchId: timeline.transaction.matchId,
+    viewerSeat,
+    basePublicRevision: timeline.transaction.baseRevision,
+    publicRevision: timeline.transaction.revision,
+    firstFrame: first.frame,
+    lastFrame: last.frame,
+    preState,
+    frames,
+    postState,
+    postStateHash: hashSeatVisibleState(postState),
   };
 }
 
@@ -936,7 +1267,10 @@ export function projectTransactionTimelineForSeat(
       index: transition.index,
       transactionId: transition.transactionId,
       frame: transition.frame,
-      scope: { ...transition.scope },
+      scope: {
+        turn: transition.scope.turn,
+        phase: transition.scope.phase,
+      },
       event: projectAnimationEventForSeat(transition, viewerSeat),
       before: projectMatchStateForSeat(
         projectAuthorityState(transition.before),
@@ -972,44 +1306,60 @@ export function projectTransactionTimelineForSeat(
  * Filtered frame numbers may contain gaps because authority-only events are
  * intentionally absent.
  */
-export function applySeatCommittedTransaction(
+export function applySeatPresentationBlock(
   snapshot: SeatMatchSnapshot,
-  transaction: SeatCommittedTransaction,
+  block: SeatPresentationBlock,
 ): SeatMatchSnapshot {
   if (
-    transaction.matchId !== snapshot.matchId
-    || transaction.viewerSeat !== snapshot.viewerSeat
+    block.matchId !== snapshot.matchId
+    || block.viewerSeat !== snapshot.viewerSeat
   ) {
-    throw new Error('applySeatCommittedTransaction: match or seat mismatch');
+    throw new Error('applySeatPresentationBlock: match or seat mismatch');
   }
   if (
-    transaction.baseRevision < snapshot.revision
-    || transaction.revision !== transaction.baseRevision + 1
+    block.basePublicRevision !== snapshot.publicRevision
+    || block.publicRevision !== block.basePublicRevision + 1
   ) {
     throw new Error(
-      `applySeatCommittedTransaction: stale or invalid revision `
-      + `${transaction.baseRevision}->${transaction.revision} after ${snapshot.revision}`,
+      `applySeatPresentationBlock: stale or invalid public revision `
+      + `${block.basePublicRevision}->${block.publicRevision} after ${snapshot.publicRevision}`,
     );
   }
-  if (transaction.frame < snapshot.frame) {
-    throw new Error('applySeatCommittedTransaction: frame moved backwards');
+  if (block.firstFrame <= snapshot.frame || block.lastFrame < block.firstFrame) {
+    throw new Error('applySeatPresentationBlock: invalid frame range');
   }
   let previousFrame = snapshot.frame;
-  for (const projected of transaction.events) {
-    if (projected.frame <= previousFrame || projected.frame > transaction.frame) {
+  for (const projected of block.frames) {
+    if (
+      projected.frame <= previousFrame
+      || projected.frame < block.firstFrame
+      || projected.frame > block.lastFrame
+    ) {
       throw new Error(
-        `applySeatCommittedTransaction: invalid projected frame ${projected.frame}`,
+        `applySeatPresentationBlock: invalid projected frame ${projected.frame}`,
       );
     }
     previousFrame = projected.frame;
   }
+  if (!seatStatesEqual(snapshot.state, block.preState)) {
+    throw new Error('applySeatPresentationBlock: pre-state mismatch');
+  }
+  if (hashSeatVisibleState(block.postState) !== block.postStateHash) {
+    throw new Error('applySeatPresentationBlock: post-state checksum mismatch');
+  }
+  const lastVisibleState = block.frames.at(-1)?.after ?? block.preState;
+  if (!seatStatesEqual(lastVisibleState, block.postState)) {
+    throw new Error('applySeatPresentationBlock: visible frames do not reach post-state');
+  }
   return {
-    version: 1,
+    version: 2,
     matchId: snapshot.matchId,
-    revision: transaction.revision,
-    frame: transaction.frame,
+    publicRevision: block.publicRevision,
+    planRevision: snapshot.planRevision,
+    frame: block.lastFrame,
     viewerSeat: snapshot.viewerSeat,
-    state: transaction.postState,
+    interactionStatus: block.postState.result === null ? 'PLANNING' : 'TERMINAL',
+    state: block.postState,
   };
 }
 

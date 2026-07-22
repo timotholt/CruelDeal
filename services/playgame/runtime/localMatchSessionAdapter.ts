@@ -37,6 +37,18 @@ import type {
   IntentReceipt,
   RuntimeIntent,
 } from './contracts';
+import type {
+  SeatBlockAck,
+  SeatCommand,
+  SeatCommandEnvelope,
+  SeatResyncRequest,
+  SeatResyncResponse,
+} from '../protocol/playerWire';
+import {
+  validateSeatBlockAckWire,
+  validateSeatCommandEnvelopeWire,
+  validateSeatResyncRequestWire,
+} from '../protocol';
 import type { MatchSession } from './matchSession';
 import { renderRuntimeReplay } from './replayExport';
 import type {
@@ -47,12 +59,14 @@ import {
   projectBootstrapForSeat,
   overlaySeatPrivatePlan,
   projectMatchStateForSeat,
+  projectPresentationBlockForSeat,
   projectSnapshotForSeat,
   projectTransactionTimelineForSeat,
   resolveSeatCardTokenForAuthority,
   type SeatBootstrap,
   type SeatCardToken,
   type SeatMatchSnapshot,
+  type SeatPresentationBlock,
   type SeatTransactionTimeline,
 } from './projection';
 import type {
@@ -88,6 +102,7 @@ export class LocalMatchSessionAdapter implements MatchClient {
   readonly #viewerSeat: Seat;
   readonly #initialization: SeatMatchInitialization;
   readonly #subscriptions = new Set<() => void>();
+  #unacknowledgedBlock: SeatPresentationBlock | null = null;
   #intentCounter = 0;
   #disposed = false;
 
@@ -124,9 +139,11 @@ export class LocalMatchSessionAdapter implements MatchClient {
       setup: projectSnapshotForSeat(
         session.bootstrap.matchId,
         initialization.setup.transaction.revision,
+        session.runtime.planRevision(this.#viewerSeat),
         initialization.setup.finalState,
         this.#viewerSeat,
         session.manifest,
+        session.runtime.interactionStatus(this.#viewerSeat),
       ),
       opening: this.#projectTimeline(initialization.opening),
     });
@@ -140,10 +157,12 @@ export class LocalMatchSessionAdapter implements MatchClient {
   snapshot(): SeatMatchSnapshot {
     return projectSnapshotForSeat(
       this.bootstrap.matchId,
-      this.#session.runtime.revision(),
+      this.#session.runtime.publicRevision(),
+      this.#session.runtime.planRevision(this.#viewerSeat),
       this.#session.runtime.projectWorkingState(),
       this.#viewerSeat,
       this.#manifest,
+      this.#session.runtime.interactionStatus(this.#viewerSeat),
     );
   }
 
@@ -152,7 +171,10 @@ export class LocalMatchSessionAdapter implements MatchClient {
   ): () => void {
     if (this.#disposed) return () => undefined;
     const unsubscribeRuntime = this.#session.runtime.subscribeCommittedTransactions(
-      timeline => subscriber(this.#projectTimeline(timeline)),
+      timeline => {
+        this.#unacknowledgedBlock = this.#projectPresentationBlock(timeline);
+        subscriber(this.#projectTimeline(timeline));
+      },
     );
     let active = true;
     const unsubscribe = () => {
@@ -169,25 +191,11 @@ export class LocalMatchSessionAdapter implements MatchClient {
     token: SeatCardToken,
     lane: LaneId,
   ): Promise<SeatCommandResult> {
-    const cardId = this.#resolveOwnedCard(token, 'HAND');
-    if (cardId === null) {
-      return Promise.resolve(this.#illegal(
-        'STAGE_CARD',
-        'Unknown, stale, or non-hand card token.',
-      ));
-    }
-    return this.#submit({ type: 'STAGE_CARD', cardId, lane });
+    return this.#submitCommand({ type: 'STAGE_CARD', token, lane });
   }
 
   unstageCard(token: SeatCardToken): Promise<SeatCommandResult> {
-    const cardId = this.#resolveOwnedCard(token, 'STAGED');
-    if (cardId === null) {
-      return Promise.resolve(this.#illegal(
-        'UNSTAGE_CARD',
-        'Unknown, stale, or non-staged card token.',
-      ));
-    }
-    return this.#submit({ type: 'UNSTAGE_CARD', cardId });
+    return this.#submitCommand({ type: 'UNSTAGE_CARD', token });
   }
 
   undoLastStagedCard(): Promise<SeatCommandResult> {
@@ -208,7 +216,48 @@ export class LocalMatchSessionAdapter implements MatchClient {
   }
 
   endTurn(): Promise<SeatCommandResult> {
-    return this.#submit({ type: 'END_TURN' });
+    return this.#submitCommand({ type: 'END_TURN' });
+  }
+
+  acknowledgePresentationBlock(
+    ack: SeatBlockAck,
+  ): Promise<SeatResyncResponse> {
+    const validation = validateSeatBlockAckWire(ack);
+    if (!validation.ok) return Promise.resolve(this.#snapshotResync());
+    const value = validation.value;
+    const retained = this.#unacknowledgedBlock;
+    if (
+      retained
+      && value.version === 2
+      && value.matchId === this.bootstrap.matchId
+      && value.viewerSeat === this.#viewerSeat
+      && value.publicRevision === retained.publicRevision
+      && value.frame === retained.lastFrame
+      && value.postStateHash === retained.postStateHash
+    ) {
+      this.#unacknowledgedBlock = null;
+    }
+    return Promise.resolve(this.#snapshotResync());
+  }
+
+  resync(request: SeatResyncRequest): Promise<SeatResyncResponse> {
+    const validation = validateSeatResyncRequestWire(request);
+    if (!validation.ok) return Promise.resolve(this.#snapshotResync());
+    const value = validation.value;
+    const retained = this.#unacknowledgedBlock;
+    if (
+      retained
+      && value.matchId === this.bootstrap.matchId
+      && value.viewerSeat === this.#viewerSeat
+      && value.publicRevision === retained.basePublicRevision
+      && value.frame < retained.firstFrame
+    ) {
+      return Promise.resolve({
+        type: 'PRESENTATION_BLOCK',
+        block: retained,
+      });
+    }
+    return Promise.resolve(this.#snapshotResync());
   }
 
   performanceProfile(): MatchPerformanceProfile {
@@ -391,6 +440,24 @@ export class LocalMatchSessionAdapter implements MatchClient {
     );
   }
 
+  #projectPresentationBlock(
+    timeline: CommittedTransactionTimeline,
+  ): SeatPresentationBlock {
+    return projectPresentationBlockForSeat(
+      timeline,
+      this.#viewerSeat,
+      this.#manifest,
+      state => this.#session.runtime.projectWorkingState(state),
+    );
+  }
+
+  #snapshotResync(): SeatResyncResponse {
+    return {
+      type: 'SNAPSHOT',
+      snapshot: this.snapshot(),
+    };
+  }
+
   #resolveOwnedCard(
     token: SeatCardToken,
     expected: 'HAND' | 'STAGED',
@@ -444,7 +511,87 @@ export class LocalMatchSessionAdapter implements MatchClient {
       intentId:
         `local-adapter-${this.#viewerSeat}-${++this.#intentCounter}`
         + `-${intent.type.toLowerCase()}`,
-      expectedRevision: this.#session.runtime.revision(),
+      expectedPublicRevision: this.#session.runtime.publicRevision(),
+      expectedPlanRevision: this.#session.runtime.planRevision(this.#viewerSeat),
+      intent,
+    };
+    const result = await this.#session.runtime.submitIntent(envelope);
+    if (result.status === 'duplicate') {
+      return {
+        status: 'duplicate',
+        matchId: result.matchId,
+        seat: result.seat,
+        intentId: result.intentId,
+        original: this.#projectReceipt(result.original),
+      };
+    }
+    return this.#projectReceipt(result);
+  }
+
+  async #submitCommand(command: SeatCommand): Promise<SeatCommandResult> {
+    if (this.#disposed) {
+      return this.#illegal(command.type, 'The match client is disposed.');
+    }
+    const envelope: SeatCommandEnvelope = {
+      version: 2,
+      matchId: this.bootstrap.matchId,
+      commandId:
+        `local-adapter-${this.#viewerSeat}-${++this.#intentCounter}`
+        + `-${command.type.toLowerCase()}`,
+      expectedPublicRevision: this.#session.runtime.publicRevision(),
+      expectedPlanRevision: this.#session.runtime.planRevision(this.#viewerSeat),
+      command,
+    };
+    const validation = validateSeatCommandEnvelopeWire(envelope);
+    if (!validation.ok) {
+      return this.#illegal(
+        command.type,
+        validation.issues.map(issue => `${issue.path}: ${issue.message}`).join('; '),
+      );
+    }
+    const intent = this.#commandToRuntimeIntent(validation.value.command);
+    if (typeof intent === 'string') {
+      return this.#illegal(command.type, intent);
+    }
+    return this.#submitWithIdentity(envelope.commandId, intent);
+  }
+
+  #commandToRuntimeIntent(command: SeatCommand): RuntimeIntent | string {
+    switch (command.type) {
+      case 'STAGE_CARD': {
+        const cardId = this.#resolveOwnedCard(command.token, 'HAND');
+        return cardId === null
+          ? 'Unknown, stale, or non-hand card token.'
+          : { type: 'STAGE_CARD', cardId, lane: command.lane };
+      }
+      case 'UNSTAGE_CARD': {
+        const cardId = this.#resolveOwnedCard(command.token, 'STAGED');
+        return cardId === null
+          ? 'Unknown, stale, or non-staged card token.'
+          : { type: 'UNSTAGE_CARD', cardId };
+      }
+      case 'UNDO_TURN':
+        return { type: 'UNDO_TURN' };
+      case 'END_TURN':
+        return { type: 'END_TURN' };
+      case 'CONCEDE':
+        return { type: 'CONCEDE' };
+    }
+  }
+
+  async #submitWithIdentity(
+    intentId: string,
+    intent: RuntimeIntent,
+  ): Promise<SeatCommandResult> {
+    if (this.#disposed) {
+      return this.#illegal(intent.type, 'The match client is disposed.');
+    }
+    const envelope: IntentEnvelope = {
+      matchId: this.bootstrap.matchId,
+      seat: this.#viewerSeat,
+      intentId,
+      expectedPublicRevision: this.#session.runtime.publicRevision(),
+      expectedPlanRevision: this.#session.runtime.planRevision(this.#viewerSeat),
       intent,
     };
     const result = await this.#session.runtime.submitIntent(envelope);
@@ -470,7 +617,8 @@ export class LocalMatchSessionAdapter implements MatchClient {
           matchId: result.matchId,
           seat: result.seat,
           intentId: result.intentId,
-          revision: result.revision,
+          publicRevision: result.publicRevision,
+          planRevision: result.planRevision,
           commit: result.commit,
         };
       case 'illegal':
@@ -479,18 +627,31 @@ export class LocalMatchSessionAdapter implements MatchClient {
           matchId: result.matchId,
           seat: result.seat,
           intentId: result.intentId,
-          currentRevision: result.currentRevision,
+          currentPublicRevision: result.currentPublicRevision,
+          currentPlanRevision: result.currentPlanRevision,
           code: result.code,
           ...(result.message === undefined ? {} : { message: result.message }),
         };
-      case 'stale':
+      case 'stale-public':
         return {
           status: result.status,
           matchId: result.matchId,
           seat: result.seat,
           intentId: result.intentId,
-          expectedRevision: result.expectedRevision,
-          currentRevision: result.currentRevision,
+          expectedPublicRevision: result.expectedPublicRevision,
+          currentPublicRevision: result.currentPublicRevision,
+          currentPlanRevision: result.currentPlanRevision,
+          resyncRequired: result.resyncRequired,
+        };
+      case 'stale-plan':
+        return {
+          status: result.status,
+          matchId: result.matchId,
+          seat: result.seat,
+          intentId: result.intentId,
+          expectedPlanRevision: result.expectedPlanRevision,
+          currentPublicRevision: result.currentPublicRevision,
+          currentPlanRevision: result.currentPlanRevision,
         };
     }
   }
@@ -506,7 +667,8 @@ export class LocalMatchSessionAdapter implements MatchClient {
       intentId:
         `local-adapter-${this.#viewerSeat}-${++this.#intentCounter}`
         + `-${intentType.toLowerCase()}`,
-      currentRevision: this.#session.runtime.revision(),
+      currentPublicRevision: this.#session.runtime.publicRevision(),
+      currentPlanRevision: this.#session.runtime.planRevision(this.#viewerSeat),
       code: 'RULES_INVALID' as const,
       message,
     };

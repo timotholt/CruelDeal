@@ -46,6 +46,7 @@ import {
 } from '../kernel/rulesTransaction';
 import type { ResolutionBudget } from '../kernel/contracts';
 import type { KernelBudgetUsage } from '../kernel/kernel';
+import type { KernelResolutionStep } from '../kernel/resolutionTrace';
 import type { CommittedTransition } from '../kernel/types';
 import type { CanonicalRulesSemantics } from '../kernel/rulesTransaction';
 import { activeLaneIds, locationCardAtLane } from '../laneTopology';
@@ -72,6 +73,7 @@ export interface EvalResult {
     MatchEvent,
     CanonicalRulesSemantics
   >[];
+  readonly resolutionSteps: readonly KernelResolutionStep[];
   readonly usage: KernelBudgetUsage;
 }
 

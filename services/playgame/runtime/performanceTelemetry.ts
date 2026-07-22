@@ -1,4 +1,5 @@
 import type { MatchEvent } from '../engine/types/events';
+import type { EffectTraceEntry } from '../engine/types/effectTrace';
 import type { MatchIntent } from '../engine/types/intents';
 import type { Frame } from '../engine/types/timeline';
 
@@ -17,7 +18,7 @@ export interface ResolveCallTiming {
 export interface FrameApplyTiming {
   readonly transactionId: string;
   readonly frame: Frame;
-  readonly eventType: MatchEvent['type'];
+  readonly eventType: MatchEvent['type'] | EffectTraceEntry['kind'];
   readonly startedAtMs: number;
   readonly endedAtMs: number;
   readonly durationMs: number;

@@ -24,7 +24,7 @@ import {
   projectMatchStateForSeat,
 } from '../runtime/projection';
 import type { MatchState } from '../engine/types/state';
-import type { EventTransition } from '../engine/transactionTimeline';
+import type { CanonicalFrameTransition } from '../engine/transactionTimeline';
 import type { Frame } from '../engine/types/timeline';
 
 let failures = 0;
@@ -48,10 +48,10 @@ const projected = (
 ) => {
   const frame = 1 as Frame;
   const scope = { turn: after.turn, phase: 'RESOLUTION' as const };
-  const transition: EventTransition = {
+  const transition: CanonicalFrameTransition = {
     index: 0,
     transactionId: 'transfer-test',
-    framedEvent: { frame, scope, event: matchEvent },
+    canonicalFrame: { frame, scope, event: matchEvent },
     frame,
     scope,
     event: matchEvent,

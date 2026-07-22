@@ -12,7 +12,7 @@ import {
   type KernelStepResult,
   type KernelWorkExpansion,
 } from '../kernel';
-import { isMovePrevented } from '../policies/movement';
+import { movementBlockers } from '../policies/movement';
 import type {
   ChangeCardZoneCommand,
   CommandWork,
@@ -164,14 +164,59 @@ export function planPlacementCommand<Effect, Context>(
   }
 
   if (command.type === 'MOVE_CARD') {
-    if (
-      card.zone !== 'LANE'
-      || card.lane === null
-      || card.lane === command.toLane
-      || isMovePrevented(state, card.id, manifest)
-      || !laneCanReceive(state, command.toLane, card.owner, manifest)
-    ) {
-      return kernelStepSuccess({ work: [] });
+    const target = { kind: 'CARD' as const, cardId: card.id };
+    if (card.zone !== 'LANE' || card.lane === null) {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target,
+          result: 'INVALIDATED',
+          blockedBy: [],
+          reason: 'TARGET_LEFT_ZONE',
+        },
+      });
+    }
+    if (card.lane === command.toLane) {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target,
+          result: 'NO_CHANGE',
+          blockedBy: [],
+          reason: 'ALREADY_SATISFIED',
+        },
+      });
+    }
+    const blockers = movementBlockers(state, card.id, manifest);
+    if (blockers.length > 0) {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target,
+          result: 'BLOCKED',
+          blockedBy: blockers,
+          reason: 'CANNOT_BE_MOVED',
+        },
+      });
+    }
+    if (!laneCanReceive(state, command.toLane, card.owner, manifest)) {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target,
+          result: 'BLOCKED',
+          blockedBy: [{ kind: 'LANE', laneId: command.toLane }],
+          reason: 'LANE_FULL',
+        },
+      });
     }
     const event: Extract<MatchEvent, { type: 'CARD_MOVED' }> = {
       type: 'CARD_MOVED',
@@ -180,7 +225,17 @@ export function planPlacementCommand<Effect, Context>(
       toLane: command.toLane,
       cause: { ...command.cause },
     };
-    return kernelStepSuccess({ work: [{ kind: 'COMMIT', event }] });
+    return kernelStepSuccess({
+      work: [{ kind: 'COMMIT', event }],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target,
+        result: 'AFFECTED',
+        blockedBy: [],
+        reason: null,
+      },
+    });
   }
 
   if (command.type === 'RETURN_CARD') {

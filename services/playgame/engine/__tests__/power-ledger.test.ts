@@ -1,6 +1,6 @@
 import { getCardState } from '../projections/cardRuntime';
 import { describe, expect, it } from 'vitest';
-import { foldFramedEvents, frameAndFoldEvents } from '../transactionTimeline';
+import { foldCanonicalFrames, frameAndFoldEvents } from '../transactionTimeline';
 import {
   activePowerContributions,
   getStoredCardPowerDelta,
@@ -71,7 +71,7 @@ describe('semantic power ledger', () => {
     expect(storedPowerDelta(card, 3)).toBe(2);
     expect(activePowerContributions(card, 3).map((entry) => entry.delta)).toEqual([2]);
     expect(card.powerLedger.map((entry) => entry.frame))
-      .toEqual(folded.framedEvents.map((entry) => entry.frame));
+      .toEqual(folded.frames.map((entry) => entry.frame));
     expect(card.powerLedger.every((entry) => entry.turn === 4)).toBe(true);
   });
 
@@ -87,10 +87,10 @@ describe('semantic power ledger', () => {
       ],
       manifest,
     });
-    const replay = foldFramedEvents({
+    const replay = foldCanonicalFrames({
       transactionId: 'power-ledger:replay',
       initialState: initialState(),
-      framedEvents: live.framedEvents,
+      frames: live.frames,
       manifest,
     });
 

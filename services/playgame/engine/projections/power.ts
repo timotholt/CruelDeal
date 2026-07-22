@@ -19,7 +19,7 @@ import { isPowerBearingCard } from './power-bearing';
 import { locationCardAtLane } from '../laneTopology';
 import {
   isLanePowerIncreaseBlocked,
-  isPowerIncreaseBlocked,
+  powerIncreaseBlockers,
 } from './power-restrictions';
 import {
   activePowerContributions,
@@ -95,7 +95,7 @@ function getCardPowerWithStoredMutation(
   // callers that compare, select, or sum power must use the structural guard.
   if (!def || def.basePower === null) return 0;
 
-  const increaseBlocked = isPowerIncreaseBlocked(state, cardId, manifest);
+  const increaseBlocked = powerIncreaseBlockers(state, cardId, manifest).length > 0;
 
   // Stage 1: base (text-override resolution lands in Step 5/6 via
   // resolveOngoingText; for Step 4 we read the def directly).
@@ -172,7 +172,10 @@ export function getCardPowerModifiers(
     const sourceId = entry.sourceCardId ?? entry.sourceLocationId;
     if (!sourceId) continue;
     const delta = evalNum(entry.expr.delta, targetCtx);
-    if (delta > 0 && isPowerIncreaseBlocked(state, cardId, manifest)) continue;
+    if (
+      delta > 0
+      && powerIncreaseBlockers(state, cardId, manifest).length > 0
+    ) continue;
     out.push({
       sourceId,
       delta,

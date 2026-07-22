@@ -8,7 +8,7 @@ import {
   type KernelStepResult,
   type KernelWorkExpansion,
 } from '../kernel';
-import { isDestroyPrevented } from '../policies/destruction';
+import { destructionBlockers } from '../policies/destruction';
 import type {
   BanishCardCommand,
   CommandWork,
@@ -70,15 +70,51 @@ export function planDestructionLifecycleCommand<Effect, Context>(
 
   const card = getCardRuntime(state, command.cardId, manifest);
   if (!card || card.zone === 'BANISHED') {
-    return kernelStepSuccess({ work: [] });
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'INVALIDATED',
+        blockedBy: [],
+        reason: 'TARGET_LEFT_ZONE',
+      },
+    });
   }
 
   if (command.type === 'DESTROY_CARD') {
-    if (
-      card.zone !== 'LANE'
-      || isDestroyPrevented(state, command.cardId, command.cause, manifest)
-    ) {
-      return kernelStepSuccess({ work: [] });
+    if (card.zone !== 'LANE') {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target: { kind: 'CARD', cardId: command.cardId },
+          result: 'INVALIDATED',
+          blockedBy: [],
+          reason: 'TARGET_LEFT_ZONE',
+        },
+      });
+    }
+    const blockers = destructionBlockers(
+      state,
+      command.cardId,
+      command.cause,
+      manifest,
+    );
+    if (blockers.length > 0) {
+      return kernelStepSuccess({
+        work: [],
+        resolution: {
+          kind: 'TARGET_ATTEMPT',
+          operation: command.type,
+          target: { kind: 'CARD', cardId: command.cardId },
+          result: 'BLOCKED',
+          blockedBy: blockers,
+          reason: 'CANNOT_BE_DESTROYED',
+        },
+      });
     }
     const event: DestroyedEvent = {
       type: 'CARD_DESTROYED',
@@ -87,6 +123,14 @@ export function planDestructionLifecycleCommand<Effect, Context>(
     };
     return kernelStepSuccess({
       work: [{ kind: 'COMMIT', event }],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'AFFECTED',
+        blockedBy: [],
+        reason: null,
+      },
     });
   }
 
@@ -97,5 +141,13 @@ export function planDestructionLifecycleCommand<Effect, Context>(
   };
   return kernelStepSuccess({
     work: [{ kind: 'COMMIT', event }],
+    resolution: {
+      kind: 'TARGET_ATTEMPT',
+      operation: command.type,
+      target: { kind: 'CARD', cardId: command.cardId },
+      result: 'AFFECTED',
+      blockedBy: [],
+      reason: null,
+    },
   });
 }

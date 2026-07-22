@@ -7,5 +7,7 @@ export * from './matchLifecycleTransaction';
 export * from './placementTransaction';
 export * from './revealTransaction';
 export * from './powerTransaction';
+export * from './resolutionTrace';
+export * from './rulesResolutionTrace';
 export * from './transformTransaction';
 export * from './types';
