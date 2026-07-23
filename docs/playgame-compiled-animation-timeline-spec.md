@@ -1617,7 +1617,10 @@ interface PreparedBeatPresentation {
   readonly firstFrame: number;
   readonly lastFrame: number;
   readonly declaredDurationMs: number;
-  presentAfterAdoption(signal: AbortSignal): Promise<PresentationOutcome>;
+  present(
+    signal: AbortSignal,
+    adopt: () => Promise<void>,
+  ): Promise<PresentationOutcome>;
   cancel(reason: PresentationCancelReason): void;
 }
 
@@ -1654,40 +1657,41 @@ Preparation may be asynchronous for actual asset readiness. The director must
 await it before adopting any Frame in the beat. Asset preparation does not count as
 storyboard time because no visual clock has started.
 
-### Adoption barrier
+### Authored adoption handoff
 
-Only `PresentationDirector` may adopt committed Frame state. For a one-Frame
-beat it adopts that Frame's `after` state. For a multi-Frame beat it advances
-every claimed Frame in canonical order inside one synchronous non-painting
-batch, leaving the live state at `beat.after`.
+Only `PresentationDirector` may create the one-shot `adopt()` capability and
+only the prepared beat owner may invoke it. For a one-Frame beat it adopts that
+Frame's `after` state. For a multi-Frame beat it advances every claimed Frame
+in canonical order inside one synchronous non-painting batch, leaving the live
+state at `beat.after`.
 
-The non-painting claim is architectural, not a hopeful timing assumption: the
-batch contains no `await`, queued microtask, layout read, observer callback, or
-other browser rendering opportunity. Every changed visible surface is already
-covered by an actor, visibility lease, or displayed-value lease before the
-batch begins.
+The prepared owner keeps canonical rendering at `beat.before` while its actors
+present the transition. At the storyboard's authored handoff cue it freezes
+the actors in their final pose and calls `adopt()`. The state write inside
+`adopt()` is synchronous and non-painting; its returned promise crosses the
+pre-paint reactive commit barrier. The owner must keep its actors and leases
+mounted until that promise settles, then remove them so the already-committed
+canonical DOM takes over the same pixels.
 
-After adoption it must cross the existing pre-paint reactive commit barrier so
-Solid has mounted canonical destination surfaces. The source actor and source
-visibility lease remain active across this barrier, preventing the adopted
-canonical destinations from flashing. Multi-Frame beat actors retain the
-prepared intermediate surfaces that the canonical DOM did not paint.
+`adopt()` is single-use. Completing without calling it or calling it more than
+once is a presentation-contract failure. Animation code may never look up a
+newly adopted element in order to begin: all required actors, geometry, and
+models must have been prepared from `beat.before` plus the seat-safe committed
+Frame data.
 
-### After adoption
+### Presentation and cleanup
 
-`presentAfterAdoption()` must:
+`present()` must:
 
-1. resolve every canonical destination and semantic target;
-2. acquire destination visibility leases before the next paint;
-3. validate destination face/model and geometry;
-4. compile the storyboard;
-5. mount or activate all storyboard-owned effects;
-6. start the compiled timeline once;
-7. await its one outcome;
-8. perform canonical visual handoff synchronously;
-9. release all actors, visibility/value leases, reservations, effects, and
+1. use only the prepared owner resources and immutable storyboard;
+2. mount or activate all storyboard-owned effects;
+3. start the compiled timeline once;
+4. await its authored handoff cue;
+5. freeze actor final poses and invoke `adopt()` synchronously;
+6. await the reactive commit promise returned by `adopt()`;
+7. release all actors, visibility/value leases, reservations, effects, and
    inline animation state;
-10. resolve only after cleanup is complete.
+8. resolve only after cleanup is complete.
 
 No resource may be acquired outside the prepared owner and cleaned by another
 service later.
@@ -1710,19 +1714,25 @@ if (transactionPrelude) await transactionPrelude.present(signal);
 const beats = planner.partition(timeline.frames);
 for (const beat of beats) {
   const prepared = await sink.prepareBeat(beat, signal);
-  batch(() => cursor.advanceBatch(beat.frames));
-  await reactiveCommitBarrier();
-  await prepared.presentAfterAdoption(signal);
+  let adoptionPromise: Promise<void> | null = null;
+  const adopt = () => {
+    if (adoptionPromise) throw new Error('beat adopted twice');
+    cursor.advanceBatch(beat.frames);
+    adoptionPromise = reactiveCommitBarrier();
+    return adoptionPromise;
+  };
+  await prepared.present(signal, adopt);
+  if (!adoptionPromise) throw new Error('beat completed without adoption');
+  await adoptionPromise;
 }
 
 await sink.afterTransaction?.(signal);
 ```
 
 `cursor.advanceBatch()` is synchronous, contains no `await`, microtask, DOM
-layout read, or foreign callback, and is called only inside the one Solid
-`batch()` shown above. Exactly one `reactiveCommitBarrier()` follows each beat
-batch. The exact implementation must still guard generation changes before and
-after every awaited boundary.
+layout read, or foreign callback. Exactly one `reactiveCommitBarrier()` follows
+each beat adoption. The exact implementation must still guard generation
+changes before and after every awaited boundary.
 
 The director may maintain a timeout watchdog as a defect detector. A watchdog:
 

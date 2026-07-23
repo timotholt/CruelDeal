@@ -197,7 +197,8 @@ async function assertScenario(scenario: Scenario): Promise<void> {
       firstFrame: beat.frames[0].frame,
       lastFrame: beat.frames.at(-1)!.frame,
       declaredDurationMs: 0,
-      presentAfterAdoption: async (signal) => {
+      present: async (signal, adopt) => {
+        await adopt();
         const frame = beat.frames[0];
         await delayMicrotasks(scenario.delayTicks[frame.index] ?? 0);
         if (frame.index !== scenario.injectionIndex) return 'COMPLETED';

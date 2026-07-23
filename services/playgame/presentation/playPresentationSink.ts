@@ -3,6 +3,7 @@ import type {
   MatchPresentationSink,
   PreparedBeatPresentation,
   PreparedTransactionPresentation,
+  AdoptPresentationBeat,
   PresentationCancelReason,
 } from './presentationDirector';
 import {
@@ -157,7 +158,10 @@ export const createPlayPresentationSink = (
       declaredDurationMs: resources.turnBanner?.declaredDurationMs
         ?? resources.location?.declaredDurationMs
         ?? LEGACY_BEAT_DECLARED_DURATION_MS,
-      presentAfterAdoption: async (signal): Promise<PresentationOutcome> => {
+      present: async (
+        signal,
+        adopt: AdoptPresentationBeat,
+      ): Promise<PresentationOutcome> => {
         if (settled || disposed || signal.aborted) {
           settle(true);
           return 'CANCELLED';
@@ -169,6 +173,18 @@ export const createPlayPresentationSink = (
         let completed = false;
         try {
           const frame = resources.frame;
+          if (frame.event?.type === 'LOCATION_REVEALED' && resources.location) {
+            const outcome = await resources.location.present(signal, adopt);
+            completed = outcome === 'COMPLETED';
+            return outcome;
+          }
+
+          // Existing beat authors animate the committed DOM. Location reveal
+          // is the first owner migrated to an authored end-of-animation
+          // handoff; the shared contract permits the remaining authors to move
+          // without another director rewrite.
+          await adopt();
+          if (signal.aborted) return 'CANCELLED';
           if (frame.event) {
             switch (frame.event.type) {
               case 'TURN_RESOLUTION_STARTED':
@@ -190,12 +206,7 @@ export const createPlayPresentationSink = (
                 break;
 
               case 'LOCATION_REVEALED':
-                if (resources.location) {
-                  const outcome = await resources.location.present(signal);
-                  completed = outcome === 'COMPLETED';
-                  return outcome;
-                }
-                break;
+                throw new Error('LOCATION_REVEALED has no prepared animation owner');
 
               case 'CARD_REVEALED':
                 if (resources.reveal) {

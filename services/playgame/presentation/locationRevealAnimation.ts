@@ -14,6 +14,7 @@ import {
 } from './storyboard/contracts';
 import { StoryboardRunner } from './storyboard/runner';
 import type { TimelineDriverFactory } from './storyboard/waapiDriver';
+import type { AdoptPresentationBeat } from './presentationDirector';
 import { readLocationSurfaceModel } from '@/components/game-surfaces/location/locationSurfaceRegistry';
 import {
   mountLocationSurface,
@@ -40,7 +41,10 @@ export interface LocationRevealBrowserPort {
 export interface LocationRevealPreparation {
   readonly lane: LaneId;
   readonly declaredDurationMs: number;
-  present(signal: AbortSignal): Promise<PresentationOutcome>;
+  present(
+    signal: AbortSignal,
+    adopt: AdoptPresentationBeat,
+  ): Promise<PresentationOutcome>;
   cancel(): void;
 }
 
@@ -130,13 +134,12 @@ export const prepareLocationRevealAnimation = (
   if (!hiddenModel || hiddenModel.face.kind !== 'back') {
     throw new Error(`LOCATION_REVEALED cannot read hidden location model for lane ${lane}`);
   }
-  const revealedModel = locationSurfaceModel(getLocation(frame.after, lane, host.content));
+  const revealedLocation = getLocation(frame.after, lane, host.content);
+  const revealedModel = locationSurfaceModel(revealedLocation);
   if (revealedModel.face.kind !== 'front') {
     throw new Error(`LOCATION_REVEALED has no revealed location model for lane ${lane}`);
   }
 
-  mapElement.style.opacity = '0';
-  canonicalSurface.style.visibility = 'hidden';
   const actor = createTwoSidedActor(
     canonicalSurface.ownerDocument,
     host,
@@ -145,43 +148,35 @@ export const prepareLocationRevealAnimation = (
     revealedModel,
   );
   const unmountActor = host.motionSurface.mountTemporary(actor.element);
-  const targets = new Map<string, Element>([
-    [`LOCATION_MAP:${lane}`, mapElement],
-    [`LOCATION_ACTOR:${lane}`, actor.element],
-  ]);
+  const mapActor = createMapActor(
+    canonicalSurface.ownerDocument,
+    mapElement,
+    revealedLocation.mapArt,
+  );
   const timeline = compileStoryboard(
     createLocationRevealStoryboard(frame, lane),
     LOCATION_REVEAL_BUDGET,
   );
-  const runner = new StoryboardRunner(
-    browser.createTimelineDriver(targets),
-    {
-      dispatch: cue => {
-        if (cue.kind === 'AUDIO') host.playSfx(cue.sound);
-      },
-    },
-  );
   let state: 'PREPARED' | 'PRESENTING' | 'SETTLED' = 'PREPARED';
+  let runner: StoryboardRunner | null = null;
 
   const restoreCanonical = (): void => {
     canonicalSurface.style.removeProperty('visibility');
-    const currentSurface = locationSurface(browser.locationTile(lane));
-    currentSurface?.style.removeProperty('visibility');
-    mapElement.style.removeProperty('opacity');
+    mapActor.remove();
     actor.dispose();
     unmountActor();
   };
   const settle = (cancelRunner: boolean): void => {
     if (state === 'SETTLED') return;
     state = 'SETTLED';
-    if (cancelRunner) runner.cancel();
+    if (cancelRunner) runner?.cancel();
     restoreCanonical();
   };
 
   return {
     lane,
     declaredDurationMs: LOCATION_REVEAL_DURATION_MS,
-    present: async signal => {
+    present: async (signal, adopt) => {
       if (state === 'SETTLED' || signal.aborted) {
         settle(true);
         return 'CANCELLED';
@@ -190,12 +185,43 @@ export const prepareLocationRevealAnimation = (
         throw new Error(`Location reveal ${timeline.storyboardId} presented twice`);
       }
       state = 'PRESENTING';
+      const targets = new Map<string, Element>([
+        [`LOCATION_MAP:${lane}`, mapActor],
+        [`LOCATION_ACTOR:${lane}`, actor.element],
+      ]);
+      runner = new StoryboardRunner(
+        browser.createTimelineDriver(targets),
+        {
+          dispatch: cue => {
+            if (cue.kind === 'AUDIO') host.playSfx(cue.sound);
+          },
+        },
+      );
+
+      // The committed state is intentionally not adopted yet. This prepared
+      // owner renders the entire transition against frame.before, then hands
+      // the pixels to frame.after at the storyboard handoff.
+      canonicalSurface.style.visibility = 'hidden';
       const onAbort = (): void => settle(true);
       signal.addEventListener('abort', onAbort, { once: true });
+      let adoption: Promise<void> | null = null;
       try {
         const result = await runner.run(timeline, NORMAL_ANIMATION_PROFILE, {
-          handoff: () => settle(false),
+          handoff: () => {
+            // Preserve the compiled final pose when StoryboardRunner cancels
+            // its fill effects, synchronously adopt canonical truth underneath,
+            // then keep the surrogate mounted through the reactive commit.
+            mapActor.style.opacity = '1';
+            actor.element.style.transform = 'rotateY(180deg)';
+            adoption = adopt();
+          },
         });
+        if (result.outcome === 'COMPLETED') {
+          if (!adoption) {
+            throw new Error(`LOCATION_REVEALED ${timeline.storyboardId} missed its handoff`);
+          }
+          await adoption;
+        }
         return result.outcome;
       } finally {
         signal.removeEventListener('abort', onAbort);
@@ -205,6 +231,24 @@ export const prepareLocationRevealAnimation = (
     cancel: () => settle(true),
   };
 };
+
+function createMapActor(
+  document: Document,
+  canonicalMap: HTMLElement,
+  mapArt: string | null,
+): HTMLElement {
+  const element = document.createElement('div');
+  element.className = 'lane-map location-map-motion-surrogate';
+  element.setAttribute('aria-hidden', 'true');
+  Object.assign(element.style, {
+    backgroundImage: mapArt ? `url("${mapArt}")` : 'none',
+    opacity: '0',
+    pointerEvents: 'none',
+    willChange: 'opacity',
+  });
+  canonicalMap.insertAdjacentElement('afterend', element);
+  return element;
+}
 
 interface TwoSidedLocationActor {
   readonly element: HTMLElement;

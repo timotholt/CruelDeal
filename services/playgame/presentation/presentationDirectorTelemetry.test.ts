@@ -70,7 +70,10 @@ describe('PresentationDirector diagnostics', () => {
         firstFrame: beat.frames[0].frame,
         lastFrame: beat.frames.at(-1)!.frame,
         declaredDurationMs: 0,
-        presentAfterAdoption: async () => 'COMPLETED',
+        present: async (_signal, adopt) => {
+          await adopt();
+          return 'COMPLETED';
+        },
         cancel: () => undefined,
       }),
     })).resolves.toMatchObject({
@@ -87,7 +90,10 @@ describe('PresentationDirector diagnostics', () => {
         firstFrame: beat.frames[0].frame,
         lastFrame: beat.frames.at(-1)!.frame,
         declaredDurationMs: 0,
-        presentAfterAdoption: async () => { throw new Error('animation failed'); },
+        present: async (_signal, adopt) => {
+          await adopt();
+          throw new Error('animation failed');
+        },
         cancel: () => undefined,
       }),
     })).rejects.toThrow('animation failed');
@@ -109,7 +115,10 @@ describe('PresentationDirector diagnostics', () => {
         firstFrame: beat.frames[0].frame,
         lastFrame: beat.frames.at(-1)!.frame,
         declaredDurationMs: 0,
-        presentAfterAdoption: () => new Promise(() => undefined),
+        present: async (_signal, adopt) => {
+          await adopt();
+          return new Promise(() => undefined);
+        },
         cancel: () => undefined,
       }),
     }).catch(error => error);

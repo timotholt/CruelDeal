@@ -133,7 +133,8 @@ const preparedTestSink = (hooks: TestPresentationHooks): MatchPresentationSink =
       firstFrame: frame.frame,
       lastFrame: beat.frames.at(-1)!.frame,
       declaredDurationMs: 0,
-      presentAfterAdoption: async (signal) => {
+      present: async (signal, adopt) => {
+        await adopt();
         await hooks.afterFrame?.(frame, signal);
         return signal.aborted ? 'CANCELLED' : 'COMPLETED';
       },

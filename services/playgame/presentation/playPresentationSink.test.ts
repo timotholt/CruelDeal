@@ -325,7 +325,11 @@ describe('browser play presentation sink', () => {
       test.root.prepend(destination);
       test.cardRefs.set(token, destination);
 
-      const animation = prepared.presentAfterAdoption(new AbortController().signal);
+      const animation = prepared.present(
+        new AbortController().signal,
+        async () => undefined,
+      );
+      await Promise.resolve();
       expect(test.overlay.querySelector('.transfer-flyer')).toBe(flyer);
       expect(destination.style.visibility).toBe('hidden');
 
@@ -345,7 +349,7 @@ describe('browser play presentation sink', () => {
       beat(ended),
       new AbortController().signal,
     );
-    await prepared.presentAfterAdoption(new AbortController().signal);
+    await prepared.present(new AbortController().signal, async () => undefined);
     expect(test.ui.setLockedResult).toHaveBeenCalledWith(result);
     expect(test.ui.setEndGamePromptVisible).toHaveBeenCalledWith(true);
   });
@@ -361,7 +365,7 @@ describe('browser play presentation sink', () => {
       }, state({ turn: 4 }));
       const controller = new AbortController();
       const prepared = await test.sink.prepareBeat(beat(started), controller.signal);
-      const animation = prepared.presentAfterAdoption(controller.signal);
+      const animation = prepared.present(controller.signal, async () => undefined);
       expect(test.showToast).toHaveBeenCalledWith('TURN 4', {
         durationMs: 2_100,
         autoDismiss: false,
@@ -406,7 +410,10 @@ describe('browser play presentation sink', () => {
 
       mountedCard.update(revealedCardModel('REMOTE IDENTITY'));
       card.classList.remove('facedown');
-      const animation = prepared.presentAfterAdoption(new AbortController().signal);
+      const animation = prepared.present(
+        new AbortController().signal,
+        async () => undefined,
+      );
       expect(flyer?.textContent).not.toContain('REMOTE IDENTITY');
       expect(card.style.visibility).toBe('hidden');
       await vi.advanceTimersByTimeAsync(REVEAL_CINEMATIC_TIMING.enterMs / 2 + 1);
@@ -465,9 +472,10 @@ describe('browser play presentation sink', () => {
     expect(test.motionSurface.cardMotion.activeLeaseCount).toBe(0);
   });
 
-  it('fades the map while flipping a prebuilt two-sided actor into the adopted tile', async () => {
+  it('owns location pixels until its authored canonical handoff', async () => {
       const test = fixture();
-      const map = document.createElement('div');
+      const hiddenMap = document.createElement('div');
+      const revealedMap = document.createElement('div');
       const hiddenTile = document.createElement('div');
       const revealedTile = document.createElement('div');
       hiddenTile.className = 'location hidden';
@@ -475,8 +483,8 @@ describe('browser play presentation sink', () => {
       mountLocationSurface(hiddenTile, locationModel('back'));
       mountLocationSurface(revealedTile, locationModel('front'));
       hiddenTile.getBoundingClientRect = () => new DOMRect(40, 330, 120, 80);
-      test.root.prepend(map, hiddenTile);
-      test.setMap(map);
+      test.root.prepend(hiddenMap, hiddenTile);
+      test.setMap(hiddenMap);
       test.setTile(hiddenTile);
       const defId = Object.keys(BOOTSTRAP_MANIFEST.locations)[0]!;
       const location = frame('LOCATION_REVEALED', {
@@ -502,9 +510,11 @@ describe('browser play presentation sink', () => {
         beat(location),
         new AbortController().signal,
       );
-      expect(map.style.opacity).toBe('0');
+      // Preparation happens before canonical state adoption and must not make
+      // the lane disappear while the previous beat is settling.
+      expect(hiddenMap.style.opacity).toBe('');
       expect(hiddenTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
-        .toBe('hidden');
+        .toBe('');
       const actor = test.overlay.querySelector<HTMLElement>('.location');
       expect(actor).not.toBeNull();
       expect(actor?.style.transform).toBe('rotateY(0deg)');
@@ -512,10 +522,19 @@ describe('browser play presentation sink', () => {
       expect(actor?.querySelector('[data-surface-face="back"]')).not.toBeNull();
       expect(actor?.querySelector('[data-surface-face="front"]')).not.toBeNull();
 
-      hiddenTile.remove();
-      test.root.prepend(revealedTile);
-      test.setTile(revealedTile);
-      const animation = prepared.presentAfterAdoption(new AbortController().signal);
+      const adoptedSurface = revealedTile.querySelector<HTMLElement>('[data-surface-kind="location"]')!;
+      const adopt = vi.fn(async () => {
+        hiddenMap.replaceWith(revealedMap);
+        hiddenTile.replaceWith(revealedTile);
+        test.setMap(revealedMap);
+        test.setTile(revealedTile);
+        await Promise.resolve();
+      });
+      const animation = prepared.present(new AbortController().signal, adopt);
+      const mapActor = test.root.querySelector<HTMLElement>('.location-map-motion-surrogate');
+      expect(mapActor?.style.opacity).toBe('0');
+      expect(hiddenTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
+        .toBe('hidden');
       const driver = test.timelineDrivers.at(-1)!;
       expect(driver.animations.map(item => item.id).sort()).toEqual([
         'location-map-fade:opacity',
@@ -524,9 +543,10 @@ describe('browser play presentation sink', () => {
       driver.advanceTo(700);
       await animation;
 
-      expect(map.style.opacity).toBe('');
-      expect(revealedTile.querySelector<HTMLElement>('[data-surface-kind="location"]')?.style.visibility)
-        .toBe('');
+      expect(adopt).toHaveBeenCalledTimes(1);
+      expect(test.root.querySelector('.location-map-motion-surrogate')).toBeNull();
+      expect(revealedMap.style.opacity).toBe('');
+      expect(adoptedSurface.style.visibility).toBe('');
   });
 
   it('restores location styles and removes the flip clone when aborted', async () => {
@@ -561,7 +581,7 @@ describe('browser play presentation sink', () => {
       }));
       const controller = new AbortController();
       const prepared = await test.sink.prepareBeat(beat(location), controller.signal);
-      const animation = prepared.presentAfterAdoption(controller.signal);
+      const animation = prepared.present(controller.signal, async () => undefined);
 
       controller.abort('fast-forward');
       await animation;
@@ -601,8 +621,8 @@ describe('browser play presentation sink', () => {
     });
     const controller = new AbortController();
     const prepared = await test.sink.prepareBeat(beat(unprepared), controller.signal);
-    const first = prepared.presentAfterAdoption(controller.signal);
-    await expect(prepared.presentAfterAdoption(controller.signal)).rejects.toThrow(
+    const first = prepared.present(controller.signal, async () => undefined);
+    await expect(prepared.present(controller.signal, async () => undefined)).rejects.toThrow(
       'presented twice',
     );
     controller.abort();

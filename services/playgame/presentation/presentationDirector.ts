@@ -17,13 +17,23 @@ export type PresentationCancelReason =
   | 'presentation-disposed'
   | 'presentation-failed';
 
+/**
+ * One-shot handoff from a prepared visual owner to the canonical renderer.
+ * Calling this synchronously adopts the beat's committed state; the returned
+ * promise settles after the reactive DOM commit barrier.
+ */
+export type AdoptPresentationBeat = () => Promise<void>;
+
 export interface PreparedBeatPresentation {
   readonly beatId: string;
   readonly firstFrame: number;
   readonly lastFrame: number;
   /** Maximum authored playback time before diagnostic grace. */
   readonly declaredDurationMs: number;
-  presentAfterAdoption(signal: AbortSignal): Promise<PresentationOutcome>;
+  present(
+    signal: AbortSignal,
+    adopt: AdoptPresentationBeat,
+  ): Promise<PresentationOutcome>;
   cancel(reason: PresentationCancelReason): void;
 }
 
@@ -389,18 +399,25 @@ export class PresentationDirector {
         this.#assertPreparedBeat(beat, prepared);
         run.beatOwner = prepared;
 
-        // This call is intentionally the only synchronous adoption boundary.
-        // The cursor implementation owns the framework batch and may not await.
-        this.#cursor.advanceBatch(beat.frames);
-        await this.#reactiveCommitBarrier();
-        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
+        let adoptionPromise: Promise<void> | null = null;
+        const adopt: AdoptPresentationBeat = () => {
+          if (adoptionPromise) {
+            throw new Error(`Prepared beat ${beat.id} adopted canonical state twice`);
+          }
+          // The state write is synchronous. The prepared visual owner decides
+          // its authored handoff point, then awaits the framework commit before
+          // removing its surrogate.
+          this.#cursor.advanceBatch(beat.frames);
+          adoptionPromise = this.#reactiveCommitBarrier();
+          return adoptionPromise;
+        };
 
         const startedAtMs = monotonicNow();
         let outcome: PresentationOutcome | null;
         try {
           outcome = await this.#awaitOwner(
             run,
-            prepared.presentAfterAdoption(run.controller.signal),
+            prepared.present(run.controller.signal, adopt),
             beat.frames[0].frame,
             this.#playbackWatchdogMs(prepared.declaredDurationMs),
           );
@@ -423,6 +440,11 @@ export class PresentationDirector {
           }
           throw outcomeError;
         }
+        if (!adoptionPromise) {
+          throw new Error(`Prepared beat ${beat.id} completed without canonical adoption`);
+        }
+        await adoptionPromise;
+        if (!this.#isCurrent(run)) return this.#stoppedResult(run);
         run.beatOwner = null;
         for (const frame of beat.frames) {
           this.#recordFrameSettlement(frame, 'completed', startedAtMs);

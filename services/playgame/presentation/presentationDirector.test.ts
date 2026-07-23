@@ -100,7 +100,8 @@ const sink = (
       firstFrame: frame.frame,
       lastFrame: beat.frames.at(-1)!.frame,
       declaredDurationMs: options.declaredDurationMs ?? 0,
-      presentAfterAdoption: async (signal) => {
+      present: async (signal, adopt) => {
+        await adopt();
         await present(frame, signal);
         return signal.aborted ? 'CANCELLED' : 'COMPLETED';
       },
@@ -181,6 +182,41 @@ describe('PresentationDirector prepared lifecycle', () => {
     await running;
     expect(order).toContain('prepare:1');
     expect(order.indexOf('prepare:1')).toBeGreaterThan(order.indexOf('present:0:cleanup'));
+  });
+
+  it('keeps canonical state at beat.before until the prepared owner hands off', async () => {
+    const order: string[] = [];
+    const handoff = deferred();
+    const value = timeline('authored-handoff', [1]);
+    const director = new PresentationDirector({ cursor: cursorRecorder(order) });
+    const running = director.present(planForTimeline(value), {
+      prepareBeat: async beat => ({
+        beatId: beat.id,
+        firstFrame: beat.frames[0].frame,
+        lastFrame: beat.frames.at(-1)!.frame,
+        declaredDurationMs: 1_000,
+        present: async (_signal, adopt) => {
+          order.push('actor:start');
+          await handoff.promise;
+          order.push('actor:handoff');
+          await adopt();
+          order.push('actor:cleanup');
+          return 'COMPLETED';
+        },
+        cancel: () => undefined,
+      }),
+    });
+
+    await vi.waitFor(() => expect(order).toContain('actor:start'));
+    expect(order).toEqual(['actor:start']);
+    handoff.resolve();
+    await expect(running).resolves.toMatchObject({ status: 'completed' });
+    expect(order).toEqual([
+      'actor:start',
+      'actor:handoff',
+      'advance:authored-handoff:0',
+      'actor:cleanup',
+    ]);
   });
 
   it('does not adopt a beat when preparation fails', async () => {
