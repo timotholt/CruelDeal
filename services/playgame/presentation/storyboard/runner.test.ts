@@ -4,9 +4,36 @@ import { compileStoryboard } from './compiler';
 import { milliseconds, type StoryboardCue } from './contracts';
 import { StoryboardRunner } from './runner';
 import { FOUNDATION_TEST_BUDGET, step, storyboard } from './__tests__/fixtures';
-import { FakeWaapiDriver } from './waapiDriver';
+import {
+  FakeWaapiDriver,
+  type TimelineAnimation,
+  type TimelineClock,
+} from './waapiDriver';
 
 describe('master-clock storyboard runner', () => {
+  it('does not start the clock or dispatch cues until every track is prepared', async () => {
+    const driver = new DeferredPreparationDriver();
+    const seen: string[] = [];
+    const runner = new StoryboardRunner(driver, {
+      dispatch: cue => { seen.push(cue.id); },
+    });
+
+    const resultPromise = runner.run(twoTrackTimeline(), NORMAL_ANIMATION_PROFILE);
+
+    expect(driver.preparationCount).toBe(1);
+    expect(driver.startOrigins).toEqual([]);
+    expect(seen).toEqual([]);
+
+    driver.releasePreparation();
+    await Promise.resolve();
+
+    expect(driver.startOrigins).toEqual([1000]);
+    expect(seen).toEqual(['zero']);
+
+    driver.advanceTo(100);
+    await expect(resultPromise).resolves.toMatchObject({ outcome: 'COMPLETED' });
+  });
+
   it('starts every track at one origin and waits for master plus all tracks', async () => {
     const driver = new FakeWaapiDriver();
     const cleanup = vi.fn();
@@ -170,4 +197,23 @@ function twoTrackTimeline() {
       },
     ],
   })]), FOUNDATION_TEST_BUDGET);
+}
+
+class DeferredPreparationDriver extends FakeWaapiDriver {
+  #release: (() => void) | null = null;
+
+  override prepareTogether(
+    clock: TimelineClock,
+    animations: readonly TimelineAnimation[],
+  ): Promise<void> {
+    super.prepareTogether(clock, animations);
+    return new Promise(resolve => { this.#release = resolve; });
+  }
+
+  releasePreparation(): void {
+    const release = this.#release;
+    if (!release) throw new Error('Preparation has not started');
+    this.#release = null;
+    release();
+  }
 }

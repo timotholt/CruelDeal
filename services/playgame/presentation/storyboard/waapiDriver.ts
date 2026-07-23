@@ -13,7 +13,7 @@ export interface TimelineAnimation {
   setPlaybackRate(rate: number): void;
 }
 
-export interface TimelineClock extends TimelineAnimation {}
+export type TimelineClock = TimelineAnimation;
 
 export interface SuspendedTimeline {
   readonly masterCurrentTimeMs: Milliseconds;
@@ -22,6 +22,10 @@ export interface SuspendedTimeline {
 export interface AnimationTimelineDriver {
   compileTrack(track: CompiledVisualTrack): TimelineAnimation;
   createClock(durationMs: Milliseconds): TimelineClock;
+  prepareTogether(
+    clock: TimelineClock,
+    animations: readonly TimelineAnimation[],
+  ): Promise<void> | void;
   startTogether(clock: TimelineClock, animations: readonly TimelineAnimation[]): void;
   pauseTogether(
     clock: TimelineClock,
@@ -88,6 +92,31 @@ export class NativeWaapiDriver implements AnimationTimelineDriver {
   createClock(durationMs: Milliseconds): TimelineClock {
     const effect = new KeyframeEffect(null, null, { duration: durationMs });
     return nativeHandle('__master_clock__', new Animation(effect, this.#document.timeline));
+  }
+
+  async prepareTogether(
+    clock: TimelineClock,
+    animations: readonly TimelineAnimation[],
+  ): Promise<void> {
+    const handles = [clock, ...animations].map(asNativeHandle);
+
+    // Establish the authored time-zero pose before the presentation clock is
+    // allowed to advance. A newly-created Animation is idle and does not
+    // reliably contribute its fill styles until it has a resolved hold time.
+    for (const handle of handles) {
+      handle.native.pause();
+      handle.native.currentTime = 0;
+    }
+
+    // This is the WAAPI scheduling barrier. Await the complete storyboard so
+    // cold and warm runs share one start boundary rather than preparing tracks
+    // opportunistically after their visible time has begun.
+    await Promise.all(handles.map(handle => handle.native.ready));
+
+    // Give the paused time-zero styles a real paint opportunity. Resuming from
+    // the second callback means the opening segment cannot be consumed before
+    // the start pose has ever appeared on screen.
+    await waitForPaintedStartPose(this.#view);
   }
 
   startTogether(clock: TimelineClock, animations: readonly TimelineAnimation[]): void {
@@ -172,6 +201,7 @@ export class FakeWaapiDriver implements AnimationTimelineDriver {
   readonly animations: FakeTimelineHandle[] = [];
   readonly clocks: FakeTimelineHandle[] = [];
   readonly startOrigins: number[] = [];
+  preparationCount = 0;
   #wakeups = new Set<(kind: TimelineWakeupKind) => void>();
   #origin = 1000;
 
@@ -186,6 +216,13 @@ export class FakeWaapiDriver implements AnimationTimelineDriver {
     const handle = new FakeTimelineHandle('__master_clock__', durationMs);
     this.clocks.push(handle);
     return handle;
+  }
+
+  prepareTogether(
+    _clock: TimelineClock,
+    _animations: readonly TimelineAnimation[],
+  ): void {
+    this.preparationCount += 1;
   }
 
   startTogether(clock: TimelineClock, animations: readonly TimelineAnimation[]): void {
@@ -306,4 +343,12 @@ function asFakeHandle(animation: TimelineAnimation): FakeTimelineHandle {
     throw new Error('Mixed timeline-driver handles');
   }
   return animation;
+}
+
+function waitForPaintedStartPose(view: Window): Promise<void> {
+  return new Promise(resolve => {
+    view.requestAnimationFrame(() => {
+      view.requestAnimationFrame(() => resolve());
+    });
+  });
 }

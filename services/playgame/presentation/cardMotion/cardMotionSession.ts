@@ -241,7 +241,7 @@ class MotionSession implements CardMotionSession {
             {
               atMs: duration,
               styles: { transform: `rotateY(${targetFaceAngle}deg) scale(${scaleTo})` },
-              easing: style.easing,
+              easing: style.faceEasing ?? style.easing,
             },
           ],
         },

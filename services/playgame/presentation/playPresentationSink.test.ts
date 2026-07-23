@@ -21,6 +21,7 @@ import {
   mountCardSurface,
 } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import { mountLocationSurface } from '@/components/game-surfaces/location/locationSurfaceRuntime';
+import { LOCATION_REVEAL_DURATION_MS } from './locationRevealAnimation';
 import { REVEAL_CINEMATIC_TIMING } from './timing';
 import type { Frame } from '../engine/types/timeline';
 import type { PresentationBeat } from './transactionPresentationPlanner';
@@ -427,6 +428,7 @@ describe('browser play presentation sink', () => {
         'rotateY(180deg) scale(2.2)',
         'rotateY(180deg) scale(1)',
       ]);
+      expect(faceTransform?.keyframes[0]?.easing).toBe('cubic-bezier(.42,0,.58,1)');
       const left = driver?.compiledTracks.find(track => (
         track.channel === 'layout' && track.property === 'left'
       ));
@@ -439,6 +441,7 @@ describe('browser play presentation sink', () => {
         '180px',
         '80px',
       ]);
+      expect(left?.keyframes[0]?.easing).toBe('cubic-bezier(.42,0,.58,1)');
       expect(top?.keyframes.map(keyframe => keyframe.value)).toEqual([
         '240px',
         '332px',
@@ -540,7 +543,7 @@ describe('browser play presentation sink', () => {
         'location-map-fade:opacity',
         'location-two-sided-flip:transform',
       ]);
-      driver.advanceTo(700);
+      driver.advanceTo(LOCATION_REVEAL_DURATION_MS);
       await animation;
 
       expect(adopt).toHaveBeenCalledTimes(1);

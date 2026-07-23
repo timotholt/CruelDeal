@@ -98,6 +98,12 @@ export class StoryboardRunner {
     };
 
     try {
+      const preparation = this.#driver.prepareTogether(clock, animations);
+      if (preparation !== undefined) await preparation;
+      if (active.cancelled) {
+        cleanup();
+        return { outcome: 'CANCELLED', cueRecords: scheduler.records, failure: null };
+      }
       scheduler.start();
       this.#driver.startTogether(clock, animations);
       await Promise.all([clock.finished, ...animations.map(animation => animation.finished)]);

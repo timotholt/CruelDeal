@@ -14,6 +14,7 @@ import {
 } from './eventAnimator';
 import type { PlayPresentationHost } from './playPresentationHost';
 import {
+  preloadCardRevealSurfaces,
   prepareCardRevealAnimation,
   type PreparedCardReveal,
 } from './cardRevealAnimation';
@@ -240,6 +241,10 @@ export const createPlayPresentationSink = (
       if (disposed) throw new Error('Play presentation sink is disposed');
       if (signal.aborted) throw new DOMException('Preparation aborted', 'AbortError');
       const transactionId = frames[0]?.transactionId;
+      await preloadCardRevealSurfaces(host, frames, signal);
+      if (disposed || signal.aborted) {
+        throw new DOMException('Preparation aborted', 'AbortError');
+      }
       if (transactionId !== options.openingTransactionId) return null;
       if (frames.some(frame => frame.transactionId !== transactionId)) {
         throw new Error('Opening transaction preparation received mixed transactions');

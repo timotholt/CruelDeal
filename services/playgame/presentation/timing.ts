@@ -3,9 +3,9 @@
  * must never enter canonical events, frames, state, or replay records.
  */
 export const REVEAL_CINEMATIC_TIMING = Object.freeze({
-  enterMs: 350,
-  holdMs: 350,
-  returnMs: 320,
+  enterMs: 220,
+  holdMs: 295,
+  returnMs: 400,
 });
 
 /** CardMotionSession adds a 30 ms completion guard to each motion phase. */

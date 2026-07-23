@@ -558,11 +558,11 @@ describe('event animator transfer origins', () => {
       });
       expect(motionSurface.cardMotion.diagnostics.find(entry =>
         entry.route === 'HAND->LANE' && entry.kind === 'motion-started')).toMatchObject({
-        durationMs: 300,
+        durationMs: 700,
         rect: { left: 180, top: 220, width: 70, height: 100 },
       });
 
-      await vi.advanceTimersByTimeAsync(299);
+      await vi.advanceTimersByTimeAsync(699);
       expect(surrogate.isConnected).toBe(true);
       expect(destination.style.visibility).toBe('hidden');
 

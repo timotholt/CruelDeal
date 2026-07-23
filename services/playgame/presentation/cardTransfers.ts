@@ -6,6 +6,7 @@ import type {
   SeatVisibleMatchState,
 } from '../runtime/projection';
 import type { CardVisualFace } from './cardMotion';
+import { CARD_MOTION_TIMING } from './cardMotionTiming';
 import {
   eventBoolean,
   eventCardToken,
@@ -130,7 +131,12 @@ function styleFor(
   if (from.kind === 'LANE' && to.kind === 'LANE') {
     style = { ...style, durationMs: 360, arc: 'small', sfx: 'move' };
   } else if (from.kind === 'HAND' && to.kind === 'LANE') {
-    style = { ...style, durationMs: 300, arc: 'small', sfx: 'play' };
+    style = {
+      ...style,
+      durationMs: CARD_MOTION_TIMING.committedHandToLaneMs,
+      arc: 'small',
+      sfx: 'play',
+    };
   } else if (from.kind === 'LANE' && to.kind === 'HAND') {
     style = { ...style, durationMs: 340, arc: 'small', sfx: 'move' };
   } else if (from.kind === 'DECK' && to.kind === 'HAND') {

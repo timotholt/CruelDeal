@@ -21,7 +21,8 @@ import {
   type MountedLocationSurface,
 } from '@/components/game-surfaces/location/locationSurfaceRuntime';
 
-export const LOCATION_REVEAL_DURATION_MS = 700;
+export const LOCATION_REVEAL_DURATION_MS = 500;
+const LOCATION_REVEAL_EDGE_ON_MS = LOCATION_REVEAL_DURATION_MS / 2;
 
 const LOCATION_REVEAL_BUDGET: PresentationExpansionBudget = Object.freeze({
   maximumPrimitiveSteps: 1,
@@ -87,7 +88,7 @@ export function createLocationRevealStoryboard(
           keyframes: [
             { atMs: milliseconds(0), styles: { transform: 'rotateY(0deg)' } },
             {
-              atMs: milliseconds(350),
+              atMs: milliseconds(LOCATION_REVEAL_EDGE_ON_MS),
               styles: { transform: 'rotateY(90deg)' },
               easing: 'cubic-bezier(.4,0,.7,1)',
             },

@@ -10,6 +10,7 @@
 import type { LaneId, Seat } from '@/services/playgame/engine/types/ids';
 import type { SeatVisibleMatchState } from '@/services/playgame/runtime/projection';
 import type { PlayMotionSurface } from '@/services/playgame/presentation/playMotionSurface';
+import { CARD_MOTION_TIMING } from '@/services/playgame/presentation/cardMotionTiming';
 import {
   captureCardVisual,
   mergeCardMotionTargets,
@@ -21,7 +22,6 @@ import type { ResolvedCard } from '@/services/playgame/view';
 import { captureCardRects } from '@/services/vfx/animations/layout-flip';
 
 const DRAG_THRESHOLD_PX = 6;
-const LANDING_DURATION_MS = 120;
 
 type DragOrigin = 'hand' | 'lane';
 
@@ -322,7 +322,7 @@ export function setupCardInteraction(opts: CardInteractionOptions): CardInteract
     if (!session) return;
     const endpoint = motionSurface.cardMotion.endpoint(drag.cardId);
     const step = await session.prepareStep(`${session.id}:pointer-landing`, endpoint, {
-      durationMs: LANDING_DURATION_MS,
+      durationMs: CARD_MOTION_TIMING.interactionLandingMs,
       easing: 'cubic-bezier(.4,0,.2,1)',
       scaleFrom: 1,
       scaleTo: 1,

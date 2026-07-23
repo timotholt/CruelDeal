@@ -77,6 +77,8 @@ export type CardMotionResult =
 export interface CardMotionStyle {
   readonly durationMs: number;
   readonly easing: string;
+  /** Optional easing for the two-sided face turn and its coupled scale. */
+  readonly faceEasing?: string;
   readonly opacityFrom?: number;
   readonly opacityTo?: number;
   readonly scaleFrom?: number;

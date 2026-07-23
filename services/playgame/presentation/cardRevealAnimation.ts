@@ -1,7 +1,10 @@
 import type { SeatCardToken, SeatTransactionFrame } from '../runtime/projection';
+import { resolveCard } from '../view';
+import { cardSurfaceModel } from './appearance';
 import type { PlayPresentationHost } from './playPresentationHost';
 import { eventString } from './projectedEvent';
 import { REVEAL_CINEMATIC_TIMING } from './timing';
+import { prepareCardSurfaceModel } from '@/components/game-surfaces/card/cardSurfaceRuntime';
 import {
   captureCardVisual,
   runCardMotionStoryboard,
@@ -22,6 +25,38 @@ export interface PreparedCardReveal {
   present(signal: AbortSignal): Promise<import('./storyboard/contracts').PresentationOutcome>;
   cancel(reason?: CardMotionCancelReason): void;
 }
+
+/**
+ * Prepares every face-up card raster authorized by one committed transaction.
+ * Asset readiness belongs before any reveal clock starts, so cache misses can
+ * never change the visible cadence between the first and later cards.
+ */
+export const preloadCardRevealSurfaces = async (
+  host: PlayPresentationHost,
+  frames: readonly SeatTransactionFrame[],
+  signal: AbortSignal,
+): Promise<void> => {
+  const models = new Map<string, ReturnType<typeof cardSurfaceModel>>();
+  for (const frame of frames) {
+    if (frame.event?.type !== 'CARD_REVEALED') continue;
+    const cardId = eventString(frame.event, 'card') as SeatCardToken | null;
+    if (!cardId) throw new Error('CARD_REVEALED is missing its seat-visible card token');
+    const card = resolveCard(cardId, frame.after, host.content, host.cardStatReadModel);
+    if (!card?.defId) {
+      throw new Error(`CARD_REVEALED has no authorized front model for ${cardId}`);
+    }
+    const model = cardSurfaceModel(card, {
+      face: 'front',
+      borderTone: card.owner === host.localSeat ? 'friendly' : 'enemy',
+    });
+    if (model.face.kind !== 'front') {
+      throw new Error(`CARD_REVEALED resolved a hidden surface for ${cardId}`);
+    }
+    models.set(model.face.content.cacheKey, model);
+  }
+  await Promise.all([...models.values()].map(model => prepareCardSurfaceModel(model)));
+  if (signal.aborted) throw new DOMException('Card reveal preparation aborted', 'AbortError');
+};
 
 export const prepareCardRevealAnimation = (
   host: PlayPresentationHost,
@@ -111,7 +146,8 @@ const presentPreparedCardReveal = async (
     centerEndpoint,
     {
       durationMs: REVEAL_CINEMATIC_TIMING.enterMs,
-      easing: 'cubic-bezier(.2,.8,.3,1)',
+      easing: 'cubic-bezier(.42,0,.58,1)',
+      faceEasing: 'cubic-bezier(.42,0,.58,1)',
       // The surrogate is already captured over the mounted lane card at its
       // real resting size. Starting this track near zero made the card snap
       // out of existence before the first painted animation frame, hiding

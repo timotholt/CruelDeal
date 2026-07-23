@@ -44,8 +44,8 @@ describe('compiled location reveal', () => {
     expect(flip?.keyframes.map(keyframe => [keyframe.atMs, keyframe.value]))
       .toEqual([
         [0, 'rotateY(0deg)'],
-        [350, 'rotateY(90deg)'],
-        [700, 'rotateY(180deg)'],
+        [250, 'rotateY(90deg)'],
+        [500, 'rotateY(180deg)'],
       ]);
     expect(flip?.keyframes.map(keyframe => keyframe.easing)).toEqual([
       'cubic-bezier(.4,0,.7,1)',
@@ -56,7 +56,7 @@ describe('compiled location reveal', () => {
     expect(map?.keyframes.map(keyframe => [keyframe.atMs, keyframe.value]))
       .toEqual([
         [0, 0],
-        [700, 1],
+        [500, 1],
       ]);
     expect(map?.keyframes.map(keyframe => keyframe.easing)).toEqual(['ease', undefined]);
   });
