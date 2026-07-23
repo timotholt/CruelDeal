@@ -10,6 +10,7 @@ import {
   type VisualChannel,
   type VisualTargetRef,
 } from './contracts';
+import { easingForCompiledSegment } from './easing';
 import { calculateSchedule } from './schedule';
 
 interface PropertyFragment {
@@ -168,12 +169,17 @@ function normalizeFragments(
     normalized.push({ ...last, atMs: totalDurationMs, easing: undefined });
   }
 
-  const compiledKeyframes: CompiledStyleKeyframe[] = normalized.map(keyframe => ({
-    atMs: milliseconds(keyframe.atMs),
-    offset: totalDurationMs === 0 ? 0 : keyframe.atMs / totalDurationMs,
-    value: keyframe.value,
-    ...(keyframe.easing === undefined ? {} : { easing: keyframe.easing }),
-  }));
+  const compiledKeyframes: CompiledStyleKeyframe[] = normalized.map((keyframe, index) => {
+    const next = normalized[index + 1];
+    return {
+      atMs: milliseconds(keyframe.atMs),
+      offset: totalDurationMs === 0 ? 0 : keyframe.atMs / totalDurationMs,
+      value: keyframe.value,
+      ...(next === undefined ? {} : {
+        easing: easingForCompiledSegment(keyframe.value, next.value, next.easing),
+      }),
+    };
+  });
   for (const keyframe of compiledKeyframes) {
     if (!Number.isFinite(keyframe.offset) || keyframe.offset < 0 || keyframe.offset > 1) {
       throw new Error(`Invalid compiled keyframe offset ${String(keyframe.offset)}`);

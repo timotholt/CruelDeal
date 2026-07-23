@@ -195,6 +195,35 @@ describe('LocalMatchSessionAdapter projected authority boundary', () => {
     }
   });
 
+  it('publishes a plannable atomic block across consecutive turns', async () => {
+    const { adapter } = fixture('adapter-multi-turn-planner');
+    const blocks: SeatPresentationBlock[] = [];
+    const unsubscribe = adapter.subscribePresentationBlocks(
+      block => blocks.push(block),
+    );
+
+    for (let turn = 1; turn <= 3; turn += 1) {
+      const countBefore = blocks.length;
+      await expect(adapter.endTurn()).resolves.toMatchObject({
+        status: 'accepted',
+      });
+      expect(blocks).toHaveLength(countBefore + 1);
+      const block = blocks.at(-1)!;
+      expect(() => presentationPlanner.plan(block)).not.toThrow();
+      expect(block.postState.turn).toBe(turn + 1);
+      await adapter.acknowledgePresentationBlock({
+        version: 2,
+        matchId: block.matchId,
+        viewerSeat: block.viewerSeat,
+        publicRevision: block.publicRevision,
+        frame: block.lastFrame,
+        postStateHash: block.postStateHash,
+      });
+    }
+
+    unsubscribe();
+  });
+
   it('redelivers one complete unacknowledged block and clears it on ack', async () => {
     const { adapter } = fixture('adapter-block-resync');
     const before = adapter.snapshot();

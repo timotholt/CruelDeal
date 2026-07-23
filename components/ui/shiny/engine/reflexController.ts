@@ -10,10 +10,80 @@ export { pointer, direction, sheenEnabled, setSheenEnabled, gyroActive };
 
 const clamp1 = (v: number) => Math.max(-1, Math.min(1, v));
 
-const writeRootVars = (gx: number, gy: number) => {
-  if (typeof document === 'undefined') return;
-  document.documentElement.style.setProperty('--reflex-gx', gx.toFixed(4));
-  document.documentElement.style.setProperty('--reflex-gy', gy.toFixed(4));
+// Keep the high-frequency direction variables off :root. Writing inherited
+// custom properties on <html> invalidates computed style for the entire app on
+// every pointer frame, including the fixed viewport and every universal-rule
+// match. This selector identifies only surfaces whose paint recipes actually
+// consume the reflex variables.
+const REFLEX_SURFACE_SELECTOR = [
+  '.sheen-linear',
+  '.sheen-radial',
+  '.sheen-box',
+  '.sheen-baked',
+  '.main-material-rich-token--gold',
+  '.main-material-rich-token--silver',
+  '.main-material-rich-token--bronze',
+  '.main-material-rich-token--kan',
+  '.main-material-rich-token--credit',
+  '.main-material-rich-token--mark',
+  '.main-material-rich-token--engraved',
+  '.metal-gold:not(.sheen-text)',
+  '.metal-silver:not(.sheen-text)',
+  '.metal-bronze:not(.sheen-text)',
+  '.gold18k',
+  '.metal-surface-gold',
+  '.metal-surface-silver',
+  '.metal-surface-bronze',
+].join(',');
+
+const reflexSurfaces = new Set<HTMLElement>();
+let reflexSurfaceObserver: MutationObserver | null = null;
+
+const addSurfaceTree = (node: Node) => {
+  if (!(node instanceof HTMLElement)) return;
+  if (node.matches(REFLEX_SURFACE_SELECTOR)) reflexSurfaces.add(node);
+  node.querySelectorAll<HTMLElement>(REFLEX_SURFACE_SELECTOR).forEach(surface => reflexSurfaces.add(surface));
+};
+
+const removeSurfaceTree = (node: Node) => {
+  if (!(node instanceof HTMLElement)) return;
+  reflexSurfaces.delete(node);
+  node.querySelectorAll<HTMLElement>(REFLEX_SURFACE_SELECTOR).forEach(surface => reflexSurfaces.delete(surface));
+};
+
+const startSurfaceRegistry = () => {
+  if (typeof document === 'undefined' || reflexSurfaceObserver) return;
+  document.querySelectorAll<HTMLElement>(REFLEX_SURFACE_SELECTOR).forEach(surface => reflexSurfaces.add(surface));
+  reflexSurfaceObserver = new MutationObserver((records) => {
+    records.forEach((record) => {
+      if (record.type === 'attributes') {
+        const element = record.target;
+        if (!(element instanceof HTMLElement)) return;
+        if (element.matches(REFLEX_SURFACE_SELECTOR)) reflexSurfaces.add(element);
+        else reflexSurfaces.delete(element);
+        return;
+      }
+      record.removedNodes.forEach(removeSurfaceTree);
+      record.addedNodes.forEach(addSurfaceTree);
+    });
+  });
+  reflexSurfaceObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['class'],
+    childList: true,
+    subtree: true,
+  });
+};
+
+const writeSurfaceVars = (gx: number, gy: number) => {
+  const x = gx.toFixed(4);
+  const y = gy.toFixed(4);
+  reflexSurfaces.forEach((surface) => {
+    surface.style.setProperty('--reflex-gx', x);
+    surface.style.setProperty('--reflex-gy', y);
+    surface.style.setProperty('--reflex-x', x);
+    surface.style.setProperty('--reflex-y', y);
+  });
 };
 
 let pendingMouse: { x: number; y: number } | null = null;
@@ -28,7 +98,7 @@ const commit = (gx: number, gy: number, src: ReflexPointer['source'], x: number,
   lastGy = gy;
   setPointer({ x, y, hasPosition: src === 'mouse', source: src });
   setDirection({ gx, gy });
-  writeRootVars(gx, gy);
+  writeSurfaceVars(gx, gy);
 };
 
 export type ReflexFpsCap = 15 | 30 | 60;
@@ -114,10 +184,46 @@ const listenForOrientation = () => {
 
 export const initReflex = () => {
   if (started || typeof window === 'undefined') return;
+  // A pre-scope controller may have left these high-frequency variables inline
+  // on <html> during a development hot update. They must never remain an
+  // inherited invalidation source.
+  document.documentElement.style.removeProperty('--reflex-gx');
+  document.documentElement.style.removeProperty('--reflex-gy');
+  document.documentElement.style.removeProperty('--reflex-x');
+  document.documentElement.style.removeProperty('--reflex-y');
+  startSurfaceRegistry();
   started = true;
   window.addEventListener('pointermove', handlePointerMove, { passive: true });
   const orientation = orientationEventConstructor();
   if (orientation && typeof orientation.requestPermission !== 'function') listenForOrientation();
+};
+
+export const disposeReflex = () => {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('pointermove', handlePointerMove);
+    if (orientationListening) {
+      window.removeEventListener('deviceorientation', handleDeviceOrientation);
+    }
+    if (frame && typeof cancelAnimationFrame !== 'undefined') cancelAnimationFrame(frame);
+  }
+  reflexSurfaceObserver?.disconnect();
+  reflexSurfaceObserver = null;
+  reflexSurfaces.forEach((surface) => {
+    surface.style.removeProperty('--reflex-gx');
+    surface.style.removeProperty('--reflex-gy');
+    surface.style.removeProperty('--reflex-x');
+    surface.style.removeProperty('--reflex-y');
+  });
+  reflexSurfaces.clear();
+  pendingMouse = null;
+  pendingTilt = null;
+  frame = 0;
+  lastGx = Number.NaN;
+  lastGy = Number.NaN;
+  lastCommitTs = Number.NEGATIVE_INFINITY;
+  started = false;
+  orientationListening = false;
+  setGyroActive(false);
 };
 
 export const enableGyro = async (): Promise<boolean> => {
@@ -139,3 +245,7 @@ export const enableGyro = async (): Promise<boolean> => {
   listenForOrientation();
   return true;
 };
+
+if (import.meta.hot) {
+  import.meta.hot.dispose(disposeReflex);
+}

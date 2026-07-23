@@ -48,11 +48,16 @@ describe('router architecture', () => {
   it('isolates mounted route surfaces from descendant reactive state', () => {
     const routeSource = source('./router.tsx');
 
-    expect(routeSource).toContain('component: () => untrack(() => (');
-    expect(routeSource).toContain('<ClassicPlayScreen');
-    expect(routeSource).not.toContain(
-      "component: () => <ClassicPlayScreen allowDebugSetup={import.meta.env.DEV}",
+    expect(routeSource).toContain(
+      'identity={routeIdentity()}',
     );
+    expect(routeSource).toContain('render={() => <Outlet />}');
+    expect(routeSource).not.toContain('component: () => untrack(() => (');
+
+    const boundarySource = source('./components/routing/ReactiveIdentityBoundary.tsx');
+    expect(boundarySource).toContain('<Show when={props.identity} keyed>');
+    expect(boundarySource).not.toContain('replaceChildren');
+    expect(boundarySource).not.toContain("from 'solid-js/web'");
   });
 
   it('isolates development screens behind the Vite lazy module catalog', () => {

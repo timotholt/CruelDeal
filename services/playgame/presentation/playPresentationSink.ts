@@ -7,6 +7,7 @@ import type {
 } from './presentationDirector';
 import {
   animatePreparedEvent,
+  awaitEventAnimationReadiness,
   prepareEventAnimation,
   type PreparedEventAnimation,
 } from './eventAnimator';
@@ -273,6 +274,10 @@ export const createPlayPresentationSink = (
       if (signal.aborted) throw new DOMException('Preparation aborted', 'AbortError');
       if (beat.frames.length !== 1) {
         throw new Error(`No grouped-beat author exists for ${beat.id}`);
+      }
+      await awaitEventAnimationReadiness(host, beat.frames[0], signal);
+      if (signal.aborted || disposed) {
+        throw new DOMException('Preparation aborted', 'AbortError');
       }
       const resources = prepareResources(beat.frames[0]);
       if (signal.aborted || disposed) {

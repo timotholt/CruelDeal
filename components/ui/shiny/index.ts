@@ -40,6 +40,7 @@ export {
   getReflexFpsCap,
   gyroActive,
   initReflex,
+  disposeReflex,
   pointer,
   setReflexFpsCap,
   setSheenEnabled,

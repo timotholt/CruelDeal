@@ -135,6 +135,7 @@ function canonicalEffectEntry(
       invocationId,
       attemptId: effectAttemptId(invocationId, entry.attemptOrdinal),
       attemptOrdinal: entry.attemptOrdinal,
+      candidateOrdinal: entry.candidateOrdinal,
       operation: entry.operation,
       target: structuredClone(entry.target),
       result: entry.result,

@@ -64,6 +64,38 @@ describe('compiled storyboard schedule', () => {
     expect(compiled.tracks[0]?.keyframes.map(frame => [frame.atMs, frame.offset])).toEqual([
       [0, 0], [100, 0.25], [150, 0.375], [250, 0.625], [300, 0.75], [400, 1],
     ]);
+    expect(compiled.tracks[0]?.keyframes.map(frame => frame.easing)).toEqual([
+      'linear', 'linear', 'ease', 'linear', 'linear', undefined,
+    ]);
+  });
+
+  it('compiles authored arrival easing into WAAPI outgoing segment easing', () => {
+    const compiled = compileStoryboard(storyboard([
+      step('motion', 300, 300, {
+        tracks: [{
+          kind: 'ELEMENT',
+          id: 'move',
+          target: { kind: 'TURN_BANNER' },
+          channel: 'banner-pose',
+          keyframes: [
+            { atMs: milliseconds(0), styles: { transform: 'translateY(10px)' } },
+            {
+              atMs: milliseconds(200),
+              styles: { transform: 'translateY(0px)' },
+              easing: 'cubic-bezier(.2,.8,.3,1)',
+            },
+            { atMs: milliseconds(300), styles: { transform: 'translateY(0px)' } },
+          ],
+        }],
+        cues: [],
+      }),
+    ]), FOUNDATION_TEST_BUDGET);
+
+    expect(compiled.tracks[0]?.keyframes.map(frame => frame.easing)).toEqual([
+      'cubic-bezier(.2,.8,.3,1)',
+      'linear',
+      undefined,
+    ]);
   });
 
   it('rejects duplicate IDs, invalid ranges, easing, and conflicting ownership', () => {

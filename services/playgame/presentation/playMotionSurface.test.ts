@@ -96,6 +96,27 @@ describe('PlayMotionSurface', () => {
     await expect(binding).resolves.toBe(card);
   });
 
+  it('binds an authored zone when the reactive renderer mounts it', async () => {
+    const frame = document.createElement('div');
+    const overlay = document.createElement('div');
+    frame.append(overlay);
+    document.body.append(frame);
+    const surface = createPlayMotionSurface({
+      frame,
+      overlay,
+      cardRefs: new Map(),
+      timelineDriverFactory,
+    });
+    const controller = new AbortController();
+
+    const binding = surface.waitForZoneElement('P0:deck', controller.signal);
+    const deck = document.createElement('div');
+    deck.dataset.playMotionZone = 'P0:deck';
+    frame.append(deck);
+
+    await expect(binding).resolves.toBe(deck);
+  });
+
   it('cancels a pending canonical card destination binding', async () => {
     const frame = document.createElement('div');
     const overlay = document.createElement('div');
@@ -110,6 +131,25 @@ describe('PlayMotionSurface', () => {
     const controller = new AbortController();
 
     const binding = surface.waitForCardElement('card-never-mounted', controller.signal);
+    controller.abort();
+
+    await expect(binding).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('cancels a pending authored-zone binding', async () => {
+    const frame = document.createElement('div');
+    const overlay = document.createElement('div');
+    frame.append(overlay);
+    document.body.append(frame);
+    const surface = createPlayMotionSurface({
+      frame,
+      overlay,
+      cardRefs: new Map(),
+      timelineDriverFactory,
+    });
+    const controller = new AbortController();
+
+    const binding = surface.waitForZoneElement('P0:deck', controller.signal);
     controller.abort();
 
     await expect(binding).rejects.toMatchObject({ name: 'AbortError' });

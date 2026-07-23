@@ -7,6 +7,7 @@ import {
 } from './contracts';
 import { KernelWorkDeque } from './deque';
 import { KernelInvariantError } from './failure';
+import type { CanonicalEntityRef } from '../types/effectTrace';
 import type {
   KernelEffectTraceEntry,
   KernelExpansionResolution,
@@ -122,12 +123,21 @@ interface InvocationCompletionWork {
 
 type InternalKernelWork<W> = QueuedWork<W> | InvocationCompletionWork;
 
-interface InvocationCounts {
+interface InvocationProgress {
   attempted: number;
   affected: number;
   blocked: number;
   invalidated: number;
   unchanged: number;
+  readonly candidates: readonly CanonicalEntityRef[];
+  readonly depth: number;
+}
+
+function sameEntityRef(
+  left: CanonicalEntityRef,
+  right: CanonicalEntityRef,
+): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 const COMMAND_TYPES = new Set<GameCommand['type']>([
@@ -288,7 +298,7 @@ export function resolveKernelTransaction<
   );
   const transitions: CommittedTransition<M, Semantics>[] = [];
   const resolutionSteps: KernelResolutionStep[] = [];
-  const invocationCounts = new Map<number, InvocationCounts>();
+  const invocationProgress = new Map<number, InvocationProgress>();
   let candidateState = input.initialState;
   let workItemsConsumed = 0;
   let reactionsScheduled = 0;
@@ -365,28 +375,39 @@ export function resolveKernelTransaction<
     attempt: KernelTargetAttemptDescriptor,
     transitionIndex: number | null,
   ): KernelResolutionResult<true> => {
-    const counts = invocationCounts.get(invocationOrdinal);
-    if (!counts) {
+    const progress = invocationProgress.get(invocationOrdinal);
+    if (!progress) {
       return fail({
         code: 'INVALID_OPERATION_OUTPUT',
         message: 'Target attempt referenced an inactive effect invocation.',
       });
     }
+    const candidateOrdinal = progress.candidates.findIndex(candidate =>
+      sameEntityRef(candidate, attempt.target)
+    );
+    if (candidateOrdinal < 0) {
+      return fail({
+        code: 'INVALID_OPERATION_OUTPUT',
+        message: `Target attempt ${progress.attempted} is absent from the invocation `
+          + `candidate snapshot (received ${JSON.stringify(attempt.target)}).`,
+      });
+    }
     const effect: KernelEffectTraceEntry = {
       kind: 'EFFECT_TARGET_RESOLVED',
       invocationOrdinal,
-      attemptOrdinal: counts.attempted,
+      attemptOrdinal: progress.attempted,
+      candidateOrdinal,
       operation: attempt.operation,
       target: structuredClone(attempt.target),
       result: attempt.result,
       blockedBy: structuredClone(attempt.blockedBy),
       reason: attempt.reason,
     };
-    counts.attempted += 1;
-    if (attempt.result === 'AFFECTED') counts.affected += 1;
-    else if (attempt.result === 'BLOCKED') counts.blocked += 1;
-    else if (attempt.result === 'INVALIDATED') counts.invalidated += 1;
-    else counts.unchanged += 1;
+    progress.attempted += 1;
+    if (attempt.result === 'AFFECTED') progress.affected += 1;
+    else if (attempt.result === 'BLOCKED') progress.blocked += 1;
+    else if (attempt.result === 'INVALIDATED') progress.invalidated += 1;
+    else progress.unchanged += 1;
     resolutionSteps.push({ transitionIndex, effect });
     return { ok: true, value: true };
   };
@@ -401,8 +422,8 @@ export function resolveKernelTransaction<
     }
 
     if (queued.kind === 'INVOCATION_COMPLETION') {
-      const counts = invocationCounts.get(queued.invocationOrdinal);
-      if (!counts) {
+      const progress = invocationProgress.get(queued.invocationOrdinal);
+      if (!progress) {
         return fail({
           code: 'INVALID_OPERATION_OUTPUT',
           message: 'Effect invocation completed without an active transcript.',
@@ -411,10 +432,14 @@ export function resolveKernelTransaction<
       const effect: KernelInvocationCompleted = {
         kind: 'EFFECT_INVOCATION_COMPLETED',
         invocationOrdinal: queued.invocationOrdinal,
-        ...counts,
+        attempted: progress.attempted,
+        affected: progress.affected,
+        blocked: progress.blocked,
+        invalidated: progress.invalidated,
+        unchanged: progress.unchanged,
       };
       resolutionSteps.push({ transitionIndex: null, effect });
-      invocationCounts.delete(queued.invocationOrdinal);
+      invocationProgress.delete(queued.invocationOrdinal);
       continue;
     }
 
@@ -449,12 +474,26 @@ export function resolveKernelTransaction<
         if (result.value.resolution?.kind === 'EFFECT_INVOCATION') {
           const invocationOrdinal = nextInvocationOrdinal;
           nextInvocationOrdinal += 1;
-          invocationCounts.set(invocationOrdinal, {
+          const parentProgress = queued.activeInvocationOrdinal === null
+            ? null
+            : invocationProgress.get(queued.activeInvocationOrdinal);
+          if (queued.activeInvocationOrdinal !== null && !parentProgress) {
+            return fail({
+              code: 'INVALID_OPERATION_OUTPUT',
+              message: 'Nested effect referenced an inactive parent invocation.',
+            });
+          }
+          const invocationDepth = parentProgress == null
+            ? 0
+            : parentProgress.depth + 1;
+          invocationProgress.set(invocationOrdinal, {
             attempted: 0,
             affected: 0,
             blocked: 0,
             invalidated: 0,
             unchanged: 0,
+            candidates: structuredClone(result.value.resolution.candidates),
+            depth: invocationDepth,
           });
           resolutionSteps.push({
             transitionIndex: null,
@@ -465,7 +504,7 @@ export function resolveKernelTransaction<
               source: structuredClone(result.value.resolution.source),
               ability: structuredClone(result.value.resolution.ability),
               invocationReason: result.value.resolution.invocationReason,
-              depth: item.depth,
+              depth: invocationDepth,
               candidates: structuredClone(result.value.resolution.candidates),
             },
           });

@@ -1428,6 +1428,9 @@
         "attemptOrdinal": {
           "$ref": "#/$defs/SafeInteger"
         },
+        "candidateOrdinal": {
+          "$ref": "#/$defs/SafeInteger"
+        },
         "operation": {
           "type": "string",
           "minLength": 1
@@ -1460,6 +1463,7 @@
         "invocationId",
         "attemptId",
         "attemptOrdinal",
+        "candidateOrdinal",
         "operation",
         "target",
         "result",

@@ -147,6 +147,7 @@ describe('Cruel Deal authority protocol v2 TypeScript validator', () => {
       invocationId: 'match:tx:1:invoke:0',
       attemptId: 'match:tx:1:invoke:0:attempt:0',
       attemptOrdinal: 0,
+      candidateOrdinal: 0,
       operation: 'DESTROY_CARD',
       target: { kind: 'CARD', cardId: 'target-0' },
       result: 'AFFECTED',

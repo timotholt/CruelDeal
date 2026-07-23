@@ -55,6 +55,7 @@ export type AnimatableStyleProperty =
 export interface RelativeStyleKeyframe {
   readonly atMs: Milliseconds;
   readonly styles: Readonly<Partial<Record<AnimatableStyleProperty, string | number>>>;
+  /** Timing curve used by the segment arriving at this authored keyframe. */
   readonly easing?: string;
 }
 
@@ -143,6 +144,7 @@ export interface CompiledStyleKeyframe {
   readonly atMs: Milliseconds;
   readonly offset: number;
   readonly value: string | number;
+  /** WAAPI timing curve for the segment from this keyframe to the next. */
   readonly easing?: string;
 }
 

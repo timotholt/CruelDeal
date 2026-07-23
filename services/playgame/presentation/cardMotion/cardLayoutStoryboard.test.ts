@@ -33,6 +33,10 @@ describe('compiled card layout contribution', () => {
     const track = timeline.tracks.find(candidate => candidate.property === 'translate');
     expect(track?.keyframes.map(frame => frame.value)).toEqual(['-60px -70px', '0px 0px']);
     expect(track?.keyframes.map(frame => frame.offset)).toEqual([0, 1]);
+    expect(track?.keyframes.map(frame => frame.easing)).toEqual([
+      'cubic-bezier(.4,0,.2,1)',
+      undefined,
+    ]);
   });
 
   it('emits no timeline when every survivor is already at its final geometry', () => {

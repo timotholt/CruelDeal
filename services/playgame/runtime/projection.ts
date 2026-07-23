@@ -240,6 +240,7 @@ export type SeatEffectTraceEntry =
       readonly invocationToken: string;
       readonly attemptToken: string;
       readonly attemptOrdinal: number;
+      readonly candidateOrdinal: number;
       readonly operation: string;
       readonly target: SeatEntityRef;
       readonly result: EffectTargetResult;
@@ -527,6 +528,7 @@ export function projectEffectTraceForSeat(
           effect.attemptId,
         ),
         attemptOrdinal: effect.attemptOrdinal,
+        candidateOrdinal: effect.candidateOrdinal,
         operation: effect.operation,
         target: projectEntityRefForSeat(
           effect.target,

@@ -118,6 +118,7 @@ export interface EffectTargetResolved {
   readonly invocationId: EffectInvocationId;
   readonly attemptId: EffectAttemptId;
   readonly attemptOrdinal: number;
+  readonly candidateOrdinal: number;
   readonly operation: string;
   readonly target: CanonicalEntityRef;
   readonly result: EffectTargetResult;

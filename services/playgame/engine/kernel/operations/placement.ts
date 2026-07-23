@@ -159,6 +159,19 @@ export function planPlacementCommand<Effect, Context>(
     : command.cardId;
   if (!cardId) return kernelStepSuccess({ work: [] });
   const card = getCardRuntime(state, cardId, manifest);
+  if (command.type === 'MOVE_CARD' && (!card || card.zone === 'BANISHED')) {
+    return kernelStepSuccess({
+      work: [],
+      resolution: {
+        kind: 'TARGET_ATTEMPT',
+        operation: command.type,
+        target: { kind: 'CARD', cardId: command.cardId },
+        result: 'INVALIDATED',
+        blockedBy: [],
+        reason: 'TARGET_LEFT_ZONE',
+      },
+    });
+  }
   if (!card || card.zone === 'BANISHED') {
     return kernelStepSuccess({ work: [] });
   }

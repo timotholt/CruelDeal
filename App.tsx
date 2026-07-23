@@ -1,7 +1,7 @@
-import { ErrorBoundary, onMount } from 'solid-js';
+import { ErrorBoundary, onCleanup, onMount } from 'solid-js';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { RouterProvider } from '@tanstack/solid-router';
-import { initReflex, publishShinyCssVars } from './components/ui/shiny';
+import { disposeReflex, initReflex, publishShinyCssVars } from './components/ui/shiny';
 import { router } from './router';
 
 const queryClient = new QueryClient({
@@ -21,6 +21,7 @@ const queryClient = new QueryClient({
 export default function App() {
   publishShinyCssVars();
   onMount(initReflex);
+  onCleanup(disposeReflex);
 
   return (
     <QueryClientProvider client={queryClient}>

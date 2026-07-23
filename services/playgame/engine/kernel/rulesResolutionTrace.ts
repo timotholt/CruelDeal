@@ -147,25 +147,53 @@ function candidateRefs(
  * Compile engine-owned authored-effect context into invocation metadata.
  * Card/location content never constructs this descriptor.
  */
-export function describeAuthoredEffectInvocation(
+function isInternalRulesEffect(effect: CanonicalRulesEffect): boolean {
+  return effect.kind === 'RESOLVE_STAGED_REVEAL_TIMING'
+    || effect.kind === 'COMPLETE_PLAY'
+    || effect.kind === 'SPELL_CLEANUP'
+    || effect.kind === 'AWARD_POWER_FOR_DESTROYED_CARDS'
+    || effect.kind === 'CHANGE_STORED_POWER_IF_CARD_ZONE';
+}
+
+/**
+ * Compile every rules-effect execution into one invocation boundary.
+ *
+ * Control-flow children and engine continuations are genuine nested
+ * invocations. Without their own boundary, their target attempts would be
+ * incorrectly appended to the parent's immutable candidate snapshot.
+ */
+export function describeRulesEffectInvocation(
   work: {
     readonly effect: CanonicalRulesEffect;
     readonly context: CanonicalEffectContext;
   },
   expansion: KernelWorkExpansion<CanonicalRulesWork>,
-): KernelEffectInvocationDescriptor | null {
-  if (work.effect.kind !== 'AUTHORED') return null;
-  const source = work.context.source;
-  const ruleIndex = source.exprIdx ?? 0;
+): KernelEffectInvocationDescriptor {
+  const internal = isInternalRulesEffect(work.effect);
+  const source = 'source' in work.context
+    ? work.context.source as EffectRef | undefined
+    : undefined;
+  if (!internal && source === undefined) {
+    throw new Error('Authored rules effect is missing its source context.');
+  }
+  const ruleIndex = source?.exprIdx ?? 0;
   return {
     kind: 'EFFECT_INVOCATION',
-    source: sourceRef(work.context),
-    ability: {
-      kind: abilityKind(source),
-      ruleId: `${source.effectKind}:${ruleIndex}`,
-      ruleIndex,
-    },
-    invocationReason: invocationReason(source),
+    source: source === undefined
+      ? { kind: 'SYSTEM', systemId: `internal:${work.effect.kind}` }
+      : sourceRef(work.context),
+    ability: internal
+      ? {
+          kind: 'SYSTEM',
+          ruleId: `SYSTEM:${work.effect.kind}`,
+          ruleIndex: 0,
+        }
+      : {
+          kind: abilityKind(source!),
+          ruleId: `${source!.effectKind}:${ruleIndex}`,
+          ruleIndex,
+        },
+    invocationReason: internal ? 'REACTION' : invocationReason(source!),
     candidates: candidateRefs(expansion),
   };
 }

@@ -148,6 +148,7 @@ describe('replay debug presentation', () => {
       invocationId,
       attemptId: effectAttemptId(invocationId, 0),
       attemptOrdinal: 0,
+      candidateOrdinal: 0,
       operation: 'DESTROY',
       target: { kind: 'CARD', cardId },
       result: 'BLOCKED',

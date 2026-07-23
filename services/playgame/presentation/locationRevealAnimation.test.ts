@@ -47,11 +47,17 @@ describe('compiled location reveal', () => {
         [350, 'rotateY(90deg)'],
         [700, 'rotateY(180deg)'],
       ]);
+    expect(flip?.keyframes.map(keyframe => keyframe.easing)).toEqual([
+      'cubic-bezier(.4,0,.7,1)',
+      'cubic-bezier(.3,0,.2,1)',
+      undefined,
+    ]);
     const map = timeline.tracks.find(track => track.targetKey === 'LOCATION_MAP:1');
     expect(map?.keyframes.map(keyframe => [keyframe.atMs, keyframe.value]))
       .toEqual([
         [0, 0],
         [700, 1],
       ]);
+    expect(map?.keyframes.map(keyframe => keyframe.easing)).toEqual(['ease', undefined]);
   });
 });

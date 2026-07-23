@@ -11,7 +11,10 @@ import {
 import { resolve } from '../engine/resolve';
 import { currentFrame } from '../engine/timeline';
 import { frameAndFoldResolution } from '../engine/transactionTimeline';
-import type { KernelResolutionStep } from '../engine/kernel/resolutionTrace';
+import {
+  rebaseKernelResolutionSteps,
+  type KernelResolutionStep,
+} from '../engine/kernel/resolutionTrace';
 import type { MatchEvent } from '../engine/types/events';
 import type { Seat } from '../engine/types/ids';
 import type { MatchIntent } from '../engine/types/intents';
@@ -747,17 +750,25 @@ export function createMatchRuntime(config: MatchRuntimeConfig): MatchRuntime {
     let mergedState = authoritativeState;
     const events: MatchEvent[] = [];
     const resolutionSteps: KernelResolutionStep[] = [];
+    let invocationOffset = 0;
     const appendBatch = (
       batch: Pick<ResolvedEventBatch, 'events' | 'resolutionSteps'>,
     ): void => {
       const transitionOffset = events.length;
       events.push(...batch.events);
-      resolutionSteps.push(...batch.resolutionSteps.map(step => ({
+      const rebased = rebaseKernelResolutionSteps(
+        batch.resolutionSteps,
+        invocationOffset,
+      );
+      resolutionSteps.push(...rebased.map(step => ({
         transitionIndex: step.transitionIndex === null
           ? null
           : step.transitionIndex + transitionOffset,
         effect: step.effect,
       })));
+      invocationOffset += batch.resolutionSteps.filter(step =>
+        step.effect?.kind === 'EFFECT_INVOCATION_STARTED'
+      ).length;
     };
     let resolveMs = 0;
     const ownerOrder: readonly Seat[] = authoritativeState.priority === 'P0'

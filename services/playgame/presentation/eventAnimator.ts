@@ -192,6 +192,57 @@ const shouldPrepareSourceBeforeAdoption = (
   && transfer.from.kind !== 'OFFBOARD'
 );
 
+const derivedTransfersForFrame = (
+  host: PlayPresentationHost,
+  frame: SeatTransactionFrame,
+): readonly CardTransfer[] => {
+  const derived = frame.event
+    ? deriveCardTransfers(frame.before, frame.event, frame.after)
+    : [];
+  if (frame.event && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
+    assertTransferCoverage(frame.before, frame.event, frame.after, derived);
+  }
+  return derived.filter(transfer => !wasPrivatelyPresentedStage(host, transfer));
+};
+
+const requiresCanonicalCardSurface = (
+  host: PlayPresentationHost,
+  zone: CardZoneRef,
+): boolean => zone.kind === 'LANE'
+  || (zone.kind === 'HAND' && zone.owner === host.localSeat);
+
+/**
+ * Wait for authored logical-zone geometry before an immutable presentation
+ * owner captures it. Reactive DOM mounting is asynchronous; missing geometry
+ * is not an alternate animation path and never permits the beat to be skipped.
+ */
+export async function awaitEventAnimationReadiness(
+  host: PlayPresentationHost,
+  frame: SeatTransactionFrame,
+  signal: AbortSignal,
+): Promise<void> {
+  const required = new Set<string>();
+  for (const transfer of derivedTransfersForFrame(host, frame)) {
+    if (transfer.from.kind === 'GENERATED') required.add('generated');
+    if (shouldPrepareSourceBeforeAdoption(transfer)) {
+      const mountedCard = requiresCanonicalCardSurface(host, transfer.from)
+        ? host.cardElement(transfer.cardId as string)
+        : null;
+      if (!mountedCard?.isConnected) {
+        const sourceKey = zoneAnchorKey(transfer.from);
+        if (sourceKey) required.add(sourceKey);
+      }
+    }
+    if (!requiresCanonicalCardSurface(host, transfer.to)) {
+      const destinationKey = zoneAnchorKey(transfer.to);
+      if (destinationKey) required.add(destinationKey);
+    }
+  }
+  await Promise.all([...required].map(key =>
+    host.motionSurface.waitForZoneElement(key, signal)
+  ));
+}
+
 const prepareTransferBeforeAdoption = (
   host: PlayPresentationHost,
   transfer: CardTransfer,
@@ -255,19 +306,11 @@ export function prepareEventAnimation(
   const choreography = frame.event
     ? describeEventChoreography(frame.event)
     : null;
-  const derivedTransfers = frame.event
-    ? deriveCardTransfers(frame.before, frame.event, frame.after)
-    : [];
-  if (frame.event && (import.meta as { env?: { DEV?: boolean } }).env?.DEV) {
-    assertTransferCoverage(frame.before, frame.event, frame.after, derivedTransfers);
-  }
   // A local private plan is already painted before its authoritative stage
   // frames arrive. Depending on when projection is materialized, that frame
   // can describe either LANE->same LANE or HAND->LANE; the live destination
   // is the final arbiter for suppressing the already-presented transfer.
-  const transfers = derivedTransfers.filter(
-    transfer => !wasPrivatelyPresentedStage(host, transfer),
-  );
+  const transfers = derivedTransfersForFrame(host, frame);
 
   const oldRects = excludeStructurallyAnimatedCards(
     captureCardRects(host.cardIds(), currentCardElements(host)),

@@ -15,7 +15,6 @@ import {
   lazy,
   Show,
   Suspense,
-  untrack,
   useContext,
   type Component,
   type JSX,
@@ -35,6 +34,7 @@ import { LoginScreen } from './components/screens/LoginScreen';
 import { NavigationBar } from './components/ui/NavigationBar';
 import { AppViewport } from './components/ui/AppViewport';
 import { InspectorOverlay } from './components/InspectorOverlay';
+import { ReactiveIdentityBoundary } from './components/routing/ReactiveIdentityBoundary';
 import { UIProvider } from './contexts/UIContext';
 import { UserProvider } from './contexts/UserContext';
 import { audio } from './services/audio';
@@ -143,6 +143,13 @@ const ApplicationChrome = () => {
     },
   });
   const activeScreen = createMemo<ScreenKey>(() => routePresentation().screen);
+  const selectedRouteIdentity = useMatches({
+    select: matches => matches[matches.length - 1]?.id ?? null,
+  });
+  // The router selector may publish equivalent values as match metadata is
+  // refreshed. Collapse those notifications so only an actual navigation can
+  // remount the owned route surface.
+  const routeIdentity = createMemo(() => selectedRouteIdentity());
 
   createEffect(() => {
     const presentation = routePresentation();
@@ -157,7 +164,10 @@ const ApplicationChrome = () => {
   return (
     <div class="w-full h-full relative overflow-hidden bg-black flex flex-col">
       <div class="flex-1 relative overflow-hidden">
-        <Outlet />
+        <ReactiveIdentityBoundary
+          identity={routeIdentity()}
+          render={() => <Outlet />}
+        />
       </div>
 
       <Show when={routePresentation().surface !== 'play'}>
@@ -343,16 +353,12 @@ const playRoute = createRoute({
   getParentRoute: () => authenticatedLayoutRoute,
   path: '/play',
   staticData: { screen: 'PLAY', surface: 'play' },
-  // Route insertion must not capture play-state signals read while the game
-  // tree is constructed. Otherwise each presentation frame briefly removes
-  // and reinserts the entire 9:16 root, invalidating animation ownership and
-  // producing a full-board flash.
-  component: () => untrack(() => (
+  component: () => (
     <ClassicPlayScreen
       allowDebugSetup={import.meta.env.DEV}
       onExit={() => router.navigate({ to: '/' })}
     />
-  )),
+  ),
 });
 
 const cityMapRoute = createRoute({

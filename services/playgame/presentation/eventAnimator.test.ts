@@ -13,7 +13,11 @@ import {
   projectMatchStateForSeat,
   type SeatTransactionFrame,
 } from '../runtime/projection';
-import { animatePreparedEvent, prepareEventAnimation } from './eventAnimator';
+import {
+  animatePreparedEvent,
+  awaitEventAnimationReadiness,
+  prepareEventAnimation,
+} from './eventAnimator';
 import { createPlayPresentationHost, type PlayPresentationHost } from './playPresentationHost';
 import { createPlayMotionSurface } from './playMotionSurface';
 import { createAutoAdvancingTestTimelineDriverFactory } from './storyboard/testing';
@@ -763,6 +767,64 @@ describe('event animator transfer origins', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('waits for required card-transfer anchors before preparing the beat', async () => {
+    const before = createInitialMatchState(
+      'deferred-animation-anchors',
+      BOOTSTRAP_MANIFEST,
+      {},
+      orderedTestLocationDeck(BOOTSTRAP_MANIFEST),
+    );
+    const cardId = before.deck.P0[0];
+    const event = {
+      type: 'CARD_DRAWN' as const,
+      owner: 'P0' as const,
+      cardId,
+      cause: drawCause,
+    } satisfies MatchEvent;
+    const after = apply(before, event, BOOTSTRAP_MANIFEST);
+    const frame = projectFrame({
+      transactionId: 'deferred-animation-anchors:tx',
+      index: 0,
+      canonicalFrame: {
+        frame: after.timeline.frame,
+        scope: after.timeline.scope!,
+        event,
+      },
+      frame: after.timeline.frame,
+      scope: after.timeline.scope!,
+      event,
+      before,
+      after,
+    });
+    const board = document.createElement('div');
+    const overlay = document.createElement('div');
+    board.append(overlay);
+    document.body.append(board);
+    const motionSurface = createPlayMotionSurface({
+      frame: board,
+      overlay,
+      cardRefs: new Map(),
+      timelineDriverFactory,
+    });
+    const host = presentationHost(motionSurface);
+    const controller = new AbortController();
+    let ready = false;
+
+    const readiness = awaitEventAnimationReadiness(host, frame, controller.signal)
+      .then(() => { ready = true; });
+    await Promise.resolve();
+    expect(ready).toBe(false);
+
+    const deck = document.createElement('div');
+    registerZone(deck, 'P0:deck');
+    board.append(deck);
+    await readiness;
+
+    expect(ready).toBe(true);
+    const prepared = prepareEventAnimation(host, frame);
+    prepared.dispose();
   });
 
   it('animates a generated card from the authored creation anchor into its lane surface', async () => {

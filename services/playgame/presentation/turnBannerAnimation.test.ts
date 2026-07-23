@@ -48,5 +48,8 @@ describe('compiled turn banner', () => {
         [1_848, 1],
         [2_100, 0],
       ]);
+    expect(textOpacity?.keyframes.map(keyframe => keyframe.easing)).toEqual([
+      'ease-out', 'linear', 'ease-in', undefined,
+    ]);
   });
 });

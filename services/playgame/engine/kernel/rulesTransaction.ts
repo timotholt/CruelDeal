@@ -168,7 +168,7 @@ import type {
   TransformCardCommand,
 } from './types';
 import type { KernelResolutionStep } from './resolutionTrace';
-import { describeAuthoredEffectInvocation } from './rulesResolutionTrace';
+import { describeRulesEffectInvocation } from './rulesResolutionTrace';
 
 export interface LaneTopologySemantics {
   readonly eventType: LaneTopologyEvent['type'];
@@ -1146,13 +1146,13 @@ export function resolveRulesWorkTransaction(
         return options.expandEffect(candidate, work.effect, work.context);
         })();
         if (planned.ok === false) return planned;
-        const resolution = describeAuthoredEffectInvocation(
+        const resolution = describeRulesEffectInvocation(
           work,
           planned.value,
         );
         return kernelStepSuccess({
           ...planned.value,
-          ...(resolution === null ? {} : { resolution }),
+          resolution,
         });
       },
       applyCandidate: (candidate, event) => {

@@ -274,6 +274,7 @@ interface EffectTargetResolved {
   readonly invocationId: EffectInvocationId;
   readonly attemptId: EffectAttemptId;
   readonly attemptOrdinal: number;
+  readonly candidateOrdinal: number;
   readonly operation: string;
   readonly target: CanonicalEntityRef;
   readonly result: EffectTargetResult;
@@ -296,6 +297,11 @@ type EffectTraceEntry =
   | EffectTargetResolved
   | EffectInvocationCompleted;
 ```
+
+`attemptOrdinal` is the execution order of governed operations.
+`candidateOrdinal` points back to the immutable candidate snapshot. They are
+deliberately separate: one selected candidate may receive multiple operations,
+and some selected candidates may produce no governed operation.
 
 The completion counters are checksums over earlier target outcomes, not an
 alternative target list. A consumer derives affected or blocked entity arrays

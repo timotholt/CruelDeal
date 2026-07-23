@@ -16,6 +16,7 @@ import type {
 export interface DerivedTargetOutcome {
   readonly attemptToken: string;
   readonly attemptOrdinal: number;
+  readonly candidateOrdinal: number;
   readonly operation: string;
   readonly target: SeatEntityRef;
   readonly result: EffectTargetResult;
@@ -211,7 +212,7 @@ function buildEffectInvocationIndex(
             `Effect invocation ${entry.invocationToken} has non-contiguous attempt ordinals`,
           );
         }
-        const candidate = invocation.candidates[entry.attemptOrdinal];
+        const candidate = invocation.candidates[entry.candidateOrdinal];
         if (!candidate || entityRefKey(candidate) !== entityRefKey(entry.target)) {
           throw new Error(
             `Effect invocation ${entry.invocationToken} target order differs from candidates`,
@@ -221,6 +222,7 @@ function buildEffectInvocationIndex(
         invocation.outcomes.push(Object.freeze({
           attemptToken: entry.attemptToken,
           attemptOrdinal: entry.attemptOrdinal,
+          candidateOrdinal: entry.candidateOrdinal,
           operation: entry.operation,
           target: entry.target,
           result: entry.result,

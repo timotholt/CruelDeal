@@ -22,6 +22,7 @@ export interface PlayMotionSurface {
   cardRect: (cardId: string) => DOMRect | null;
   zoneElement: (key: string) => HTMLElement | null;
   zoneRect: (key: string) => DOMRect | null;
+  waitForZoneElement: (key: string, signal: AbortSignal) => Promise<HTMLElement>;
   mountTemporary: (element: HTMLElement) => () => void;
   dispose: () => void;
 }
@@ -73,8 +74,8 @@ export const createPlayMotionSurface = (
     if (signal.aborted) {
       return Promise.reject(new DOMException('Card binding cancelled', 'AbortError'));
     }
-    const Observer = options.frame.ownerDocument.defaultView?.MutationObserver;
-    if (!Observer) throw new Error('Play motion surface requires MutationObserver');
+    const Observer = globalThis.MutationObserver;
+    if (!Observer) throw new Error('Play motion surface requires a live MutationObserver');
     return new Promise<HTMLElement>((resolve, reject) => {
       const observer = new Observer(() => {
         const candidate = cardElement(cardId);
@@ -100,6 +101,45 @@ export const createPlayMotionSurface = (
         attributeFilter: ['data-play-motion-card'],
       });
       const candidate = cardElement(cardId);
+      if (candidate?.isConnected) settle(() => resolve(candidate));
+    });
+  };
+  const waitForZoneElement = (
+    key: string,
+    signal: AbortSignal,
+  ): Promise<HTMLElement> => {
+    const mounted = zoneElement(key);
+    if (mounted?.isConnected) return Promise.resolve(mounted);
+    if (signal.aborted) {
+      return Promise.reject(new DOMException('Zone binding cancelled', 'AbortError'));
+    }
+    const Observer = globalThis.MutationObserver;
+    if (!Observer) throw new Error('Play motion surface requires a live MutationObserver');
+    return new Promise<HTMLElement>((resolve, reject) => {
+      const observer = new Observer(() => {
+        const candidate = zoneElement(key);
+        if (!candidate?.isConnected) return;
+        settle(() => resolve(candidate));
+      });
+      const onAbort = (): void => settle(() => reject(
+        new DOMException('Zone binding cancelled', 'AbortError'),
+      ));
+      let settled = false;
+      const settle = (complete: () => void): void => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        signal.removeEventListener('abort', onAbort);
+        complete();
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      observer.observe(options.frame, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['data-play-motion-zone'],
+      });
+      const candidate = zoneElement(key);
       if (candidate?.isConnected) settle(() => resolve(candidate));
     });
   };
@@ -137,6 +177,7 @@ export const createPlayMotionSurface = (
     cardRect: cardId => connectedRect(cardElement(cardId) ?? undefined),
     zoneElement,
     zoneRect: key => connectedRect(zoneElement(key) ?? undefined),
+    waitForZoneElement,
     mountTemporary,
     dispose: () => {
       if (disposed) return;

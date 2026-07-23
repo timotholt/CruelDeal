@@ -44,6 +44,7 @@ export interface KernelTargetResolved {
   readonly kind: 'EFFECT_TARGET_RESOLVED';
   readonly invocationOrdinal: number;
   readonly attemptOrdinal: number;
+  readonly candidateOrdinal: number;
   readonly operation: string;
   readonly target: CanonicalEntityRef;
   readonly result: EffectTargetResult;
@@ -73,4 +74,41 @@ export type KernelEffectTraceEntry =
 export interface KernelResolutionStep {
   readonly transitionIndex: number | null;
   readonly effect: KernelEffectTraceEntry | null;
+}
+
+/**
+ * Rebase one independently resolved kernel batch into a larger transaction.
+ * Kernel invocation ordinals are batch-local; committed transaction ordinals
+ * are unique across every batch merged into that transaction.
+ */
+export function rebaseKernelResolutionSteps(
+  steps: readonly KernelResolutionStep[],
+  invocationOffset: number,
+): readonly KernelResolutionStep[] {
+  if (!Number.isSafeInteger(invocationOffset) || invocationOffset < 0) {
+    throw new Error('Kernel invocation offset must be a non-negative safe integer.');
+  }
+  return steps.map(step => {
+    const effect = step.effect;
+    if (effect === null) return step;
+    if (effect.kind === 'EFFECT_INVOCATION_STARTED') {
+      return {
+        transitionIndex: step.transitionIndex,
+        effect: {
+          ...effect,
+          invocationOrdinal: effect.invocationOrdinal + invocationOffset,
+          parentInvocationOrdinal: effect.parentInvocationOrdinal === null
+            ? null
+            : effect.parentInvocationOrdinal + invocationOffset,
+        },
+      };
+    }
+    return {
+      transitionIndex: step.transitionIndex,
+      effect: {
+        ...effect,
+        invocationOrdinal: effect.invocationOrdinal + invocationOffset,
+      },
+    };
+  });
 }

@@ -72,6 +72,7 @@ describe('seat presentation block projection', () => {
           invocationId,
           attemptId: effectAttemptId(invocationId, 0),
           attemptOrdinal: 0,
+          candidateOrdinal: 0,
           operation: 'DESTROY_CARD',
           target: { kind: 'CARD', cardId: observableTargetId },
           result: 'BLOCKED',

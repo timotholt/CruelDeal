@@ -45,6 +45,7 @@ const trace = (): readonly SeatEffectTraceEntry[] => [{
   invocationToken: 'invocation:parent',
   attemptToken: 'attempt:parent:0',
   attemptOrdinal: 0,
+  candidateOrdinal: 0,
   operation: 'TEST',
   target: hiddenCard,
   result: 'AFFECTED',
@@ -117,6 +118,36 @@ describe('TransactionPresentationPlanner', () => {
     });
     expect(Object.isFrozen(invocation)).toBe(true);
     expect(Object.isFrozen(invocation?.outcomes)).toBe(true);
+  });
+
+  it('keeps candidate identity separate from repeated operation order', () => {
+    const entries: readonly SeatEffectTraceEntry[] = [
+      trace()[0]!,
+      trace()[1]!,
+      {
+        ...trace()[1] as Extract<SeatEffectTraceEntry, {
+          kind: 'EFFECT_TARGET_RESOLVED';
+        }>,
+        attemptToken: 'attempt:parent:1',
+        attemptOrdinal: 1,
+        candidateOrdinal: 0,
+      },
+      {
+        ...trace()[2] as Extract<SeatEffectTraceEntry, {
+          kind: 'EFFECT_INVOCATION_COMPLETED';
+        }>,
+        attempted: 2,
+        affected: 2,
+      },
+    ];
+
+    const invocation = new TransactionPresentationPlanner()
+      .plan(block(entries))
+      .effects.get('invocation:parent');
+    expect(invocation?.outcomes).toMatchObject([
+      { attemptOrdinal: 0, candidateOrdinal: 0 },
+      { attemptOrdinal: 1, candidateOrdinal: 0 },
+    ]);
   });
 
   it('rejects an incomplete effect transcript before returning any beat', () => {

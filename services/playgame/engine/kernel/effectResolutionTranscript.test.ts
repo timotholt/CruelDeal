@@ -39,6 +39,63 @@ function effectContext(
 }
 
 describe('authored effect resolution transcript', () => {
+  it('gives sequence children distinct nested invocation ownership', () => {
+    const manifest = testManifest([testCardDef('sequencer')]);
+    const state = buildRuntimeFixture({
+      seed: 'nested-sequence-transcript',
+      localSeat: 'P0',
+      turn: 2,
+      phase: 'AWAITING_INTENT',
+      priority: 'P0',
+      decks: { P0: [], P1: [] },
+      hands: { P0: [], P1: [] },
+      lanes: [
+        { P0: [{ id: 'sequencer', defId: 'sequencer', revealed: true }], P1: [] },
+        { P0: [], P1: [] },
+        { P0: [], P1: [] },
+      ],
+      locations: [null, null, null],
+    }).state;
+
+    const result = executeEffectForTest(
+      state,
+      {
+        kind: 'SEQUENCE',
+        items: [
+          { kind: 'ADD_POWER', target: SELF, delta: { kind: 'LIT', n: 1 } },
+          { kind: 'ADD_POWER', target: SELF, delta: { kind: 'LIT', n: 2 } },
+        ],
+      },
+      effectContext(state, manifest, 'sequencer' as CardId, 0),
+      manifest,
+    );
+
+    const effects = result.resolutionSteps.flatMap(step =>
+      step.effect === null ? [] : [step.effect]
+    );
+    expect(effects.map(effect => [
+      effect.kind,
+      effect.invocationOrdinal,
+      effect.kind === 'EFFECT_INVOCATION_STARTED'
+        ? effect.parentInvocationOrdinal
+        : null,
+    ])).toEqual([
+      ['EFFECT_INVOCATION_STARTED', 0, null],
+      ['EFFECT_INVOCATION_STARTED', 1, 0],
+      ['EFFECT_TARGET_RESOLVED', 1, null],
+      ['EFFECT_INVOCATION_COMPLETED', 1, null],
+      ['EFFECT_INVOCATION_STARTED', 2, 0],
+      ['EFFECT_TARGET_RESOLVED', 2, null],
+      ['EFFECT_INVOCATION_COMPLETED', 2, null],
+      ['EFFECT_INVOCATION_COMPLETED', 0, null],
+    ]);
+    expect(effects.filter(effect => effect.kind === 'EFFECT_TARGET_RESOLVED'))
+      .toEqual([
+        expect.objectContaining({ attemptOrdinal: 0, candidateOrdinal: 0 }),
+        expect.objectContaining({ attemptOrdinal: 0, candidateOrdinal: 0 }),
+      ]);
+  });
+
   it('records mixed destroy outcomes and the actual blocking card', () => {
     const armor = {
       ...testCardDef('armor'),
@@ -122,6 +179,7 @@ describe('authored effect resolution transcript', () => {
           kind: 'EFFECT_TARGET_RESOLVED',
           invocationOrdinal: 0,
           attemptOrdinal: 0,
+          candidateOrdinal: 0,
           operation: 'DESTROY_CARD',
           target: { kind: 'CARD', cardId: 'protected' },
           result: 'BLOCKED',
@@ -135,6 +193,7 @@ describe('authored effect resolution transcript', () => {
           kind: 'EFFECT_TARGET_RESOLVED',
           invocationOrdinal: 0,
           attemptOrdinal: 1,
+          candidateOrdinal: 1,
           operation: 'DESTROY_CARD',
           target: { kind: 'CARD', cardId: 'exposed' },
           result: 'AFFECTED',

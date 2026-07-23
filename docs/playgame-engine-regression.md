@@ -16,7 +16,7 @@ Each log ends with a per-gate duration and total wall-clock time.
 
 | Command | Use | Contract |
 | --- | --- | --- |
-| `npm run test:engine:kernel` | Fast kernel/rules confidence | The permanent Phase 1.5 kernel and architecture contract: 33 files / 281 tests at its recorded baseline. |
+| `npm run test:engine:kernel` | Fast kernel/rules confidence | The permanent Phase 1.5 kernel and architecture contract: 35 files / 286 tests at its recorded baseline. |
 | `npm run test:engine:runtime` | Runtime and replay confidence | The complete runtime suite plus the deterministic property corpus at 200 cases per property. |
 | `npm run test:engine:authorities` | Match-client, authority, replay-debug, or presentation-block work | The complete player-facing contract against every registered authority test driver, plus block-delivery and debug replay presentation fences. |
 | `npm run test:presentation` | Presentation compiler, runner, animation, actor, director, or UI-interleaving work | The focused presentation contract, including compiled-timeline schedule/runner proofs and existing animation architecture regressions, without authentication or authority coupling. |
@@ -34,7 +34,7 @@ npm run test:engine:runtime -- --reporter=verbose
 
 | Area | Named suites / source | Regression guarantee |
 | --- | --- | --- |
-| Transaction kernel | `engine/kernel/*.test.ts`, `kernel/operations/stagedPlay.test.ts`, `kernel/policies/revealTiming.test.ts` | Costs, energy, hands, metadata, reveal timing, staged play, transforms, pending effects, location lifecycle, and match lifecycle are planned and committed through the governed transaction boundary. |
+| Transaction kernel | `engine/kernel/*.test.ts`, including `kernel/effectResolutionTranscript.test.ts` and `kernel/resolutionTrace.test.ts`, plus `kernel/operations/stagedPlay.test.ts` and `kernel/policies/revealTiming.test.ts` | Costs, energy, hands, metadata, reveal timing, staged play, transforms, pending effects, location lifecycle, match lifecycle, nested effect ownership, candidate identity, and merged-batch invocation rebasing are planned and committed through the governed transaction boundary. |
 | Engine authority | `phase15-architecture-gates`, `phase15-mutation-boundary`, `state-api-architecture-fences`, `superseded-control-paths-architecture-fences` | No direct mutation path, stale control path, hidden state API, or policy leak re-enters the engine. |
 | Determinism and replay | `phase15-frame-continuity`, `replay-snapshot-parity.stress`, `gameplay-rng-authority`, runtime `frameReplay.edge`, `projection`, `debug/replayPresentation.test.ts` | Framed history remains continuous; replay and live state agree; gameplay randomness is state-owned; projections do not disclose authority-only state; developer replay renders typed effect evidence from canonical frames. |
 | Rules and reactions | `lifecycle-reaction-characterization`, `match-lifecycle-architecture-fences`, `power-ledger`, `power-restrictions` | Lifecycle/reaction ordering, match terminal handling, semantic power, and restricted location power remain governed. |
