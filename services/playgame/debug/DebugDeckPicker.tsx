@@ -18,6 +18,7 @@ import { DEBUG_DECKS, type DebugDeck } from './debugDecks';
 import type { MatchBootstrap } from '../runtime/contracts';
 import { buildDebugMatchBootstrap } from './buildDebugBootstrap';
 import {
+  createFreshDebugMatchSeed,
   DEFAULT_DEBUG_MATCH_SEED,
   normalizeDebugMatchSeed,
   pickDebugOpponent,
@@ -34,7 +35,11 @@ export const DebugDeckPicker = (props: Props) => {
   const [step, setStep] = createSignal<Step>('player');
   const [playerDeck, setPlayerDeck] = createSignal<DebugDeck | null>(null);
   const [oppDeck, setOppDeck] = createSignal<DebugDeck | null>(null);
-  const [seed, setSeed] = createSignal(normalizeDebugMatchSeed(props.initialSeed));
+  const [seed, setSeed] = createSignal(
+    props.initialSeed === undefined
+      ? createFreshDebugMatchSeed()
+      : normalizeDebugMatchSeed(props.initialSeed),
+  );
   const [randomDraw, setRandomDraw] = createSignal(0);
 
   const handleSelect = (deck: DebugDeck) => {

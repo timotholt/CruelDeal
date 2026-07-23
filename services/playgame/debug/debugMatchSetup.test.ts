@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEBUG_DECKS } from './debugDecks';
 import {
+  createFreshDebugMatchSeed,
   DEFAULT_DEBUG_MATCH_SEED,
   normalizeDebugMatchSeed,
   pickDebugOpponent,
@@ -11,6 +12,12 @@ describe('debug match setup', () => {
     expect(normalizeDebugMatchSeed(undefined)).toBe(DEFAULT_DEBUG_MATCH_SEED);
     expect(normalizeDebugMatchSeed('   ')).toBe(DEFAULT_DEBUG_MATCH_SEED);
     expect(normalizeDebugMatchSeed('  replay-me  ')).toBe('replay-me');
+  });
+
+  it('creates non-default seeds for fresh debug picker sessions', () => {
+    expect(createFreshDebugMatchSeed(() => 'abc')).toBe('debug-match:abc');
+    expect(createFreshDebugMatchSeed(() => '  xyz  ')).toBe('debug-match:xyz');
+    expect(createFreshDebugMatchSeed(() => '   ')).toBe('debug-match:fresh');
   });
 
   it('repeats the same opponent sequence for the same seed and player deck', () => {
