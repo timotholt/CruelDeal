@@ -245,6 +245,7 @@ const devLinks = [
   ['/game-ui-skin-proof', 'Game UI Skin/CMS Proof', 'Theme tokens, skins, and placements'],
   ['/dev/shiny', 'Shiny Material Authoring', 'Metallic, reflex, icon, and authoring surface'],
   ['/dev/shiny-performance', 'Gold Reflex Mobile Proof', 'Phone-oriented reflex performance lab'],
+  ['/dev/card-backs', 'Card Back Optics', 'Generated masks, directional light, and reflex proof'],
 ] as const;
 
 const DevIndexScreen = () => (
@@ -287,6 +288,7 @@ const experimentalScreenModules = import.meta.glob<LazyScreenModule>([
   './components/screens/MinimalSurfaceProofScreen.tsx',
   './components/authoring/shiny/ShinyAuthoringScreen.tsx',
   './components/authoring/shiny/ShinyPerformanceScreen.tsx',
+  './components/screens/CardBackLabScreen.tsx',
   './components/screens/GameUiSkinProofScreen.tsx',
   './components/screens/GameTextTestScreen.tsx',
 ]);
@@ -319,6 +321,7 @@ const CanonicalCardProofScreen = lazyScreen('./components/screens/CanonicalCardP
 const MinimalSurfaceProofScreen = lazyScreen('./components/screens/MinimalSurfaceProofScreen.tsx', 'MinimalSurfaceProofScreen');
 const ShinyAuthoringScreen = lazyScreen('./components/authoring/shiny/ShinyAuthoringScreen.tsx', 'ShinyAuthoringScreen');
 const ShinyPerformanceScreen = lazyScreen('./components/authoring/shiny/ShinyPerformanceScreen.tsx', 'ShinyPerformanceScreen');
+const CardBackLabScreen = lazyScreen('./components/screens/CardBackLabScreen.tsx', 'CardBackLabScreen');
 const GameUiSkinProofScreen = lazyScreen('./components/screens/GameUiSkinProofScreen.tsx', 'GameUiSkinProofScreen');
 const GameTextTestScreen = lazyScreen<{ version: 'v1' | 'v2' | 'v3' }>('./components/screens/GameTextTestScreen.tsx', 'GameTextTestScreen');
 
@@ -412,6 +415,7 @@ const developmentRouteSpecs: DevelopmentRouteSpec[] = [
   { path: '/dev/icons', component: () => <ShinyAuthoringScreen /> },
   { path: '/dev/shiny', component: () => <ShinyAuthoringScreen /> },
   { path: '/dev/shiny-performance', component: () => <ShinyPerformanceScreen /> },
+  { path: '/dev/card-backs', component: () => <CardBackLabScreen /> },
   { path: '/gametext-test', component: () => <GameTextTestScreen version="v1" /> },
   { path: '/gametextv2-test', component: () => <GameTextTestScreen version="v2" /> },
   { path: '/gametext-v2-test', component: () => <GameTextTestScreen version="v2" /> },

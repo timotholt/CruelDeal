@@ -45,6 +45,7 @@
     "ui:mission-v2:generate:check": "tsx scripts/generate-mission-v2-artifact.ts --check",
     "cards:rename": "tsx scripts/cards/rename-card.ts",
     "cards:validate": "tsx services/playgame/engine/manifest/validate-cards.ts",
+    "assets:card-backs": "node scripts/card-backs/build.mjs",
     "locations:validate": "tsx services/playgame/engine/manifest/validate-locations.ts"
   },
   "dependencies": {
