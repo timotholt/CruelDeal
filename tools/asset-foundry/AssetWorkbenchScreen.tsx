@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'so
 import {
   AssetCandidateRecord,
   AssetKind,
-  AssetProvider,
+  GenerationProvider,
   buildPromptForAsset,
   buildWorkbenchAssets,
   CandidateStatus,
@@ -92,7 +92,7 @@ const providerLinks = [
 export const AssetWorkbenchScreen = () => {
   const assets = createMemo(() => buildWorkbenchAssets());
   const [selectedId, setSelectedId] = createSignal(assets()[0]?.id ?? '');
-  const [provider, setProvider] = createSignal<AssetProvider>('openai');
+  const [provider, setProvider] = createSignal<GenerationProvider>('openai');
   const [prompt, setPrompt] = createSignal('');
   const [notes, setNotes] = createSignal('');
   const [message, setMessage] = createSignal<string | null>(null);
@@ -291,6 +291,7 @@ export const AssetWorkbenchScreen = () => {
             </div>
           </div>
           <div class="flex items-center gap-4 text-[10px] text-slate-600">
+            <a class="rounded border border-[#c8c0b2] bg-white/60 px-2 py-1 font-semibold text-slate-700 no-underline hover:bg-white" href="/tools/asset-foundry/?tool=card-backs">Card Back Foundry</a>
             <span>Open {counts().open}</span>
             <span>Generated {counts().generated}</span>
             <span>Approved {counts().approved}</span>
@@ -442,7 +443,7 @@ export const AssetWorkbenchScreen = () => {
                         <select
                           class="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-[12px]"
                           value={provider()}
-                          onChange={(event) => setProvider(event.currentTarget.value as AssetProvider)}
+                          onChange={(event) => setProvider(event.currentTarget.value as GenerationProvider)}
                         >
                           <option value="openai">OpenAI {providerQuery.data?.openai ? '✓' : 'empty/missing'}</option>
                           <option value="leonardo">Leonardo {providerQuery.data?.leonardo ? '✓' : 'empty/missing'}</option>

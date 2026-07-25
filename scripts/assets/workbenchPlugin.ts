@@ -6,7 +6,7 @@ import type { Plugin } from 'vite';
 import type {
   AssetCandidateRecord,
   AssetKind,
-  AssetProvider,
+  GenerationProvider,
   CandidateStatus,
   WorkbenchState,
 } from '../../services/assets/workbench';
@@ -20,13 +20,20 @@ interface GenerateRequest {
   assetKind: AssetKind;
   assetId: string;
   displayName: string;
-  provider: AssetProvider;
+  provider: GenerationProvider;
   prompt: string;
   promptInputs: Record<string, string | number | string[] | null>;
   committedSize: { w: number; h: number };
   aspectRatio: '5:7' | '4:15';
   engineTargetPath: string;
   manifestPath?: string;
+}
+
+interface AuthorCardBackRequest {
+  dataUrl: string;
+  displayName: string;
+  committedSize: { w: number; h: number };
+  engineTargetPath: string;
 }
 
 const STATE_PATH = 'asset-workbench/state.json';
@@ -401,6 +408,48 @@ export const assetWorkbenchPlugin = ({ root, env }: AssetWorkbenchPluginOptions)
             candidates: [candidate, ...state.candidates],
           };
           await writeState(root, nextState);
+          sendJson(res, 200, { candidate });
+          return;
+        }
+
+        if (req.method === 'POST' && url.pathname === '/author-card-back') {
+          const body = await readJsonBody<AuthorCardBackRequest>(req);
+          if (body.committedSize.w !== 640 || body.committedSize.h !== 896) {
+            throw new Error('Card-back authoring output must be exactly 640x896.');
+          }
+          if (!body.dataUrl.startsWith('data:image/webp;base64,')) {
+            throw new Error('Card-back authoring output must be a WebP data URL.');
+          }
+
+          const id = randomUUID();
+          const now = new Date().toISOString();
+          const normalizedPath = `/art/generated/authoring/default/${id}.webp`;
+          await saveBytes(root, normalizedPath, Buffer.from(body.dataUrl.slice('data:image/webp;base64,'.length), 'base64'));
+          const candidate: AssetCandidateRecord = {
+            id,
+            batchId: randomUUID(),
+            assetKind: 'card-back',
+            assetId: 'default',
+            displayName: body.displayName,
+            provider: 'authoring',
+            providerModel: 'card-back-foundry-v1',
+            generatedAt: now,
+            updatedAt: now,
+            status: 'generated',
+            promptTemplateId: 'card-back-foundry',
+            promptTemplateVersion: 1,
+            promptInputs: {},
+            finalPrompt: 'Deterministic card-back authoring render.',
+            requestedSize: body.committedSize,
+            providerOutputSize: body.committedSize,
+            committedSize: body.committedSize,
+            aspectRatio: '5:7',
+            dimensionsDivisibleBy8: true,
+            rawPath: normalizedPath,
+            normalizedPath,
+            engineTargetPath: body.engineTargetPath,
+          };
+          await writeState(root, { ...state, candidates: [candidate, ...state.candidates] });
           sendJson(res, 200, { candidate });
           return;
         }

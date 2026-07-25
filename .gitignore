@@ -15,6 +15,10 @@ dist-ssr
 target
 *.local
 
+# Local visual proofs and generated image experiments
+/.codex-screenshots/
+/output/
+
 # Local asset generation workbench state and unpromoted candidates
 asset-workbench/
 public/art/generated/

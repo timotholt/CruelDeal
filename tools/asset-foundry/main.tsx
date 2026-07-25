@@ -1,6 +1,7 @@
 import { render } from 'solid-js/web';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { AssetWorkbenchScreen } from './AssetWorkbenchScreen';
+import { CardBackLabScreen } from '../../components/screens/CardBackLabScreen';
 import '../../index.css';
 
 const queryClient = new QueryClient({
@@ -24,6 +25,8 @@ document.fonts.ready.then(() => {
 
 render(() => (
   <QueryClientProvider client={queryClient}>
-    <AssetWorkbenchScreen />
+    {new URLSearchParams(window.location.search).get('tool') === 'card-backs'
+      ? <CardBackLabScreen />
+      : <AssetWorkbenchScreen />}
   </QueryClientProvider>
 ), rootElement);

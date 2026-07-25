@@ -2,7 +2,8 @@ import { BOOTSTRAP_MANIFEST } from '@/services/playgame/engine/manifest';
 import type { CardDef, LocationCardDef } from '@/services/playgame/engine/manifest';
 
 export type AssetKind = 'card-front' | 'card-back' | 'location-lane';
-export type AssetProvider = 'openai' | 'leonardo';
+export type AssetProvider = 'openai' | 'leonardo' | 'authoring';
+export type GenerationProvider = Exclude<AssetProvider, 'authoring'>;
 export type CandidateStatus = 'generated' | 'approved' | 'rejected' | 'promoted';
 
 export interface AssetSpec {

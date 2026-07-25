@@ -1,6 +1,11 @@
 .card-back-lab {
-  min-height: 100%;
-  overflow: auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: scroll;
+  scrollbar-color: #8f7438 #111519;
+  scrollbar-width: thin;
   color: #e9e7e0;
   background:
     linear-gradient(rgb(255 255 255 / 2%) 1px, transparent 1px),
@@ -9,6 +14,11 @@
   background-size: 40px 40px;
   font-family: "IBM Plex Sans", sans-serif;
 }
+
+.card-back-lab::-webkit-scrollbar { width: 12px; height: 12px; }
+.card-back-lab::-webkit-scrollbar-track { background: #111519; }
+.card-back-lab::-webkit-scrollbar-thumb { border: 3px solid #111519; border-radius: 8px; background: #8f7438; }
+.card-back-lab::-webkit-scrollbar-corner { background: #111519; }
 
 .card-back-lab__toolbar {
   position: sticky;
@@ -28,6 +38,8 @@
 .card-back-lab__toolbar > div:first-child { display: grid; gap: 4px; }
 .card-back-lab__toolbar span { color: #cda95d; font: 700 9px/1 "JetBrains Mono", monospace; text-transform: uppercase; }
 .card-back-lab__toolbar h1 { margin: 0; font-size: 22px; line-height: 1; letter-spacing: 0; text-transform: uppercase; }
+.card-back-lab__toolbar a { color: rgb(255 255 255 / 45%); font: 700 8px/1 "JetBrains Mono", monospace; text-decoration: none; text-transform: uppercase; }
+.card-back-lab__toolbar a:hover { color: #d5b56a; }
 .card-back-lab__controls { display: flex; align-items: center; gap: 10px; }
 .card-back-lab__segments { display: flex; overflow: hidden; border: 1px solid rgb(255 255 255 / 14%); border-radius: 4px; }
 .card-back-lab__segments button {
@@ -67,20 +79,240 @@
 
 .card-back-lab__stage {
   display: grid;
-  grid-template-columns: minmax(260px, 430px) minmax(220px, 320px);
-  align-items: center;
+  grid-template-columns: minmax(620px, 850px) minmax(250px, 320px);
+  align-items: start;
   justify-content: center;
-  gap: clamp(34px, 7vw, 100px);
+  gap: clamp(34px, 5vw, 80px);
   min-height: calc(100vh - 72px);
   padding: 44px 28px;
 }
 
-.card-back-lab__hero { width: min(430px, 44vw); }
-.card-back-lab__notes { display: grid; border-top: 1px solid rgb(255 255 255 / 13%); }
-.card-back-lab__notes > div { display: grid; grid-template-columns: 30px 1fr; gap: 5px 12px; padding: 18px 0; border-bottom: 1px solid rgb(255 255 255 / 10%); }
-.card-back-lab__notes span { grid-row: 1 / 3; padding-top: 3px; color: #cda95d; }
-.card-back-lab__notes strong { font-size: 13px; line-height: 1; text-transform: uppercase; }
-.card-back-lab__notes small { color: rgb(255 255 255 / 46%); font-size: 10px; line-height: 1.35; }
+.card-back-lab__comparison { display: flex; align-items: flex-end; justify-content: center; gap: clamp(22px, 3vw, 44px); min-width: 0; }
+.card-back-lab__comparison figure { display: grid; gap: 12px; margin: 0; }
+.card-back-lab__comparison figcaption { display: grid; gap: 5px; padding-left: 2px; }
+.card-back-lab__comparison figcaption strong { color: rgb(255 255 255 / 78%); font: 700 10px/1 "JetBrains Mono", monospace; text-transform: uppercase; }
+.card-back-lab__reference-card { width: min(330px, 25vw); }
+.card-back-lab__rebuild-card { position: relative; width: min(387px, 29vw); }
+.card-back-lab__light-guide {
+  position: absolute;
+  z-index: 8;
+  width: 1px;
+  height: 1px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 85%));
+  animation: card-back-light-guide-in 120ms ease-out;
+}
+.card-back-lab__light-guide i,
+.card-back-lab__light-guide i::before,
+.card-back-lab__light-guide i::after {
+  position: absolute;
+  display: block;
+  content: '';
+}
+.card-back-lab__light-guide i {
+  left: -21px;
+  top: -21px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: radial-gradient(circle, currentColor 0 2px, transparent 3px);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 55%), inset 0 0 0 1px rgb(0 0 0 / 45%);
+}
+.card-back-lab__light-guide i::before { left: 20px; top: -9px; width: 1px; height: 58px; background: currentColor; }
+.card-back-lab__light-guide i::after { left: -9px; top: 20px; width: 58px; height: 1px; background: currentColor; }
+.card-back-lab__light-guide output {
+  position: absolute;
+  left: 29px;
+  top: 25px;
+  width: max-content;
+  padding: 4px 6px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: inherit;
+  background: rgb(7 9 10 / 84%);
+  font: 800 8px/1 "JetBrains Mono", monospace;
+}
+@keyframes card-back-light-guide-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.82); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.card-back-lab__editor {
+  position: sticky;
+  top: 92px;
+  align-self: start;
+  display: grid;
+  gap: 16px;
+  width: min(340px, 100%);
+  height: calc(100dvh - 108px);
+  max-height: calc(100dvh - 108px);
+  padding: 0 14px 36px 0;
+  overflow-y: scroll;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  scrollbar-color: #8f7438 #111519;
+  scrollbar-width: auto;
+  box-shadow: inset -12px 0 #111519;
+}
+.card-back-lab__editor::-webkit-scrollbar { display: block !important; width: 14px !important; -webkit-appearance: none; }
+.card-back-lab__editor::-webkit-scrollbar-track { background: #111519 !important; }
+.card-back-lab__editor::-webkit-scrollbar-thumb { min-height: 48px; border: 3px solid #111519 !important; border-radius: 8px; background: #8f7438 !important; }
+.card-back-lab__editor::-webkit-scrollbar-thumb:hover { background: #b0914b; }
+.card-back-lab__editor > header { display: grid; gap: 7px; padding-bottom: 14px; border-bottom: 1px solid rgb(255 255 255 / 13%); }
+.card-back-lab__editor > header strong { font-size: 17px; line-height: 1; text-transform: uppercase; }
+.card-back-lab__editor > label { display: grid; gap: 7px; }
+.card-back-lab__editor > label > span { color: rgb(255 255 255 / 48%); }
+.card-back-lab__editor input,
+.card-back-lab__editor select {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  border: 1px solid rgb(255 255 255 / 14%);
+  border-radius: 4px;
+  outline: 0;
+  color: #f0eee8;
+  background: #111519;
+  font: 650 11px/1 "JetBrains Mono", monospace;
+  letter-spacing: 0;
+}
+.card-back-lab__editor select { appearance: none; cursor: pointer; }
+.card-back-lab__editor input:focus,
+.card-back-lab__editor select:focus { border-color: rgb(213 181 106 / 72%); box-shadow: 0 0 0 2px rgb(213 181 106 / 12%); }
+.card-back-lab__font-tools {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgb(213 181 106 / 20%);
+  border-radius: 4px;
+  background: rgb(213 181 106 / 5%);
+}
+.card-back-lab__font-tools button,
+.card-back-lab__font-tools > label {
+  display: grid;
+  place-items: center;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 8px;
+  border: 1px solid rgb(213 181 106 / 38%);
+  border-radius: 3px;
+  color: #dec681;
+  background: #17150f;
+  font: 750 8px/1.2 "JetBrains Mono", monospace;
+  text-align: center;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.card-back-lab__font-tools button:hover,
+.card-back-lab__font-tools > label:hover { border-color: #d5b56a; background: #211c10; }
+.card-back-lab__font-tools input[type='file'] { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }
+.card-back-lab__font-tools small { grid-column: 1 / -1; color: rgb(255 255 255 / 52%); font: 650 8px/1.4 "JetBrains Mono", monospace; }
+.card-back-lab__typography-controls { display: grid; gap: 12px; padding: 14px 0; border-top: 1px solid rgb(255 255 255 / 13%); border-bottom: 1px solid rgb(255 255 255 / 13%); }
+.card-back-lab__typography-controls > header { display: flex; align-items: center; justify-content: space-between; }
+.card-back-lab__typography-controls > header > span { color: #cda95d; }
+.card-back-lab__typography-controls button {
+  padding: 4px 7px;
+  border: 1px solid rgb(213 181 106 / 35%);
+  border-radius: 3px;
+  color: #cda95d;
+  background: transparent;
+  font: 700 8px/1 "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.card-back-lab__typography-controls fieldset { display: grid; gap: 9px; margin: 0; padding: 10px; border: 1px solid rgb(213 181 106 / 18%); border-radius: 4px; }
+.card-back-lab__typography-controls legend { padding: 0 6px; color: rgb(255 255 255 / 72%); font: 800 9px/1 "JetBrains Mono", monospace; text-transform: uppercase; }
+.card-back-lab__typography-controls label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 10px; }
+.card-back-lab__typography-controls label > span { color: rgb(255 255 255 / 56%); font-size: 10px; }
+.card-back-lab__typography-controls output { color: #d8bc77; font: 700 9px/1 "JetBrains Mono", monospace; }
+.card-back-lab__typography-controls input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  accent-color: #d5b56a;
+  background: transparent;
+  box-shadow: none;
+  cursor: ew-resize;
+}
+.card-back-lab__exports { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.card-back-lab__exports button {
+  height: 38px;
+  border: 1px solid rgb(213 181 106 / 45%);
+  border-radius: 4px;
+  color: #e4ce92;
+  background: #17150f;
+  font: 800 9px/1 "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.card-back-lab__exports button:hover { border-color: #d5b56a; background: #211c10; }
+.card-back-lab__exports button:disabled { opacity: 0.45; cursor: default; }
+.card-back-lab__export-message {
+  padding: 9px 10px;
+  border: 1px solid rgb(213 181 106 / 24%);
+  border-radius: 4px;
+  color: #d8bc77;
+  background: rgb(213 181 106 / 7%);
+  font: 650 9px/1.4 "JetBrains Mono", monospace;
+}
+.card-back-lab__runtime-contract { display: grid; gap: 5px; padding: 11px; border: 1px solid rgb(255 255 255 / 11%); border-radius: 4px; background: #0e1114; }
+.card-back-lab__runtime-contract strong { color: #e4ce92; font: 800 9px/1 "JetBrains Mono", monospace; text-transform: uppercase; }
+.card-back-lab__runtime-contract span { color: rgb(255 255 255 / 72%); font: 700 9px/1.3 "JetBrains Mono", monospace; }
+.card-back-lab__runtime-contract small { color: rgb(255 255 255 / 42%); font-size: 9px; line-height: 1.45; }
+.card-back-lab__light-controls { display: grid; gap: 11px; padding: 14px 0; border-top: 1px solid rgb(255 255 255 / 13%); }
+.card-back-lab__light-controls > header { display: flex; align-items: center; justify-content: space-between; }
+.card-back-lab__light-controls > header > span { color: #cda95d; }
+.card-back-lab__light-controls > header > button {
+  padding: 4px 7px;
+  border: 1px solid rgb(213 181 106 / 35%);
+  border-radius: 3px;
+  color: #cda95d;
+  background: transparent;
+  font: 700 8px/1 "JetBrains Mono", monospace;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.card-back-lab__light-controls > label { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 5px 10px; }
+.card-back-lab__light-controls > label > span { color: rgb(255 255 255 / 56%); font-size: 10px; }
+.card-back-lab__light-controls output { color: #d8bc77; font: 700 9px/1 "JetBrains Mono", monospace; }
+.card-back-lab__light-controls input[type='range'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  accent-color: #d5b56a;
+  background: transparent;
+  box-shadow: none;
+  cursor: ew-resize;
+}
+.card-back-lab__light-controls input[type='color'] {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 30px;
+  padding: 2px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 3px;
+  background: #0e1114;
+  cursor: pointer;
+}
+.card-back-lab__layer-list { display: grid; border-top: 1px solid rgb(255 255 255 / 13%); }
+.card-back-lab__layer-list > header { padding: 14px 0 7px; color: #cda95d; font: 800 9px/1 "JetBrains Mono", monospace; text-transform: uppercase; }
+.card-back-lab__layer-list > label {
+  display: grid;
+  grid-template-columns: 18px 28px 1fr;
+  gap: 5px 9px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgb(255 255 255 / 10%);
+  cursor: pointer;
+}
+.card-back-lab__layer-list input { grid-row: 1 / 3; align-self: center; margin: 0; accent-color: #d5b56a; }
+.card-back-lab__layer-list span { grid-row: 1 / 3; padding-top: 2px; color: #cda95d; font: 700 11px/1 "JetBrains Mono", monospace; }
+.card-back-lab__layer-list strong { font-size: 12px; line-height: 1; text-transform: uppercase; }
+.card-back-lab__layer-list small { color: rgb(255 255 255 / 46%); font-size: 9px; line-height: 1.3; }
 
 .card-back-lab__scale-proof { display: grid; gap: 28px; padding: 40px clamp(20px, 6vw, 80px) 70px; border-top: 1px solid rgb(255 255 255 / 10%); background: #07090a; }
 .card-back-lab__scale-proof > header { display: grid; gap: 6px; }
@@ -89,25 +321,21 @@
 .card-back-lab__scale-row figure { display: grid; flex: 0 0 auto; gap: 10px; margin: 0; }
 .card-back-lab__scale-row figcaption { color: rgb(255 255 255 / 36%); font: 700 8px/1 "JetBrains Mono", monospace; text-align: center; }
 
-.card-back-lab__mask-preview {
-  position: fixed;
-  z-index: 20;
-  inset: 88px 20px auto auto;
-  display: none;
-  width: min(360px, calc(100vw - 40px));
-  aspect-ratio: 5 / 7;
-  object-fit: fill;
-  border: 1px solid rgb(255 255 255 / 24%);
-  background: #000;
-  box-shadow: 0 18px 70px rgb(0 0 0 / 70%);
-}
-.card-back-lab[data-show-mask='true'] .card-back-lab__mask-preview { display: block; }
+.card-back-lab[data-show-mask='true'] .card-back-material__base,
+.card-back-lab[data-show-mask='true'] .card-back-material__gold-finish,
+.card-back-lab[data-show-mask='true'] .card-back-material__key-light,
+.card-back-lab[data-show-mask='true'] .reference-card-back-material__base,
+.card-back-lab[data-show-mask='true'] .reference-card-back-material__gold-response,
+.card-back-lab[data-show-mask='true'] .reference-card-back-material__key-light { opacity: 0.06; }
+.card-back-lab[data-show-mask='true'] .card-back-material__reflection { opacity: 1; }
 
 @media (max-width: 760px) {
   .card-back-lab__toolbar { position: relative; align-items: flex-start; flex-direction: column; }
   .card-back-lab__controls { flex-wrap: wrap; }
   .card-back-lab__stage { grid-template-columns: 1fr; justify-items: center; }
-  .card-back-lab__hero { width: min(390px, 82vw); }
-  .card-back-lab__notes { width: min(390px, 82vw); }
+  .card-back-lab__comparison { width: 100%; overflow-x: auto; justify-content: flex-start; padding: 0 8vw 12px; }
+  .card-back-lab__reference-card { width: 250px; }
+  .card-back-lab__rebuild-card { width: 292px; }
+  .card-back-lab__editor { position: relative; top: auto; width: min(390px, 82vw); height: 70dvh; max-height: 70dvh; }
   .card-back-lab__scale-row { flex-wrap: wrap; }
 }
