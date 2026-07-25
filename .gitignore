@@ -18,6 +18,7 @@ target
 # Local visual proofs and generated image experiments
 /.codex-screenshots/
 /output/
+/.claude/worktrees/
 
 # Local asset generation workbench state and unpromoted candidates
 asset-workbench/
